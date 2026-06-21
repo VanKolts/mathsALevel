@@ -1521,6 +1521,19 @@ html{scroll-behavior:smooth;}
       <div class="settings-card">
         <div class="settings-row">
           <div class="settings-row-info">
+            <div class="settings-row-title">Backup &amp; restore</div>
+            <div class="settings-row-sub">Your progress already saves to your account automatically. You can also download a copy as a file, or restore your data from one.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="settings-btn" id="export-btn">Export</button>
+            <button class="settings-btn" id="import-btn">Import</button>
+          </div>
+        </div>
+        <input type="file" id="import-file" accept=".json" style="display:none">
+      </div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-info">
             <div class="settings-row-title">Further Maths options</div>
             <div class="settings-row-sub">Choose which optional Further Maths modules you study. Core Pure is always included. You can change this any time.</div>
           </div>
@@ -5637,7 +5650,37 @@ function toast(msg, duration){
 //                                                           
 // EXPORT / IMPORT
 //                                                           
-// Export/import removed 2026-06-21 — data now auto-syncs to the cloud (Firebase) per account.
+// Manual backup file (data also auto-syncs to the cloud). Buttons live in Settings.
+function doExport(){
+  const data={sr,mistakes,favourites:[...favourites],notes,paperLog,exported:today()};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='alevel-maths-backup-'+today()+'.json';a.click();
+}
+(function(){
+  var eb=document.getElementById('export-btn'); if(eb)eb.addEventListener('click',doExport);
+  var ib=document.getElementById('import-btn'); if(ib)ib.addEventListener('click',function(){document.getElementById('import-file').click();});
+  var ifl=document.getElementById('import-file'); if(ifl)ifl.addEventListener('change',function(){
+    const file=this.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const data=JSON.parse(e.target.result);
+        if(data.sr) sr=data.sr;
+        if(data.mistakes) mistakes=data.mistakes;
+        if(data.favourites) favourites=new Set(data.favourites);
+        if(data.notes) notes=data.notes;
+        if(data.paperLog) paperLog=data.paperLog;
+        sanitizeAllSR();
+        saveState();renderReviewPanel();renderAll();
+        if(activeTab==='mistakes')renderMistakesTab();
+        if(activeTab==='resources')renderResources();
+        alert('Data imported successfully!');
+      }catch(err){alert('Could not read file. Make sure it is a valid backup JSON.');}
+    };
+    reader.readAsText(file);this.value='';
+  });
+})();
 
 //                                                           
 // FORMULA MODAL
