@@ -1390,6 +1390,7 @@ html{scroll-behavior:smooth;}
       <button class="pp-type-btn" data-type="fm">Further Maths</button>
       <button class="pp-type-btn" data-type="madas">Madas</button>
       <button class="pp-type-btn" data-type="naiker">Naiker</button>
+      <button class="pp-type-btn" data-type="oldspec">Old Spec</button>
     </div>
     <div class="pp-slider-card">
       <div class="pp-slider-head">
@@ -2741,7 +2742,13 @@ const PAPER_MODULES=[
   {id:'naikerpure',name:'Naiker — Pure Paper 2',sub:'Naiker practice',need:null,papers:[
     {n:1,name:'Pure Paper 2',max:100,mins:120}]},
   {id:'naikermech',name:'Naiker — Mechanics (Paper 3)',sub:'Naiker practice',need:null,papers:[
-    {n:1,name:'Mechanics Paper 3',max:100,mins:120}]}
+    {n:1,name:'Mechanics Paper 3',max:100,mins:120}]},
+  {id:'oldc1',name:'C1 — Core Mathematics 1',sub:'Old spec',need:null,papers:[{n:1,name:'C1',max:75,mins:90}]},
+  {id:'oldc2',name:'C2 — Core Mathematics 2',sub:'Old spec',need:null,papers:[{n:1,name:'C2',max:75,mins:90}]},
+  {id:'oldc3',name:'C3 — Core Mathematics 3',sub:'Old spec',need:null,papers:[{n:1,name:'C3',max:75,mins:90}]},
+  {id:'oldc4',name:'C4 — Core Mathematics 4',sub:'Old spec',need:null,papers:[{n:1,name:'C4',max:75,mins:90}]},
+  {id:'oldm1',name:'M1 — Mechanics 1',sub:'Old spec',need:null,papers:[{n:1,name:'M1',max:75,mins:90}]},
+  {id:'olds1',name:'S1 — Statistics 1',sub:'Old spec',need:null,papers:[{n:1,name:'S1',max:75,mins:90}]}
 ];
 // ── Per-question breakdowns (marks + exact checklist topics per question/part) ──
 // Source: official Edexcel question papers + mark schemes. Topics use exact checklist names.
@@ -4211,6 +4218,7 @@ function ppModulesForType(type){
     if(type==='as') return m.id==='as';
     if(type==='madas') return m.id==='madaspure'||m.id==='madasapplied';
     if(type==='naiker') return m.id==='naikerpure'||m.id==='naikermech';
+    if(type==='oldspec') return m.id.indexOf('old')===0;
     if(m.id==='fmcp') return true;                       // always show Core Pure
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
@@ -4221,6 +4229,7 @@ function ppAllLoggableModules(){
     if(m.id==='alevel'||m.id==='as'||m.id==='fmcp') return true;
     if(m.id==='madaspure'||m.id==='madasapplied') return true;
     if(m.id==='naikerpure'||m.id==='naikermech') return true;
+    if(m.id.indexOf('old')===0) return true;
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
 }
@@ -4389,6 +4398,8 @@ const PP_YEAR_ORDER=['Specimen','2018','2019','2020','2021','2022','2023','2024'
 const PP_LETTER_ORDER=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
 // Naiker papers are coded by sitting (M=spring, J=June; number=year), chronological order
 const PP_NAIKER_ORDER=['M7','M8','J8','M9','J9','M10','J10','M11','J11','M12','J12','M13','J13','M14','M15','M16','M17'];
+// Old-spec (modular, pre-2017) exam sittings, oldest→newest (Jan/June, some Nov)
+const PP_OLDSPEC_ORDER=['January 2001','June 2001','January 2002','June 2002','November 2002','January 2003','June 2003','November 2003','January 2004','June 2004','November 2004','January 2005','June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'];
 // Madas / IYGB practice papers, hosted on madasmaths.com. Each has the paper + full solutions
 // (no separate mark scheme). mp2 = Pure, mms = Applied. Marks + duration vary per paper and were
 // read from each PDF; a few Applied letters (X–Z) don't exist yet, so only real papers are listed.
@@ -4416,12 +4427,31 @@ const PP_NAIKER_ORDER=['M7','M8','J8','M9','J9','M10','J10','M11','J11','M12','J
   PAPER_LINKS.naikerpure={1:PURE};
   PAPER_LINKS.naikermech={1:MECH};
 })();
+// Old-spec (modular) Edexcel papers on PMT. Built from each unit's real sitting list; QP+MS always,
+// MA (worked solutions) where it exists (x = sittings with no MA). Reuses the _L URL builder.
+(function(){
+  var OB='https://pmt.physicsandmathstutor.com/download/Maths/A-level';
+  var OS={
+    oldc1:{f:'C1/Papers-Edexcel',s:['January 2005','June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:[]},
+    oldc2:{f:'C2/Papers-Edexcel',s:['January 2005','June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:['June 2018']},
+    oldc3:{f:'C3/Papers-Edexcel',s:['June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:[]},
+    oldc4:{f:'C4/Papers-Edexcel',s:['June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:['June 2011']},
+    oldm1:{f:'M1/Papers-Edexcel',s:['January 2001','June 2001','January 2002','June 2002','November 2002','January 2003','June 2003','November 2003','January 2004','June 2004','November 2004','January 2005','June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:[]},
+    olds1:{f:'S1/Papers-Edexcel',s:['January 2001','June 2001','January 2002','June 2002','November 2002','January 2003','June 2003','November 2003','January 2004','June 2004','November 2004','January 2005','June 2005','January 2006','June 2006','January 2007','June 2007','January 2008','June 2008','January 2009','June 2009','January 2010','June 2010','January 2011','June 2011','January 2012','June 2012','January 2013','June 2013','June 2014','June 2015','June 2016','June 2017','June 2018'],x:[]}
+  };
+  Object.keys(OS).forEach(function(id){
+    var m=OS[id], o={}, noma={}; m.x.forEach(function(s){noma[s]=1;});
+    m.s.forEach(function(s){ o[s]=_L(OB,m.f,s,noma[s]?0:1); });
+    PAPER_LINKS[id]={1:o};
+  });
+})();
 function ppPaperLinks(moduleId,n){ return (PAPER_LINKS[moduleId]&&PAPER_LINKS[moduleId][n])||{}; }
 // Some modules key papers by a custom series (Madas A–Z, Naiker M7/J8…) rather than year
 function ppIsMadas(mid){ return mid==='madaspure'||mid==='madasapplied'; }
 function ppIsNaiker(mid){ return mid==='naikerpure'||mid==='naikermech'; }
-function ppCustomSeries(mid){ return ppIsMadas(mid)||ppIsNaiker(mid); }
-function ppSeriesOrder(mid){ return ppIsMadas(mid)?PP_LETTER_ORDER : ppIsNaiker(mid)?PP_NAIKER_ORDER : PP_YEAR_ORDER; }
+function ppIsOldspec(mid){ return mid.indexOf('old')===0; }
+function ppCustomSeries(mid){ return ppIsMadas(mid)||ppIsNaiker(mid); } // natural-order series (no newest-first reverse)
+function ppSeriesOrder(mid){ return ppIsMadas(mid)?PP_LETTER_ORDER : ppIsNaiker(mid)?PP_NAIKER_ORDER : ppIsOldspec(mid)?PP_OLDSPEC_ORDER : PP_YEAR_ORDER; }
 // Max marks for one paper instance — Madas carries per-letter marks on the link entry
 function ppPaperMaxFor(mid,n,year){ var lk=ppPaperLinks(mid,n)[year]; if(lk&&lk.max!=null)return lk.max; var p=ppPaper(mid,n); return p?p.max:0; }
 // All series keys (years, or Madas letters) that exist for the visible modules, in order
@@ -4430,7 +4460,7 @@ function ppAvailableYears(){
   ppModulesForType(ppPaperType).forEach(m=>m.papers.forEach(p=>{
     Object.keys(ppPaperLinks(m.id,p.n)).forEach(y=>set.add(y));
   }));
-  const order = ppPaperType==='madas' ? PP_LETTER_ORDER : ppPaperType==='naiker' ? PP_NAIKER_ORDER : PP_YEAR_ORDER;
+  const order = ppPaperType==='madas' ? PP_LETTER_ORDER : ppPaperType==='naiker' ? PP_NAIKER_ORDER : ppPaperType==='oldspec' ? PP_OLDSPEC_ORDER : PP_YEAR_ORDER;
   return order.filter(y=>set.has(y));
 }
 
@@ -6857,6 +6887,10 @@ function ppLatest(moduleId,n,year){
 
 // ---- year slider + browser ----
 var ppActiveYear=null;
+function ppTickLabel(y){
+  if(ppPaperType==='oldspec'){ var m=y.match(/^(\w{3})\w*\s+20(\d\d)$/); return m?(m[1]+" '"+m[2]):y; } // "Jun '18"
+  return (y==='Specimen'?'Spec':y);
+}
 function ppSetupSlider(){
   var years=ppAvailableYears();
   var slider=document.getElementById('pp-year-slider');
@@ -6864,8 +6898,8 @@ function ppSetupSlider(){
   var now=document.getElementById('pp-year-now');
   var lbl=document.getElementById('pp-slider-lbl');
   if(!slider)return;
-  var isMadas=ppPaperType==='madas',isNaiker=ppPaperType==='naiker',custom=isMadas||isNaiker;
-  if(lbl)lbl.textContent=isMadas?'Madas paper':isNaiker?'Naiker paper':'Exam series';
+  var isMadas=ppPaperType==='madas',isNaiker=ppPaperType==='naiker',isOld=ppPaperType==='oldspec',custom=isMadas||isNaiker;
+  if(lbl)lbl.textContent=isMadas?'Madas paper':isNaiker?'Naiker paper':isOld?'Exam sitting':'Exam series';
   function disp(y){return isMadas?('Paper '+y):y;}
   if(!years.length){slider.disabled=true;if(now)now.textContent='—';return;}
   slider.disabled=false;
@@ -6875,7 +6909,12 @@ function ppSetupSlider(){
   slider.value=idx;
   ppActiveYear=years[idx];
   ticks.innerHTML='';
-  years.forEach(function(y){var sp=document.createElement('span');sp.textContent=(y==='Specimen'?'Spec':y);ticks.appendChild(sp);});
+  var tstep=years.length>14?Math.ceil(years.length/8):1; // don't cram 30+ tick labels
+  years.forEach(function(y,i){
+    var sp=document.createElement('span');
+    sp.textContent=((i%tstep===0)||i===years.length-1)?ppTickLabel(y):'';
+    ticks.appendChild(sp);
+  });
   slider.oninput=function(){
     ppActiveYear=years[+slider.value];
     now.textContent=disp(ppActiveYear);
