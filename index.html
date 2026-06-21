@@ -50,6 +50,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .hdr-btn.acc:hover{filter:brightness(1.12);}
 .streak-chip{display:none;align-items:center;gap:3px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:linear-gradient(var(--surface-glass),var(--surface-glass)) padding-box,linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa) border-box;border:1.5px solid transparent;color:var(--text);white-space:nowrap;user-select:none;line-height:1;margin:auto 2px;}
 .streak-chip.visible{display:flex;}
+/* Mobile app-shell chrome — hidden on desktop, shown only in the mobile media query below */
+.m-nav,.m-menu-btn,.m-menu,.m-menu-backdrop{display:none;}
 
 /*   PAGES    */
 .page{display:none;}.page.active{display:block;}
@@ -477,6 +479,79 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
   .filter-btn.sf{display:none;}
   #btn-notstarted{display:none;}
   .tab-btn{font-size:11px;padding:9px 8px;}
+}
+
+/* ============ Mobile / tablet app-shell (desktop is never affected) ============ */
+@media (max-width:900px), (pointer:coarse){
+  /* Lock the view horizontally — like a native app, vertical scroll only */
+  html,body{overflow-x:hidden;max-width:100%;}
+  body{overscroll-behavior-x:none;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
+  .page,main,.review-panel,.tab-content,footer{max-width:100%;overflow-x:hidden;}
+
+  /* Hide the desktop top tab bar — replaced by the bottom nav + three-dots menu */
+  .tab-bar{display:none!important;}
+
+  /* Slim header; reserve the top-right corner for the floating menu button */
+  header{padding:calc(.85rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) .85rem calc(1rem + env(safe-area-inset-left));}
+  .hdr-inner{padding-right:50px;}
+
+  /* Filters stick to the top of the scroll area now the tab bar is gone */
+  .filters-bar{top:0;}
+
+  /* ---- Floating three-dots button (top-right) ---- */
+  .m-menu-btn{display:flex;align-items:center;justify-content:center;position:fixed;
+    top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));
+    width:42px;height:42px;border-radius:50%;z-index:460;cursor:pointer;color:var(--text);
+    background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(135deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa) border-box;
+    border:1.6px solid transparent;box-shadow:0 4px 16px rgba(0,0,0,.32);transition:transform .12s;}
+  .m-menu-btn:active{transform:scale(.92);}
+  .m-menu-btn svg circle{fill:url(#m-rainbow);}
+
+  /* ---- Bottom icon nav ---- */
+  .m-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:450;
+    justify-content:space-around;align-items:center;gap:2px;
+    padding:7px 6px calc(7px + env(safe-area-inset-bottom));
+    background:var(--surface-glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border-top:1px solid var(--border);}
+  .m-nav-btn{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;min-height:52px;max-width:92px;background:none;border:none;border-radius:14px;
+    cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;transition:transform .12s;padding:4px 0;}
+  .m-nav-btn:active{transform:scale(.88);}
+  .m-nav-btn svg{width:26px;height:26px;fill:none;stroke:var(--muted);stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s;}
+  .m-nav-btn.active svg{stroke:url(#m-rainbow);}
+  .m-nav-dot{width:5px;height:5px;border-radius:50%;background:transparent;transition:background .18s;}
+  .m-nav-btn.active .m-nav-dot{background:linear-gradient(90deg,#fb923c,#34d399,#60a5fa);}
+  .m-nav-badge{position:absolute;top:3px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;
+    background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;}
+  .m-nav-badge.show{display:block;}
+
+  /* ---- Three-dots dropdown menu ---- */
+  .m-menu-backdrop{display:block;position:fixed;inset:0;z-index:470;background:rgba(0,0,0,.28);
+    opacity:0;pointer-events:none;transition:opacity .18s;}
+  .m-menu-backdrop.open{opacity:1;pointer-events:auto;}
+  .m-menu{display:block;position:fixed;top:calc(60px + env(safe-area-inset-top));
+    right:calc(12px + env(safe-area-inset-right));z-index:480;background:var(--surface2);
+    border:1px solid var(--border);border-radius:16px;padding:7px;min-width:200px;
+    box-shadow:0 16px 44px rgba(0,0,0,.42);transform-origin:top right;
+    transform:scale(.9) translateY(-6px);opacity:0;pointer-events:none;transition:transform .16s,opacity .16s;}
+  .m-menu.open{transform:scale(1) translateY(0);opacity:1;pointer-events:auto;}
+  .m-menu-item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 13px;border:none;
+    background:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;font-weight:500;
+    text-align:left;border-radius:10px;cursor:pointer;}
+  .m-menu-item:active{background:rgba(var(--accent-rgb),.16);}
+  .m-menu-ico{font-size:17px;width:22px;text-align:center;flex-shrink:0;}
+
+  /* ---- Bigger, comfortable touch targets ---- */
+  .settings-btn{min-height:42px;padding:10px 15px;font-size:13px;}
+  .filter-btn{min-height:34px;padding:7px 13px;font-size:12px;}
+  .modal-btn{min-height:44px;padding:11px 14px;font-size:13px;}
+  .today-cta{min-height:46px;}
+  .rev-more-btn{min-height:38px;}
+  .pp-link,.plog-add-mk,.mv-pill-btn{min-height:36px;}
+  /* Sliders: thin visible track, tall invisible touch zone */
+  .rating-slider,.pp-slider,.plog-slider{height:40px;background-size:100% 5px;background-position:center;background-repeat:no-repeat;}
+  .sspring-thumb{width:23px;height:23px;}
 }
 
 /*   ACCESSIBILITY    */
@@ -1824,6 +1899,47 @@ html{scroll-behavior:smooth;}
 </div>
 
 <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ===== Mobile app-shell chrome (phones + tablets only; hidden on desktop) ===== -->
+<svg class="m-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
+  <linearGradient id="m-rainbow" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f87171"/><stop offset=".28" stop-color="#fb923c"/>
+    <stop offset=".5" stop-color="#fbbf24"/><stop offset=".72" stop-color="#34d399"/>
+    <stop offset="1" stop-color="#60a5fa"/>
+  </linearGradient>
+</defs></svg>
+
+<button class="m-menu-btn" id="m-menu-btn" aria-label="More: settings, statistics, focus, tutor" aria-haspopup="true" aria-expanded="false">
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="19" cy="12" r="2.1"/></svg>
+</button>
+
+<nav class="m-nav" id="m-nav" aria-label="Main sections">
+  <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l1.6 1.6L8.4 4.8"/><path d="M4 12l1.6 1.6L8.4 10.8"/><path d="M4 18l1.6 1.6L8.4 16.8"/><line x1="11" y1="6" x2="20" y2="6"/><line x1="11" y1="12" x2="20" y2="12"/><line x1="11" y1="18" x2="20" y2="18"/></svg>
+    <span class="m-nav-badge" id="m-nav-badge"></span><span class="m-nav-dot"></span>
+  </button>
+  <button class="m-nav-btn" data-tab="resources" aria-label="Resources">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3H19a1 1 0 0 1 1 1v13"/><path d="M6.5 3A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 1 6.5 16H20"/><path d="M6.5 16A2.5 2.5 0 0 0 4 18.5A2.5 2.5 0 0 0 6.5 21H20"/></svg>
+    <span class="m-nav-dot"></span>
+  </button>
+  <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5L21.5 20H2.5L12 3.5z"/><line x1="12" y1="10" x2="12" y2="14.5"/><line x1="12" y1="17.4" x2="12" y2="17.5"/></svg>
+    <span class="m-nav-dot"></span>
+  </button>
+  <button class="m-nav-btn" data-tab="papers" aria-label="Past Papers">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/></svg>
+    <span class="m-nav-dot"></span>
+  </button>
+</nav>
+
+<div class="m-menu-backdrop" id="m-menu-backdrop"></div>
+<div class="m-menu" id="m-menu" role="menu" aria-label="More options">
+  <button class="m-menu-item" data-act="settings" role="menuitem"><span class="m-menu-ico">⚙️</span>Settings</button>
+  <button class="m-menu-item" data-act="stats" role="menuitem"><span class="m-menu-ico">📊</span>Statistics</button>
+  <button class="m-menu-item" data-act="focus" role="menuitem"><span class="m-menu-ico">🍅</span>Focus timer</button>
+  <button class="m-menu-item" data-act="tutor" role="menuitem"><span class="m-menu-ico">✨</span>AI Tutor</button>
+</div>
+
 <footer>A-Level Maths &middot; Progress saved locally in your browser &middot; Adaptive memory model (FSRS): each topic is scheduled by its difficulty, your self-test grades and logged mistakes</footer>
 
 
@@ -5138,6 +5254,52 @@ TAB_ORDER.forEach(t=>{
       if(ico)ico.addEventListener('animationend',()=>sb.classList.remove('si-spinning'),{once:true});
     }
     openSettings();
+  });
+})();
+
+/* ===== Mobile app-shell: bottom icon nav + three-dots overflow menu ===== */
+(function(){
+  // Bottom nav icons drive the same switchTab() as desktop
+  document.querySelectorAll('.m-nav-btn').forEach(function(b){
+    b.addEventListener('click',function(){ switchTab(b.getAttribute('data-tab')); });
+  });
+  function updateMNav(){
+    document.querySelectorAll('.m-nav-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-tab')===activeTab);
+    });
+  }
+  // Keep the nav highlight in sync with every tab change (wrap the existing fn)
+  var _origSwitch=switchTab;
+  switchTab=function(t){ _origSwitch(t); updateMNav(); };
+  updateMNav();
+
+  // Mirror the "due" badge onto the checklist nav icon
+  if(typeof updateDueBadge==='function'){
+    var _origDue=updateDueBadge;
+    updateDueBadge=function(){ _origDue(); var b=document.getElementById('m-nav-badge'),
+      src=document.getElementById('tab-due-badge'); if(b)b.classList.toggle('show',!!(src&&src.textContent)); };
+    updateDueBadge();
+  }
+
+  // Three-dots overflow menu (Settings / Statistics / Focus / Tutor)
+  var menu=document.getElementById('m-menu'),
+      back=document.getElementById('m-menu-backdrop'),
+      btn=document.getElementById('m-menu-btn');
+  function openMenu(){ menu.classList.add('open'); back.classList.add('open'); btn.setAttribute('aria-expanded','true'); }
+  function closeMenu(){ menu.classList.remove('open'); back.classList.remove('open'); btn.setAttribute('aria-expanded','false'); }
+  if(btn)btn.addEventListener('click',function(e){ e.stopPropagation(); menu.classList.contains('open')?closeMenu():openMenu(); });
+  if(back)back.addEventListener('click',closeMenu);
+  document.querySelectorAll('.m-menu-item').forEach(function(it){
+    it.addEventListener('click',function(){
+      closeMenu();
+      var a=it.getAttribute('data-act');
+      setTimeout(function(){
+        if(a==='settings'&&typeof openSettings==='function')openSettings();
+        else if(a==='stats'&&typeof openStats==='function')openStats();
+        else if(a==='focus'&&typeof openPomodoro==='function')openPomodoro();
+        else if(a==='tutor'&&typeof openTutor==='function')openTutor();
+      },130);
+    });
   });
 })();
 
