@@ -1389,6 +1389,7 @@ html{scroll-behavior:smooth;}
       <button class="pp-type-btn active" data-type="alevel">A-Level Maths</button>
       <button class="pp-type-btn" data-type="fm">Further Maths</button>
       <button class="pp-type-btn" data-type="madas">Madas</button>
+      <button class="pp-type-btn" data-type="naiker">Naiker</button>
     </div>
     <div class="pp-slider-card">
       <div class="pp-slider-head">
@@ -2736,7 +2737,11 @@ const PAPER_MODULES=[
   {id:'madaspure',name:'Madas — Pure',sub:'IYGB practice',need:null,papers:[
     {n:1,name:'Pure Paper',max:100,mins:120}]},
   {id:'madasapplied',name:'Madas — Applied',sub:'IYGB practice',need:null,papers:[
-    {n:1,name:'Applied Paper',max:150,mins:180}]}
+    {n:1,name:'Applied Paper',max:150,mins:180}]},
+  {id:'naikerpure',name:'Naiker — Pure Paper 2',sub:'Naiker practice',need:null,papers:[
+    {n:1,name:'Pure Paper 2',max:100,mins:120}]},
+  {id:'naikermech',name:'Naiker — Mechanics (Paper 3)',sub:'Naiker practice',need:null,papers:[
+    {n:1,name:'Mechanics Paper 3',max:100,mins:120}]}
 ];
 // ── Per-question breakdowns (marks + exact checklist topics per question/part) ──
 // Source: official Edexcel question papers + mark schemes. Topics use exact checklist names.
@@ -4205,6 +4210,7 @@ function ppModulesForType(type){
     if(type==='alevel') return m.id==='alevel';
     if(type==='as') return m.id==='as';
     if(type==='madas') return m.id==='madaspure'||m.id==='madasapplied';
+    if(type==='naiker') return m.id==='naikerpure'||m.id==='naikermech';
     if(m.id==='fmcp') return true;                       // always show Core Pure
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
@@ -4214,6 +4220,7 @@ function ppAllLoggableModules(){
   return PAPER_MODULES.filter(function(m){
     if(m.id==='alevel'||m.id==='as'||m.id==='fmcp') return true;
     if(m.id==='madaspure'||m.id==='madasapplied') return true;
+    if(m.id==='naikerpure'||m.id==='naikermech') return true;
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
 }
@@ -4380,6 +4387,8 @@ const PAPER_LINKS={
 const PP_YEAR_ORDER=['Specimen','2018','2019','2020','2021','2022','2023','2024'];
 // Madas papers use letters A–Z on the slider instead of years
 const PP_LETTER_ORDER=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+// Naiker papers are coded by sitting (M=spring, J=June; number=year), chronological order
+const PP_NAIKER_ORDER=['M7','M8','J8','M9','J9','M10','J10','M11','J11','M12','J12','M13','J13','M14','M15','M16','M17'];
 // Madas / IYGB practice papers, hosted on madasmaths.com. Each has the paper + full solutions
 // (no separate mark scheme). mp2 = Pure, mms = Applied. Marks + duration vary per paper and were
 // read from each PDF; a few Applied letters (X–Z) don't exist yet, so only real papers are listed.
@@ -4399,10 +4408,20 @@ const PP_LETTER_ORDER=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','
   PAPER_LINKS.madaspure={1:build('mp2_practice_papers','mp2',PURE)};
   PAPER_LINKS.madasapplied={1:build('mms_practice_papers','mms',APP)};
 })();
+// Naiker practice papers (naikermaths.com): Pure Paper 2 + Mechanics Paper 3, coded by sitting
+// (M = spring, J = June; number = year). Each carries QP + mark scheme (doubles as worked solutions).
+(function(){
+  var PURE={'M7':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M7__.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M7-Mark-Scheme.pdf',sol:null},'M8':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M8.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M8-Mark-Scheme.pdf',sol:null},'J8':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J8__.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J8-Mark-Scheme.pdf',sol:null},'M9':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M9.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M9-Mark-Scheme.pdf',sol:null},'J9':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J9_.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J9-Mark-Scheme.pdf',sol:null},'M10':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M10.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M10-Mark-Scheme.pdf',sol:null},'J10':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J10.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J10-MARK-SCHEME_.pdf',sol:null},'M11':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M11__.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M11-Mark-Scheme.pdf',sol:null},'J11':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J11.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J11-Mark-Scheme.pdf',sol:null},'M12':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M12.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M12-Mark-Scheme.pdf',sol:null},'J12':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-J12_.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-J12-Mark-Scheme.pdf',sol:null},'M13':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M13.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M13-Mark-Scheme.pdf',sol:null},'M14':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M14.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Pure-Practice-Paper-2-M14-Mark-Scheme.pdf',sol:null},'M15':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M15.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M15-Mark-Scheme.pdf',sol:null},'M16':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Pure-Practice-Paper-2-M16.pdf',ms:null,sol:null}};
+  var MECH={'M7':{qp:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-M7.pdf',ms:null,sol:null},'M8':{qp:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-M8.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-M8-Mark-Scheme.pdf',sol:null},'J8':{qp:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-J8_.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-J8-Mark-Scheme_.pdf',sol:null},'M9':{qp:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-M9.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-3B-Mechanics-M9-Mark-Scheme.pdf',sol:null},'J9':{qp:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-J9-1.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/04/A-level-Applied-Paper-3B-Mechanics-J9-Mark-Scheme-1.pdf',sol:null},'M10':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M10.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M10-Mark-Scheme.pdf',sol:null},'J10':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J10.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J10-Mark-Scheme.pdf',sol:null},'M11':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M11.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M11-Mark-Scheme.pdf',sol:null},'J11':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J11.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J11-Mark-Scheme.pdf',sol:null},'M12':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M12.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M12-Mark-Scheme.pdf',sol:null},'J12':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J12.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J12-Mark-Scheme.pdf',sol:null},'M13':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M13.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M13-Mark-Scheme.pdf',sol:null},'J13':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J13.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-J13-Mark-Scheme.pdf',sol:null},'M14':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M14.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M14-Mark-Scheme.pdf',sol:null},'M15':{qp:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M15.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/05/A-level-Applied-Paper-3B-Mechanics-M15-Mark-Scheme.pdf',sol:null},'M16':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Applied-Paper-3B-Mechanics-M16.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Applied-Paper-3B-Mechanics-M16-Mark-Scheme.pdf',sol:null},'M17':{qp:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Applied-Paper-3B-Mechanics-M17.pdf',ms:'https://naikermaths.com/wp-content/uploads/2019/06/A-level-Applied-Paper-3B-Mechanics-M17-Mark-Scheme.pdf',sol:null}};
+  PAPER_LINKS.naikerpure={1:PURE};
+  PAPER_LINKS.naikermech={1:MECH};
+})();
 function ppPaperLinks(moduleId,n){ return (PAPER_LINKS[moduleId]&&PAPER_LINKS[moduleId][n])||{}; }
-// Madas-style modules key their papers by letter (A–Z) rather than year
-function ppIsLetterModule(mid){ return mid==='madaspure'||mid==='madasapplied'; }
-function ppSeriesOrder(mid){ return ppIsLetterModule(mid)?PP_LETTER_ORDER:PP_YEAR_ORDER; }
+// Some modules key papers by a custom series (Madas A–Z, Naiker M7/J8…) rather than year
+function ppIsMadas(mid){ return mid==='madaspure'||mid==='madasapplied'; }
+function ppIsNaiker(mid){ return mid==='naikerpure'||mid==='naikermech'; }
+function ppCustomSeries(mid){ return ppIsMadas(mid)||ppIsNaiker(mid); }
+function ppSeriesOrder(mid){ return ppIsMadas(mid)?PP_LETTER_ORDER : ppIsNaiker(mid)?PP_NAIKER_ORDER : PP_YEAR_ORDER; }
 // Max marks for one paper instance — Madas carries per-letter marks on the link entry
 function ppPaperMaxFor(mid,n,year){ var lk=ppPaperLinks(mid,n)[year]; if(lk&&lk.max!=null)return lk.max; var p=ppPaper(mid,n); return p?p.max:0; }
 // All series keys (years, or Madas letters) that exist for the visible modules, in order
@@ -4411,7 +4430,7 @@ function ppAvailableYears(){
   ppModulesForType(ppPaperType).forEach(m=>m.papers.forEach(p=>{
     Object.keys(ppPaperLinks(m.id,p.n)).forEach(y=>set.add(y));
   }));
-  const order = ppPaperType==='madas' ? PP_LETTER_ORDER : PP_YEAR_ORDER;
+  const order = ppPaperType==='madas' ? PP_LETTER_ORDER : ppPaperType==='naiker' ? PP_NAIKER_ORDER : PP_YEAR_ORDER;
   return order.filter(y=>set.has(y));
 }
 
@@ -6845,13 +6864,13 @@ function ppSetupSlider(){
   var now=document.getElementById('pp-year-now');
   var lbl=document.getElementById('pp-slider-lbl');
   if(!slider)return;
-  var isMadas=ppPaperType==='madas';
-  if(lbl)lbl.textContent=isMadas?'Madas paper':'Exam series';
+  var isMadas=ppPaperType==='madas',isNaiker=ppPaperType==='naiker',custom=isMadas||isNaiker;
+  if(lbl)lbl.textContent=isMadas?'Madas paper':isNaiker?'Naiker paper':'Exam series';
   function disp(y){return isMadas?('Paper '+y):y;}
   if(!years.length){slider.disabled=true;if(now)now.textContent='—';return;}
   slider.disabled=false;
   slider.min=0;slider.max=years.length-1;slider.step=1;
-  var idx=isMadas?0:years.length-1;
+  var idx=custom?0:years.length-1;
   if(ppActiveYear&&years.indexOf(ppActiveYear)>=0)idx=years.indexOf(ppActiveYear);
   slider.value=idx;
   ppActiveYear=years[idx];
@@ -7006,10 +7025,10 @@ function plogFillPapers(){
 function plogFillYears(){
   var mid=document.getElementById('plog-module').value,n=+document.getElementById('plog-paper').value;
   var sel=document.getElementById('plog-year');sel.innerHTML='';
-  var links=ppPaperLinks(mid,n),letter=ppIsLetterModule(mid);
+  var links=ppPaperLinks(mid,n),custom=ppCustomSeries(mid);
   var order=ppSeriesOrder(mid).filter(function(y){return links[y];});
-  if(!letter)order=order.slice().reverse(); // years newest-first; Madas letters A→Z
-  order.forEach(function(y){var o=document.createElement('option');o.value=y;o.textContent=letter?('Paper '+y):y;sel.appendChild(o);});
+  if(!custom)order=order.slice().reverse(); // years newest-first; custom series in natural order
+  order.forEach(function(y){var o=document.createElement('option');o.value=y;o.textContent=ppIsMadas(mid)?('Paper '+y):y;sel.appendChild(o);});
   var lk=ppPaperLinks(mid,n)[sel.value],p=ppPaper(mid,n);
   document.getElementById('plog-time').value=(lk&&lk.mins!=null)?lk.mins:(p?p.mins:'');
   plogSyncMax();
@@ -7184,7 +7203,7 @@ function closePaperPerf(){document.getElementById('paperperf-overlay').classList
 function renderPerfCharts(){
   var wrap=document.getElementById('perf-charts');if(!wrap)return;wrap.innerHTML='';
   var mid=document.getElementById('perf-module').value,m=ppModuleById(mid);if(!m)return;
-  var letter=ppIsLetterModule(mid);
+  var letter=ppIsMadas(mid); // only Madas mixes paper totals → plot %; Naiker/years use raw marks
   m.papers.forEach(function(p){
     var links=ppPaperLinks(mid,p.n);
     var series=ppSeriesOrder(mid).filter(function(y){return links[y];});
