@@ -7154,5 +7154,142 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   document.querySelectorAll('.rating-slider,.pp-slider,.plog-slider').forEach(enhance);
 })();
 </script>
+
+<!-- ===================== Firebase cloud sync (email/password) ===================== -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  var firebaseConfig = {
+    apiKey: "AIzaSyB5N7PsS22N31BUdHpPeHU8s9pwSr_Owpg",
+    authDomain: "maths-hub-3aa8c.firebaseapp.com",
+    projectId: "maths-hub-3aa8c",
+    storageBucket: "maths-hub-3aa8c.firebasestorage.app",
+    messagingSenderId: "522673793917",
+    appId: "1:522673793917:web:3b632eb29e023972a57a14"
+  };
+  if(typeof firebase==='undefined'){ console.warn('[cloud] Firebase SDK did not load — app runs in local-only mode'); return; }
+  firebase.initializeApp(firebaseConfig);
+  var auth=firebase.auth(), db=firebase.firestore();
+
+  // Everything is synced EXCEPT the Gemini API key, which stays device-local on purpose.
+  var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
+    'alevel-favs-v1','alevel-notes-v1','alevel-fm-options-v1','alevel-streak-v1',
+    'alevel-exam-date','alevel-onboarded-v1','alevel-plainlang-v1','alevel-pomo-presets-v1',
+    'alevel-shortcuts-v1','msh-theme'];
+
+  var nativeSet=localStorage.setItem.bind(localStorage);
+  var currentUser=null, pushTimer=null;
+
+  function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
+  function applyToLocal(store){ if(!store)return; SYNC_KEYS.forEach(function(k){ if(store[k]!=null)nativeSet(k,store[k]); }); }
+  function pushNow(){
+    if(!currentUser)return;
+    db.collection('users').doc(currentUser.uid).set(
+      { store:collectLocal(), updatedAt:firebase.firestore.FieldValue.serverTimestamp() },
+      { merge:true }
+    ).catch(function(e){ console.warn('[cloud] save failed',e); });
+  }
+  function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1500); }
+
+  // Mirror every app save up to the cloud (debounced). localStorage stays the fast local cache.
+  localStorage.setItem=function(k,v){ nativeSet(k,v); if(currentUser&&SYNC_KEYS.indexOf(k)>=0)schedulePush(); };
+
+  // ---------- Auth gate UI ----------
+  var ov=null;
+  function build(){
+    if(ov)return;
+    var st=document.createElement('style');
+    st.textContent=
+      '#mh-login{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg,#160b10);padding:20px;font-family:inherit;}'
+      +'#mh-login .card{width:100%;max-width:360px;background:var(--card,#241319);border-radius:18px;padding:30px 26px;box-shadow:0 24px 70px rgba(0,0,0,.55);}'
+      +'#mh-login .brand{font-size:1.7rem;font-weight:800;margin-bottom:14px;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}'
+      +'#mh-login h2{margin:0 0 4px;font-size:1.35rem;color:var(--text,#fff);}'
+      +'#mh-login p.sub{margin:0 0 16px;font-size:.84rem;color:var(--muted,#b89aa6);}'
+      +'#mh-login label{display:block;font-size:.76rem;color:var(--muted,#b89aa6);margin:12px 0 5px;}'
+      +'#mh-login input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:var(--text,#fff);font-size:.95rem;}'
+      +'#mh-login input:focus{outline:none;border-color:#fb923c;}'
+      +'#mh-login button.go{width:100%;margin-top:20px;padding:12px;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:.95rem;color:#160b10;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);}'
+      +'#mh-login button.go:disabled{opacity:.6;cursor:default;}'
+      +'#mh-login .toggle{margin-top:15px;text-align:center;font-size:.82rem;color:var(--muted,#b89aa6);}'
+      +'#mh-login .toggle a{color:#fb923c;cursor:pointer;text-decoration:underline;}'
+      +'#mh-login .err{margin-top:12px;font-size:.8rem;color:#f87171;min-height:1em;}'
+      +'#mh-login .loading{color:var(--muted,#b89aa6);font-size:.9rem;padding:8px 0;}';
+    document.head.appendChild(st);
+    ov=document.createElement('div'); ov.id='mh-login';
+    ov.innerHTML='<div class="card"><div class="brand">ƒx</div>'
+      +'<div id="mh-loading" class="loading">Loading your hub…</div>'
+      +'<div id="mh-form" style="display:none">'
+      +'<h2 id="mh-title">Welcome back</h2><p class="sub" id="mh-sub">Log in to load your progress.</p>'
+      +'<label>Email</label><input id="mh-email" type="email" autocomplete="email" placeholder="you@example.com">'
+      +'<label>Password</label><input id="mh-pass" type="password" autocomplete="current-password" placeholder="••••••">'
+      +'<div class="err" id="mh-err"></div>'
+      +'<button class="go" id="mh-go">Log in</button>'
+      +'<div class="toggle" id="mh-toggle"></div>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+
+    var mode='login';
+    function setMode(m){ mode=m;
+      document.getElementById('mh-title').textContent=m==='login'?'Welcome back':'Create your account';
+      document.getElementById('mh-sub').textContent=m==='login'?'Log in to load your progress.':'Sign up to save your progress to the cloud.';
+      document.getElementById('mh-go').textContent=m==='login'?'Log in':'Sign up';
+      document.getElementById('mh-pass').setAttribute('autocomplete',m==='login'?'current-password':'new-password');
+      document.getElementById('mh-toggle').innerHTML=m==='login'?'New here? <a>Create an account</a>':'Already have an account? <a>Log in</a>';
+      document.getElementById('mh-toggle').querySelector('a').onclick=function(){ document.getElementById('mh-err').textContent=''; setMode(m==='login'?'signup':'login'); };
+    }
+    function friendly(e){ var c=(e&&e.code)||'';
+      if(c.indexOf('invalid-credential')>=0||c.indexOf('user-not-found')>=0||c.indexOf('wrong-password')>=0)return 'Wrong email or password.';
+      if(c.indexOf('email-already-in-use')>=0)return 'That email already has an account — log in instead.';
+      if(c.indexOf('weak-password')>=0)return 'Password must be at least 6 characters.';
+      if(c.indexOf('invalid-email')>=0)return 'That doesn’t look like a valid email.';
+      if(c.indexOf('network')>=0)return 'Network error — check your connection.';
+      if(c.indexOf('too-many-requests')>=0)return 'Too many attempts — wait a moment and try again.';
+      return (e&&e.message)||'Something went wrong.';
+    }
+    function submit(){
+      var email=document.getElementById('mh-email').value.trim(), pass=document.getElementById('mh-pass').value, err=document.getElementById('mh-err');
+      if(!email||!pass){ err.textContent='Enter your email and password.'; return; }
+      err.textContent=''; var go=document.getElementById('mh-go'); go.disabled=true;
+      var p=mode==='login'?auth.signInWithEmailAndPassword(email,pass):auth.createUserWithEmailAndPassword(email,pass);
+      p.catch(function(e){ err.textContent=friendly(e); go.disabled=false; });
+    }
+    document.getElementById('mh-go').onclick=submit;
+    document.getElementById('mh-pass').addEventListener('keydown',function(e){ if(e.key==='Enter')submit(); });
+    setMode('login');
+  }
+  function showLoading(){ build(); ov.style.display='flex'; document.getElementById('mh-loading').style.display='block'; document.getElementById('mh-form').style.display='none'; }
+  function showForm(){ build(); ov.style.display='flex'; document.getElementById('mh-loading').style.display='none'; document.getElementById('mh-form').style.display='block'; }
+  function hide(){ if(ov)ov.style.display='none'; }
+
+  // Put the gate up immediately so the app can't be used before login.
+  if(document.body){ showLoading(); } else { document.addEventListener('DOMContentLoaded',showLoading); }
+
+  auth.onAuthStateChanged(function(user){
+    currentUser=user;
+    if(!user){ showForm(); return; }
+    hide();
+    if(sessionStorage.getItem('mh_synced')==='1'){ return; } // already reconciled this browser session
+    db.collection('users').doc(user.uid).get().then(function(snap){
+      if(snap.exists && snap.data() && snap.data().store){
+        applyToLocal(snap.data().store);        // pull cloud -> local
+        sessionStorage.setItem('mh_synced','1');
+        location.reload();                       // re-read everything cleanly
+      }else{
+        sessionStorage.setItem('mh_synced','1'); // first login on this account
+        pushNow();                               // migrate whatever's on this device up
+      }
+    }).catch(function(e){
+      console.warn('[cloud] pull failed',e);
+      sessionStorage.setItem('mh_synced','1');   // never trap the user behind a transient error
+    });
+  });
+
+  // Sign out (exposed for a settings button / console use).
+  window.mhSignOut=function(){ sessionStorage.removeItem('mh_synced'); auth.signOut().then(function(){ location.reload(); }); };
+  window.mhCurrentEmail=function(){ return currentUser?currentUser.email:null; };
+})();
+</script>
 </body>
 </html>
