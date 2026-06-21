@@ -4213,6 +4213,7 @@ function ppModulesForType(type){
 function ppAllLoggableModules(){
   return PAPER_MODULES.filter(function(m){
     if(m.id==='alevel'||m.id==='as'||m.id==='fmcp') return true;
+    if(m.id==='madaspure'||m.id==='madasapplied') return true;
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
 }
@@ -4379,20 +4380,31 @@ const PAPER_LINKS={
 const PP_YEAR_ORDER=['Specimen','2018','2019','2020','2021','2022','2023','2024'];
 // Madas papers use letters A–Z on the slider instead of years
 const PP_LETTER_ORDER=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
-// Madas / IYGB practice papers (A–Z), hosted on madasmaths.com. Each has the paper + full
-// solutions (no separate mark scheme). mp2 = Pure, mms = Applied (Stats & Mechanics).
+// Madas / IYGB practice papers, hosted on madasmaths.com. Each has the paper + full solutions
+// (no separate mark scheme). mp2 = Pure, mms = Applied. Marks + duration vary per paper and were
+// read from each PDF; a few Applied letters (X–Z) don't exist yet, so only real papers are listed.
 (function(){
   var MAD='https://www.madasmaths.com/archive/iygb_practice_papers/';
-  var pure={}, app={};
-  PP_LETTER_ORDER.forEach(function(L){
-    var l=L.toLowerCase();
-    pure[L]={qp:MAD+'mp2_practice_papers/mp2_'+l+'.pdf',ms:null,sol:MAD+'mp2_practice_papers/mp2_'+l+'_solutions.pdf'};
-    app[L] ={qp:MAD+'mms_practice_papers/mms_'+l+'.pdf',ms:null,sol:MAD+'mms_practice_papers/mms_'+l+'_solutions.pdf'};
-  });
-  PAPER_LINKS.madaspure={1:pure};
-  PAPER_LINKS.madasapplied={1:app};
+  // letter: [total marks, minutes]
+  var PURE={A:[100,120],B:[100,120],C:[100,120],D:[100,120],E:[100,120],F:[100,120],G:[100,120],H:[100,120],I:[100,120],J:[100,120],K:[100,120],L:[100,120],M:[100,120],N:[100,120],O:[100,120],P:[100,120],Q:[100,120],R:[100,120],S:[150,180],T:[175,180],U:[125,120],V:[125,120],W:[125,120],X:[125,120],Y:[125,120],Z:[125,120]};
+  var APP={A:[150,180],B:[150,180],C:[150,180],D:[150,180],E:[100,120],F:[150,180],G:[150,180],H:[150,180],I:[150,180],J:[150,180],K:[150,180],L:[150,180],M:[150,180],N:[150,180],O:[150,180],P:[150,180],Q:[150,180],R:[150,180],S:[150,180],T:[150,180],U:[150,180],V:[150,180],W:[150,180]};
+  function build(folder,strand,tbl){
+    var o={};
+    Object.keys(tbl).forEach(function(L){
+      var l=L.toLowerCase();
+      o[L]={qp:MAD+folder+'/'+strand+'_'+l+'.pdf',ms:null,sol:MAD+folder+'/'+strand+'_'+l+'_solutions.pdf',max:tbl[L][0],mins:tbl[L][1]};
+    });
+    return o;
+  }
+  PAPER_LINKS.madaspure={1:build('mp2_practice_papers','mp2',PURE)};
+  PAPER_LINKS.madasapplied={1:build('mms_practice_papers','mms',APP)};
 })();
 function ppPaperLinks(moduleId,n){ return (PAPER_LINKS[moduleId]&&PAPER_LINKS[moduleId][n])||{}; }
+// Madas-style modules key their papers by letter (A–Z) rather than year
+function ppIsLetterModule(mid){ return mid==='madaspure'||mid==='madasapplied'; }
+function ppSeriesOrder(mid){ return ppIsLetterModule(mid)?PP_LETTER_ORDER:PP_YEAR_ORDER; }
+// Max marks for one paper instance — Madas carries per-letter marks on the link entry
+function ppPaperMaxFor(mid,n,year){ var lk=ppPaperLinks(mid,n)[year]; if(lk&&lk.max!=null)return lk.max; var p=ppPaper(mid,n); return p?p.max:0; }
 // All series keys (years, or Madas letters) that exist for the visible modules, in order
 function ppAvailableYears(){
   const set=new Set();
@@ -6900,17 +6912,19 @@ function ppPaperCard(m,p,year){
   var top=document.createElement('div');top.className='pp-paper-top';
   var left=document.createElement('div');
   var nm=document.createElement('div');nm.className='pp-paper-name';nm.textContent=p.name;
+  var maxMarks=(links.max!=null)?links.max:p.max;       // Madas papers carry per-letter marks/mins
+  var paperMins=(links.mins!=null)?links.mins:p.mins;
   var meta=document.createElement('div');meta.className='pp-paper-meta';
   var seriesLabel=(ppPaperType==='madas')?('Paper '+year):year;
-  meta.textContent=seriesLabel+' · '+p.max+' marks · '+ppFmtMins(p.mins);
+  meta.textContent=seriesLabel+' · '+maxMarks+' marks · '+ppFmtMins(paperMins);
   left.append(nm,meta);
   var status=document.createElement('div');
   if(latest){
     status.className='pp-status done';
-    var pct=Math.round((latest.marks/p.max)*100);
+    var pct=Math.round((latest.marks/maxMarks)*100);
     var gradeG=latest.grade||getGradeForMarks(latest.marks,m.id,p.n,latest.year||year);
     var gradeHtml=gradeG?'<span class="'+gbBadgeClass(gradeG)+'">'+gradeG+'</span>':'';
-    status.innerHTML='<span class="pp-marks">'+latest.marks+' / '+p.max+'</span> ('+pct+'%)'+gradeHtml;
+    status.innerHTML='<span class="pp-marks">'+latest.marks+' / '+maxMarks+'</span> ('+pct+'%)'+gradeHtml;
     if(logs.length>1){var b=document.createElement('span');b.className='pp-attempt-badge';b.textContent='×'+logs.length;status.appendChild(b);}
   }else{
     status.className='pp-status notdone';status.textContent='Not attempted yet';
@@ -6931,11 +6945,9 @@ function ppPaperCard(m,p,year){
   var tb=document.createElement('button');tb.className='pp-act timer';tb.innerHTML='<span>⏱</span>Timer';
   tb.addEventListener('click',function(){openTimer(m.id,p.n,year);});
   acts.appendChild(tb);
-  if(ppPaperType!=='madas'){ // per-paper logging arrives with the Madas mark breakdowns
-    var lg=document.createElement('button');lg.className='pp-act log';lg.innerHTML='<span>＋</span>Log result';
-    lg.addEventListener('click',function(){openPaperLog({moduleId:m.id,paperN:p.n,year:year});});
-    acts.appendChild(lg);
-  }
+  var lg=document.createElement('button');lg.className='pp-act log';lg.innerHTML='<span>＋</span>Log result';
+  lg.addEventListener('click',function(){openPaperLog({moduleId:m.id,paperN:p.n,year:year});});
+  acts.appendChild(lg);
   card.appendChild(acts);
   return card;
 }
@@ -6994,14 +7006,18 @@ function plogFillPapers(){
 function plogFillYears(){
   var mid=document.getElementById('plog-module').value,n=+document.getElementById('plog-paper').value;
   var sel=document.getElementById('plog-year');sel.innerHTML='';
-  var links=ppPaperLinks(mid,n);
-  PP_YEAR_ORDER.filter(function(y){return links[y];}).slice().reverse().forEach(function(y){var o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o);});
-  var p=ppPaper(mid,n);if(p)document.getElementById('plog-time').value=p.mins;
+  var links=ppPaperLinks(mid,n),letter=ppIsLetterModule(mid);
+  var order=ppSeriesOrder(mid).filter(function(y){return links[y];});
+  if(!letter)order=order.slice().reverse(); // years newest-first; Madas letters A→Z
+  order.forEach(function(y){var o=document.createElement('option');o.value=y;o.textContent=letter?('Paper '+y):y;sel.appendChild(o);});
+  var lk=ppPaperLinks(mid,n)[sel.value],p=ppPaper(mid,n);
+  document.getElementById('plog-time').value=(lk&&lk.mins!=null)?lk.mins:(p?p.mins:'');
   plogSyncMax();
 }
 function plogSyncMax(){
-  var p=ppPaper(document.getElementById('plog-module').value,+document.getElementById('plog-paper').value);
-  document.getElementById('plog-max').textContent=p?p.max:'—';
+  var mid=document.getElementById('plog-module').value,n=+document.getElementById('plog-paper').value,y=document.getElementById('plog-year').value;
+  var mx=ppPaperMaxFor(mid,n,y);
+  document.getElementById('plog-max').textContent=mx||'—';
 }
 function updatePlogDiff(){var d=+document.getElementById('plog-diff').value;document.getElementById('plog-diff-val').textContent=d+' — '+ppDiffLabel(d);}
 // ── Per-question breakdown in the logger ──
@@ -7168,36 +7184,39 @@ function closePaperPerf(){document.getElementById('paperperf-overlay').classList
 function renderPerfCharts(){
   var wrap=document.getElementById('perf-charts');if(!wrap)return;wrap.innerHTML='';
   var mid=document.getElementById('perf-module').value,m=ppModuleById(mid);if(!m)return;
+  var letter=ppIsLetterModule(mid);
   m.papers.forEach(function(p){
     var links=ppPaperLinks(mid,p.n);
-    var years=PP_YEAR_ORDER.filter(function(y){return links[y];});
-    if(!years.length)return;
-    var data=years.map(function(y){var l=ppLatest(mid,p.n,y);return {year:y,marks:l?l.marks:0,done:!!l};});
-    wrap.appendChild(perfChart(p,data));
+    var series=ppSeriesOrder(mid).filter(function(y){return links[y];});
+    if(!series.length)return;
+    var data=series.map(function(y){var l=ppLatest(mid,p.n,y);return {year:y,marks:l?l.marks:0,done:!!l,max:ppPaperMaxFor(mid,p.n,y)};});
+    wrap.appendChild(perfChart(p,data,letter));
   });
   if(!wrap.childElementCount){var e=document.createElement('div');e.className='perf-empty';e.textContent='No papers in this module.';wrap.appendChild(e);}
 }
-function perfChart(p,data){
+function perfChart(p,data,asPercent){
   var box=document.createElement('div');box.className='perf-chart';
-  var best=data.reduce(function(mx,d){return Math.max(mx,d.marks);},0);
+  var unitMax=asPercent?100:p.max;                                  // Madas papers vary in total, so plot %
+  function val(d){return asPercent?(d.max?Math.round(d.marks/d.max*100):0):d.marks;}
+  var best=data.reduce(function(mx,d){return Math.max(mx,val(d));},0);
   var ttl=document.createElement('div');ttl.className='perf-chart-title';
-  ttl.innerHTML='<span>'+p.name+'</span><span class="best">best '+best+'/'+p.max+'</span>';
+  ttl.innerHTML='<span>'+p.name+'</span><span class="best">best '+best+(asPercent?'%':'/'+p.max)+'</span>';
   box.appendChild(ttl);
   var W=520,H=190,padL=40,padR=16,padT=14,padB=30,n=data.length;
   function X(i){return n<=1?padL+(W-padL-padR)/2:padL+i*(W-padL-padR)/(n-1);}
-  function Y(v){return padT+(1-v/p.max)*(H-padT-padB);}
+  function Y(v){return padT+(1-v/unitMax)*(H-padT-padB);}
   var svg='<svg class="perf-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
   [0,0.25,0.5,0.75,1].forEach(function(f){
-    var yy=Y(p.max*f);
+    var yy=Y(unitMax*f);
     svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" style="stroke:var(--border)" stroke-width="1"/>';
-    svg+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" text-anchor="end" font-size="9" font-family="monospace" style="fill:var(--muted)">'+Math.round(p.max*f)+'</text>';
+    svg+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" text-anchor="end" font-size="9" font-family="monospace" style="fill:var(--muted)">'+Math.round(unitMax*f)+(asPercent?'%':'')+'</text>';
   });
-  var pts=data.map(function(d,i){return X(i)+','+Y(d.marks);}).join(' ');
+  var pts=data.map(function(d,i){return X(i)+','+Y(val(d));}).join(' ');
   svg+='<polyline points="'+pts+'" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
   data.forEach(function(d,i){
-    svg+='<circle cx="'+X(i)+'" cy="'+Y(d.marks)+'" r="'+(d.done?4:3)+'" style="'+(d.done?'fill:var(--accent);stroke:var(--accent)':'fill:var(--surface);stroke:var(--accent)')+'" stroke-width="2"/>';
+    svg+='<circle cx="'+X(i)+'" cy="'+Y(val(d))+'" r="'+(d.done?4:3)+'" style="'+(d.done?'fill:var(--accent);stroke:var(--accent)':'fill:var(--surface);stroke:var(--accent)')+'" stroke-width="2"/>';
     svg+='<text x="'+X(i)+'" y="'+(H-padB+15)+'" text-anchor="middle" font-size="9" font-family="monospace" style="fill:var(--muted)">'+(d.year==='Specimen'?'Spec':d.year)+'</text>';
-    if(d.done)svg+='<text x="'+X(i)+'" y="'+(Y(d.marks)-8)+'" text-anchor="middle" font-size="9" font-family="monospace" style="fill:var(--text)">'+d.marks+'</text>';
+    if(d.done)svg+='<text x="'+X(i)+'" y="'+(Y(val(d))-8)+'" text-anchor="middle" font-size="9" font-family="monospace" style="fill:var(--text)">'+val(d)+(asPercent?'%':'')+'</text>';
   });
   svg+='</svg>';
   var holder=document.createElement('div');holder.innerHTML=svg;box.appendChild(holder.firstElementChild);
@@ -7208,9 +7227,12 @@ function perfChart(p,data){
 var timerState={mid:null,n:null,year:null,total:0,remaining:0,running:false,interval:null};
 function openTimer(mid,n,year){
   var p=ppPaper(mid,n);if(!p)return;
+  var lk=ppPaperLinks(mid,n)[year]||{};
+  var mins=(lk.mins!=null)?lk.mins:p.mins;          // Madas papers vary 2h/3h per letter
+  var label=(mid.indexOf('madas')===0)?('Paper '+year):year;
   timerState.mid=mid;timerState.n=n;timerState.year=year;
-  timerState.total=p.mins*60;timerState.remaining=p.mins*60;timerState.running=true;
-  document.getElementById('timer-paper').textContent=ppModuleById(mid).name+' · '+p.name+' · '+year;
+  timerState.total=mins*60;timerState.remaining=mins*60;timerState.running=true;
+  document.getElementById('timer-paper').textContent=ppModuleById(mid).name+' · '+p.name+' · '+label;
   document.getElementById('timer-toggle').textContent='Pause';
   timerRender();
   if(timerState.interval)clearInterval(timerState.interval);
