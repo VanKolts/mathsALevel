@@ -552,6 +552,12 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
   /* Sliders: thin visible track, tall invisible touch zone */
   .rating-slider,.pp-slider,.plog-slider{height:40px;background-size:100% 5px;background-position:center;background-repeat:no-repeat;}
   .sspring-thumb{width:23px;height:23px;}
+  /* Past-papers type toggle scrolls sideways when it has many tabs (AS/A-Level/FM/Madas) */
+  .pp-type-seg{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .pp-type-seg::-webkit-scrollbar{display:none;}
+  .pp-type-btn{flex-shrink:0;}
+  /* Madas slider has 26 ticks (A–Z) — keep them tiny so they fit */
+  .pp-slider-ticks span{font-size:8px;}
 }
 
 /*   ACCESSIBILITY    */
@@ -1382,10 +1388,11 @@ html{scroll-behavior:smooth;}
       <button class="pp-type-btn" data-type="as">AS Maths</button>
       <button class="pp-type-btn active" data-type="alevel">A-Level Maths</button>
       <button class="pp-type-btn" data-type="fm">Further Maths</button>
+      <button class="pp-type-btn" data-type="madas">Madas</button>
     </div>
     <div class="pp-slider-card">
       <div class="pp-slider-head">
-        <span class="lbl">Exam series</span>
+        <span class="lbl" id="pp-slider-lbl">Exam series</span>
         <span class="pp-year-now" id="pp-year-now">2024</span>
       </div>
       <input type="range" class="pp-slider" id="pp-year-slider" min="0" max="0" step="1" value="0" aria-label="Choose exam year">
@@ -2725,7 +2732,11 @@ const PAPER_MODULES=[
   {id:'fm1',name:'Further Maths — Further Mechanics 1',sub:'Edexcel 9FM0',need:'fm1',papers:[
     {n:1,name:'Further Mechanics 1',max:75,mins:90}]},
   {id:'d1',name:'Further Maths — Decision 1',sub:'Edexcel 9FM0',need:'d1',papers:[
-    {n:1,name:'Decision 1',max:75,mins:90}]}
+    {n:1,name:'Decision 1',max:75,mins:90}]},
+  {id:'madaspure',name:'Madas — Pure',sub:'IYGB practice',need:null,papers:[
+    {n:1,name:'Pure Paper',max:100,mins:120}]},
+  {id:'madasapplied',name:'Madas — Applied',sub:'IYGB practice',need:null,papers:[
+    {n:1,name:'Applied Paper',max:150,mins:180}]}
 ];
 // ── Per-question breakdowns (marks + exact checklist topics per question/part) ──
 // Source: official Edexcel question papers + mark schemes. Topics use exact checklist names.
@@ -4193,6 +4204,7 @@ function ppModulesForType(type){
   return PAPER_MODULES.filter(function(m){
     if(type==='alevel') return m.id==='alevel';
     if(type==='as') return m.id==='as';
+    if(type==='madas') return m.id==='madaspure'||m.id==='madasapplied';
     if(m.id==='fmcp') return true;                       // always show Core Pure
     return FM_OPT_IDS.indexOf(m.id)>=0 && fmOptions.has(m.id);
   });
@@ -4365,14 +4377,30 @@ const PAPER_LINKS={
 };
 // Canonical year order for the slider (oldest→newest, Specimen first)
 const PP_YEAR_ORDER=['Specimen','2018','2019','2020','2021','2022','2023','2024'];
+// Madas papers use letters A–Z on the slider instead of years
+const PP_LETTER_ORDER=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+// Madas / IYGB practice papers (A–Z), hosted on madasmaths.com. Each has the paper + full
+// solutions (no separate mark scheme). mp2 = Pure, mms = Applied (Stats & Mechanics).
+(function(){
+  var MAD='https://www.madasmaths.com/archive/iygb_practice_papers/';
+  var pure={}, app={};
+  PP_LETTER_ORDER.forEach(function(L){
+    var l=L.toLowerCase();
+    pure[L]={qp:MAD+'mp2_practice_papers/mp2_'+l+'.pdf',ms:null,sol:MAD+'mp2_practice_papers/mp2_'+l+'_solutions.pdf'};
+    app[L] ={qp:MAD+'mms_practice_papers/mms_'+l+'.pdf',ms:null,sol:MAD+'mms_practice_papers/mms_'+l+'_solutions.pdf'};
+  });
+  PAPER_LINKS.madaspure={1:pure};
+  PAPER_LINKS.madasapplied={1:app};
+})();
 function ppPaperLinks(moduleId,n){ return (PAPER_LINKS[moduleId]&&PAPER_LINKS[moduleId][n])||{}; }
-// All years that exist for any currently-visible module/paper, in canonical order
+// All series keys (years, or Madas letters) that exist for the visible modules, in order
 function ppAvailableYears(){
   const set=new Set();
   ppModulesForType(ppPaperType).forEach(m=>m.papers.forEach(p=>{
     Object.keys(ppPaperLinks(m.id,p.n)).forEach(y=>set.add(y));
   }));
-  return PP_YEAR_ORDER.filter(y=>set.has(y));
+  const order = ppPaperType==='madas' ? PP_LETTER_ORDER : PP_YEAR_ORDER;
+  return order.filter(y=>set.has(y));
 }
 
 // ---- Formula sheet (A-Level Maths, Edexcel 9MA0). Rendered as styled HTML.
@@ -6803,11 +6831,15 @@ function ppSetupSlider(){
   var slider=document.getElementById('pp-year-slider');
   var ticks=document.getElementById('pp-year-ticks');
   var now=document.getElementById('pp-year-now');
+  var lbl=document.getElementById('pp-slider-lbl');
   if(!slider)return;
+  var isMadas=ppPaperType==='madas';
+  if(lbl)lbl.textContent=isMadas?'Madas paper':'Exam series';
+  function disp(y){return isMadas?('Paper '+y):y;}
   if(!years.length){slider.disabled=true;if(now)now.textContent='—';return;}
   slider.disabled=false;
   slider.min=0;slider.max=years.length-1;slider.step=1;
-  var idx=years.length-1;
+  var idx=isMadas?0:years.length-1;
   if(ppActiveYear&&years.indexOf(ppActiveYear)>=0)idx=years.indexOf(ppActiveYear);
   slider.value=idx;
   ppActiveYear=years[idx];
@@ -6815,10 +6847,11 @@ function ppSetupSlider(){
   years.forEach(function(y){var sp=document.createElement('span');sp.textContent=(y==='Specimen'?'Spec':y);ticks.appendChild(sp);});
   slider.oninput=function(){
     ppActiveYear=years[+slider.value];
-    now.textContent=ppActiveYear;
+    now.textContent=disp(ppActiveYear);
     renderPaperBreakdown();
   };
-  now.textContent=ppActiveYear;
+  now.textContent=disp(ppActiveYear);
+  if(typeof syncSpringSliders==='function')setTimeout(syncSpringSliders,30); // re-seat the spring thumb after a programmatic value change
 }
 function renderPaperBrowser(){ ppSetupSlider(); renderPaperBreakdown(); }
 function positionPpPill(){
@@ -6828,6 +6861,10 @@ function positionPpPill(){
   if(!active||!pill)return;
   pill.style.left=active.offsetLeft+'px';
   pill.style.width=active.offsetWidth+'px';
+  // On mobile the toggle scrolls; keep the active tab in view (direct set survives re-render)
+  if(seg.scrollWidth>seg.clientWidth+2){
+    seg.scrollLeft=Math.max(0,active.offsetLeft-(seg.clientWidth-active.offsetWidth)/2);
+  }
 }
 function ppSetType(type){
   if(type===ppPaperType)return;
@@ -6863,7 +6900,9 @@ function ppPaperCard(m,p,year){
   var top=document.createElement('div');top.className='pp-paper-top';
   var left=document.createElement('div');
   var nm=document.createElement('div');nm.className='pp-paper-name';nm.textContent=p.name;
-  var meta=document.createElement('div');meta.className='pp-paper-meta';meta.textContent=year+' · '+p.max+' marks · '+ppFmtMins(p.mins);
+  var meta=document.createElement('div');meta.className='pp-paper-meta';
+  var seriesLabel=(ppPaperType==='madas')?('Paper '+year):year;
+  meta.textContent=seriesLabel+' · '+p.max+' marks · '+ppFmtMins(p.mins);
   left.append(nm,meta);
   var status=document.createElement('div');
   if(latest){
@@ -6892,9 +6931,11 @@ function ppPaperCard(m,p,year){
   var tb=document.createElement('button');tb.className='pp-act timer';tb.innerHTML='<span>⏱</span>Timer';
   tb.addEventListener('click',function(){openTimer(m.id,p.n,year);});
   acts.appendChild(tb);
-  var lg=document.createElement('button');lg.className='pp-act log';lg.innerHTML='<span>＋</span>Log result';
-  lg.addEventListener('click',function(){openPaperLog({moduleId:m.id,paperN:p.n,year:year});});
-  acts.appendChild(lg);
+  if(ppPaperType!=='madas'){ // per-paper logging arrives with the Madas mark breakdowns
+    var lg=document.createElement('button');lg.className='pp-act log';lg.innerHTML='<span>＋</span>Log result';
+    lg.addEventListener('click',function(){openPaperLog({moduleId:m.id,paperN:p.n,year:year});});
+    acts.appendChild(lg);
+  }
   card.appendChild(acts);
   return card;
 }
