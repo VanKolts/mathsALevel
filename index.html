@@ -1509,6 +1509,15 @@ html{scroll-behavior:smooth;}
       <button class="stats-close" id="settings-close" aria-label="Close">&#10005;</button>
     </div>
     <div class="stats-body">
+      <div class="settings-card" id="account-card" style="display:none">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-title">Account</div>
+            <div class="settings-row-sub" id="account-email">Signed in</div>
+          </div>
+          <button class="settings-btn" id="logout-btn">Log out</button>
+        </div>
+      </div>
       <div class="settings-card">
         <div class="settings-row">
           <div class="settings-row-info">
@@ -5424,9 +5433,28 @@ document.getElementById('open-shortcuts-btn').addEventListener('click',openShort
 
 function openSettings(){
   renderSettings();
+  // Account card: show signed-in email + log-out (only when cloud sync is active)
+  var card=document.getElementById('account-card');
+  var email=(typeof window.mhCurrentEmail==='function')?window.mhCurrentEmail():null;
+  if(card){
+    if(email){
+      card.style.display='';
+      var em=document.getElementById('account-email');
+      if(em)em.textContent='Signed in as '+email;
+    }else{
+      card.style.display='none';
+    }
+  }
   document.getElementById('settings-overlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
+(function(){
+  var lb=document.getElementById('logout-btn');
+  if(lb)lb.addEventListener('click',function(){
+    if(typeof window.mhSignOut!=='function')return;
+    if(confirm('Log out? Your progress is safely saved to your account — you can log back in any time, on any device.'))window.mhSignOut();
+  });
+})();
 function closeSettings(){
   document.getElementById('settings-overlay').classList.remove('open');
   document.body.style.overflow='';
