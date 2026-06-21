@@ -1078,9 +1078,6 @@ html{scroll-behavior:smooth;}
     <div class="hdr-actions">
       <button class="hdr-btn" id="focus-btn" aria-label="Focus timer" title="Start a focus session">🍅 Focus</button>
       <button class="hdr-btn" id="tutor-btn" aria-label="AI tutor" title="Get a step-by-step walkthrough">✨ Tutor</button>
-      <button class="hdr-btn" id="import-btn" aria-label="Import backup file">Import</button>
-      <button class="hdr-btn acc" id="export-btn" aria-label="Export backup file">Export</button>
-      <input type="file" id="import-file" accept=".json" style="display:none">
     </div>
   </div>
 </div>
@@ -1134,7 +1131,7 @@ html{scroll-behavior:smooth;}
     </div>
   </div>
   <main>
-    <div class="storage-warning" id="storage-warning" role="alert">Storage is nearly full. Export a backup (top right) and consider deleting old mistake images, otherwise new changes may stop saving.</div>
+    <div class="storage-warning" id="storage-warning" role="alert">This device's storage is nearly full — deleting old mistake images can help. Your progress is still safely backed up to your account.</div>
     <div class="stats-bar">
       <div class="stat-item">Visible: <strong id="s-total">0</strong></div>
       <div class="stat-item">Studied: <strong id="s-done">0</strong></div>
@@ -5612,33 +5609,7 @@ function toast(msg, duration){
 //                                                           
 // EXPORT / IMPORT
 //                                                           
-function doExport(){
-  const data={sr,mistakes,favourites:[...favourites],notes,exported:today()};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='alevel-maths-backup-'+today()+'.json';a.click();
-}
-document.getElementById('export-btn').addEventListener('click',doExport);
-document.getElementById('import-btn').addEventListener('click',()=>document.getElementById('import-file').click());
-document.getElementById('import-file').addEventListener('change',function(){
-  const file=this.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const data=JSON.parse(e.target.result);
-      if(data.sr) sr=data.sr;
-      if(data.mistakes) mistakes=data.mistakes;
-      if(data.favourites) favourites=new Set(data.favourites);
-      if(data.notes) notes=data.notes;
-      sanitizeAllSR();
-      saveState();renderReviewPanel();renderAll();
-      if(activeTab==='mistakes')renderMistakesTab();
-          if(activeTab==='resources')renderResources();
-      alert('Data imported successfully!');
-    }catch(err){alert('Could not read file. Make sure it is a valid backup JSON.');}
-  };
-  reader.readAsText(file);this.value='';
-});
+// Export/import removed 2026-06-21 — data now auto-syncs to the cloud (Firebase) per account.
 
 //                                                           
 // FORMULA MODAL
