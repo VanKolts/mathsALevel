@@ -6800,6 +6800,65 @@ async function reattemptExplain(){
   finally{ ai.disabled=false; }
 }
 
+// ---- Re-attempt loop: resurface a detailed mistake (with a photo) to redo ----
+var reattemptCurrent=null;
+function reattemptPool(){ return mistakes.filter(function(m){ return m.answer && (m.qImgId||m.img); }); }
+function renderReattempt(pick){
+  var card=document.getElementById('m-reattempt'); if(!card)return;
+  var pool=reattemptPool();
+  if(!pool.length){ card.style.display='none'; reattemptCurrent=null; return; }
+  card.style.display='block';
+  var m=pick||reattemptCurrent;
+  if(!m||pool.indexOf(m)<0) m=pool[Math.floor(Math.random()*pool.length)];
+  reattemptCurrent=m;
+  document.getElementById('m-reattempt-topic').textContent=m.topic+(m.date?(' · logged '+fmtDate(m.date)):'');
+  document.getElementById('m-reattempt-q').textContent=m.question||'(no question text — see the photo)';
+  var imgEl=document.getElementById('m-reattempt-img'); imgEl.style.display='none'; imgEl.removeAttribute('src');
+  if(m.img){ imgEl.src=m.img; imgEl.style.display='block'; }
+  else if(m.qImgId&&typeof window.mhGetImage==='function'){ window.mhGetImage(m.qImgId).then(function(src){ if(src&&reattemptCurrent===m){ imgEl.src=src; imgEl.style.display='block'; } }); }
+  document.getElementById('m-reattempt-answer').style.display='none';
+  document.getElementById('m-reattempt-reveal').style.display='block';
+  document.getElementById('m-reattempt-ans-text').textContent=m.answer||'';
+  document.getElementById('m-reattempt-wrong').textContent=m.text||'';
+  document.getElementById('m-reattempt-ai-out').innerHTML='';
+}
+function reattemptShuffle(){
+  var pool=reattemptPool(); if(!pool.length)return;
+  var m=reattemptCurrent; if(pool.length>1){ do{ m=pool[Math.floor(Math.random()*pool.length)]; }while(m===reattemptCurrent); }
+  renderReattempt(m);
+}
+(function(){
+  var rev=document.getElementById('m-reattempt-reveal'); if(rev)rev.addEventListener('click',function(){ document.getElementById('m-reattempt-answer').style.display='block'; this.style.display='none'; });
+  var sh=document.getElementById('m-reattempt-shuffle'); if(sh)sh.addEventListener('click',reattemptShuffle);
+  var ai=document.getElementById('m-reattempt-ai'); if(ai)ai.addEventListener('click',function(){ reattemptExplainAI(this); });
+})();
+async function reattemptExplainAI(btn){
+  var m=reattemptCurrent; if(!m)return;
+  var key=(typeof loadGeminiKey==='function')?loadGeminiKey():'';
+  var out=document.getElementById('m-reattempt-ai-out');
+  if(!key){ out.innerHTML='<span style="color:var(--overdue)">Add your Gemini key in Settings → AI Tutor first.</span>'; return; }
+  btn.disabled=true; out.innerHTML='<div class="tutor-spinner"><span class="tutor-spin-dot"></span>Working through it…</div>';
+  var prompt='You are a friendly A-Level maths tutor. A student previously got this question wrong and is re-attempting it. '
+    +'Explain the correct method step by step, clearly and concisely. Use $...$ for inline maths and $$...$$ for display maths.\n\n'
+    +'Topic: '+m.topic+'\nQuestion: '+(m.question||'(see image)')+'\n\nThe answer they recorded: '+(m.answer||'')
+    +'\n\nLast time they went wrong because: '+(m.text||'')+'\n\nGently focus on getting them past that specific mistake.';
+  var parts=[{text:prompt}];
+  try{
+    var imgSrc=m.img;
+    if(!imgSrc&&m.qImgId&&typeof window.mhGetImage==='function') imgSrc=await window.mhGetImage(m.qImgId);
+    if(imgSrc&&imgSrc.indexOf('data:')===0){ var b64=imgSrc.split(',')[1]; var mime=((imgSrc.split(';')[0]||'').split(':')[1])||'image/jpeg'; parts.push({inline_data:{mime_type:mime,data:b64}}); }
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.3}})});
+    var data=await r.json();
+    if(!r.ok)throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
+    var cand=data.candidates&&data.candidates[0];
+    var txt=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
+    if(!txt)throw new Error('No answer returned. Try again.');
+    out.innerHTML=(typeof tutorMd==='function')?tutorMd(txt):txt;
+    if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([out]).catch(function(){});
+  }catch(e){ out.innerHTML='<span style="color:var(--overdue)">Couldn’t get an explanation: '+((typeof tutorEsc==='function')?tutorEsc(e.message):e.message)+'</span>'; }
+  finally{ btn.disabled=false; }
+}
+
 function renderMistakesTab(){
   renderReattempt();
   const logList=document.getElementById('mistake-list');logList.innerHTML='';
@@ -7710,16 +7769,36 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
 
   var nativeSet=localStorage.setItem.bind(localStorage);
   var currentUser=null, pushTimer=null;
+  var myWriter=localStorage.getItem('mh_writer'); if(!myWriter){ myWriter=Math.random().toString(36).slice(2)+Date.now().toString(36); nativeSet('mh_writer',myWriter); }
+  function docStamp(d){ var u=d&&d.updatedAt; if(u&&u.seconds!=null)u=u.seconds*1000; return ((d&&d.writer)||'?')+'|'+(u||0); }
 
   function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
   function applyToLocal(store){ if(!store)return; SYNC_KEYS.forEach(function(k){ if(store[k]!=null)nativeSet(k,store[k]); }); }
   function pushNow(){
     if(!currentUser)return;
+    var stamp=Date.now(); try{nativeSet('mh_stamp',myWriter+'|'+stamp);}catch(e){}
     db.collection('users').doc(currentUser.uid).set(
-      { store:collectLocal(), updatedAt:firebase.firestore.FieldValue.serverTimestamp() },
+      { store:collectLocal(), updatedAt:stamp, writer:myWriter },
       { merge:true }
     ).catch(function(e){ console.warn('[cloud] save failed',e); });
   }
+  // Re-pull when the app regains focus / periodically, so a 2nd device sees the 1st's changes.
+  var pulling=false;
+  function syncPull(){
+    if(!currentUser||pulling)return; pulling=true;
+    db.collection('users').doc(currentUser.uid).get().then(function(snap){
+      pulling=false;
+      if(!snap.exists)return; var d=snap.data(); if(!d||!d.store)return;
+      var remote=docStamp(d), mine=localStorage.getItem('mh_stamp')||'';
+      if(remote===mine)return;
+      if(d.writer===myWriter){ nativeSet('mh_stamp',remote); return; }
+      applyToLocal(d.store); nativeSet('mh_stamp',remote);
+      location.reload();
+    }).catch(function(){ pulling=false; });
+  }
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden)syncPull(); });
+  window.addEventListener('focus',syncPull);
+  setInterval(function(){ if(!document.hidden)syncPull(); },25000);
   function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1500); }
 
   // Mirror every app save up to the cloud (debounced). localStorage stays the fast local cache.
@@ -7803,6 +7882,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     db.collection('users').doc(user.uid).get().then(function(snap){
       if(snap.exists && snap.data() && snap.data().store){
         applyToLocal(snap.data().store);        // pull cloud -> local
+        nativeSet('mh_stamp',docStamp(snap.data()));
         sessionStorage.setItem('mh_synced','1');
         location.reload();                       // re-read everything cleanly
       }else{
