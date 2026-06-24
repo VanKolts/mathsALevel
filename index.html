@@ -6951,10 +6951,13 @@ function ppSetupSlider(){
   slider.value=idx;
   ppActiveYear=years[idx];
   ticks.innerHTML='';
-  var tstep=years.length>14?Math.ceil(years.length/8):1; // don't cram 30+ tick labels
-  years.forEach(function(y,i){
+  // shrink labels (inline, to override the stylesheet rule) so EVERY element fits — Madas A–Z, Naiker, old-spec
+  var tfs = years.length>26 ? 7 : years.length>18 ? 7.5 : years.length>12 ? 8.5 : 9;
+  years.forEach(function(y){
     var sp=document.createElement('span');
-    sp.textContent=((i%tstep===0)||i===years.length-1)?ppTickLabel(y):'';
+    sp.style.fontSize=tfs+'px';
+    if(isOld){ var m=y.match(/^(\w{3})\w*\s+20(\d\d)$/); sp.innerHTML=m?(m[1]+"<br>'"+m[2]):y; sp.style.lineHeight='1.05'; sp.style.textAlign='center'; }
+    else sp.textContent=ppTickLabel(y);   // label EVERY element
     ticks.appendChild(sp);
   });
   slider.oninput=function(){
