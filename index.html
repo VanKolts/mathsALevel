@@ -6102,7 +6102,7 @@ function openModal(topicName,fromReviewPanel){
   const db=document.createElement('span');db.className='diff-lbl '+diffClass;db.textContent=DIFF_LABELS[diff];
   sub.append(ns,db);
 
-  document.getElementById('modal-date').value=rec?rec.last:today();
+  document.getElementById('modal-date').value=today();   // always default to today, even if the topic is overdue
   document.getElementById('modal-clear-btn').style.display=rec?'block':'none';
   document.getElementById('modal-notes').value=notes[topicName]||'';
 
