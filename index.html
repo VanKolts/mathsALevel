@@ -328,6 +328,26 @@ main{max-width:1060px;margin:0 auto;padding:1.2rem 1.5rem 2rem;}
 .m-cat-badge{font-size:9px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:3px;background:rgba(251,191,36,.1);color:var(--due);border:1px solid rgba(251,191,36,.25);}
 .m-text{font-size:12px;color:var(--text);line-height:1.5;margin-bottom:4px;}
 .m-img{max-width:120px;max-height:80px;border-radius:4px;border:1px solid var(--border2);margin-top:4px;cursor:pointer;}
+/* Mistake-log mode toggle (Quick / Detailed) */
+.m-mode-seg{display:flex;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:4px;margin-bottom:8px;position:relative;}
+.m-mode-btn{flex:1;padding:8px 10px;border:none;border-radius:7px;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.m-mode-btn.active{background:var(--grad);color:#fff;}
+.m-mode-hint{font-size:11px;color:var(--dim);margin-bottom:12px;font-style:italic;}
+/* Re-attempt card */
+.reattempt-card{background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa) border-box;border:1.5px solid transparent;border-radius:12px;padding:14px 16px;margin-bottom:18px;}
+.reattempt-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.reattempt-eyebrow{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);}
+.reattempt-shuffle{font-size:11px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer;padding:4px 10px;}
+.reattempt-topic{font-size:11px;color:var(--dim);margin-bottom:4px;}
+.reattempt-q{font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;margin-bottom:8px;}
+.reattempt-img{max-width:100%;max-height:320px;border-radius:8px;border:1px solid var(--border2);margin-bottom:10px;}
+.reattempt-reveal{width:100%;padding:10px;border:1px dashed var(--border2);border-radius:8px;background:transparent;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;}
+.reattempt-reveal-box{margin-top:10px;border-top:1px solid var(--border2);padding-top:6px;}
+.reattempt-ans-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:8px 0 3px;font-weight:700;}
+.reattempt-ans-text{font-size:12px;color:var(--text);line-height:1.5;white-space:pre-wrap;}
+.reattempt-ai{margin-top:12px;padding:9px 14px;border:none;border-radius:8px;background:var(--grad);color:#fff;font-weight:600;font-size:12px;cursor:pointer;}
+.reattempt-ai:disabled{opacity:.6;cursor:default;}
+.reattempt-ai-out{margin-top:10px;font-size:12px;color:var(--text);line-height:1.55;}
 .m-date{font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;}
 .m-del{background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:15px;transition:color .15s;flex-shrink:0;padding:0 3px;}
 .m-del:hover{color:var(--overdue);}
@@ -1261,8 +1281,34 @@ html{scroll-behavior:smooth;}
 <!--            MISTAKES TAB             -->
 <div class="page" id="page-mistakes">
   <div class="tab-content">
+    <!-- Re-attempt loop: a random detailed mistake with a photo, surfaced to redo -->
+    <div class="reattempt-card" id="m-reattempt" style="display:none">
+      <div class="reattempt-hdr">
+        <span class="reattempt-eyebrow">🔁 Re-attempt this</span>
+        <button class="reattempt-shuffle" id="m-reattempt-shuffle" title="Show another">Shuffle ⤿</button>
+      </div>
+      <div class="reattempt-topic" id="m-reattempt-topic"></div>
+      <div class="reattempt-q" id="m-reattempt-q"></div>
+      <img class="reattempt-img" id="m-reattempt-img" style="display:none" alt="question"/>
+      <button class="reattempt-reveal" id="m-reattempt-reveal">Have a go on paper, then reveal ↓</button>
+      <div class="reattempt-reveal-box" id="m-reattempt-answer" style="display:none">
+        <div class="reattempt-ans-lbl">Answer / worked solution</div>
+        <div class="reattempt-ans-text" id="m-reattempt-ans-text"></div>
+        <div class="reattempt-ans-lbl">What went wrong last time</div>
+        <div class="reattempt-ans-text" id="m-reattempt-wrong"></div>
+        <button class="reattempt-ai" id="m-reattempt-ai">✨ Explain with AI</button>
+        <div class="reattempt-ai-out" id="m-reattempt-ai-out"></div>
+      </div>
+    </div>
+
     <div class="tab-sec-title">Log a Mistake</div>
     <div class="mistake-form">
+      <div class="m-mode-seg" id="m-mode-seg">
+        <span class="m-mode-pill" id="m-mode-pill"></span>
+        <button class="m-mode-btn active" id="m-mode-quick" data-mode="quick">⚡ Quick log</button>
+        <button class="m-mode-btn" id="m-mode-detailed" data-mode="detailed">📸 Detailed log</button>
+      </div>
+      <div class="m-mode-hint" id="m-mode-hint">A fast note — just the topic and what went wrong.</div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-lbl">Topic</label>
@@ -1282,9 +1328,23 @@ html{scroll-behavior:smooth;}
           </select>
         </div>
       </div>
+      <div id="m-detailed-fields" style="display:none">
+        <div class="form-group">
+          <label class="form-lbl">The question</label>
+          <textarea class="form-textarea" id="m-question" placeholder="Type the question — or just snap a photo below"></textarea>
+          <div class="img-upload-area" id="img-upload-area" style="margin-top:6px">📷  Add a photo of the question</div>
+          <input type="file" id="img-file-input" accept="image/*" style="display:none"/>
+          <img id="img-preview" class="img-preview" style="display:none;margin-top:6px"/>
+          <button id="m-img-clear" type="button" style="display:none;font-size:11px;background:transparent;border:none;color:var(--dim);cursor:pointer;margin-top:2px;">Remove photo</button>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Your answer / worked solution <span style="color:var(--accent)">*</span></label>
+          <textarea class="form-textarea" id="m-answer" placeholder="The correct answer and key steps — so you can self-mark when you re-attempt it"></textarea>
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-lbl">What went wrong?</label>
-        <textarea class="form-textarea" id="m-text" placeholder="e.g. Forgot to multiply by inner derivative when using chain rule"></textarea>
+        <textarea class="form-textarea" id="m-text" placeholder="e.g. Forgot to multiply by inner derivative when using chain rule"></textarea>
       </div>
       <div class="form-group">
         <label class="form-lbl">Severity &nbsp;<span id="m-sev-lbl" style="color:var(--accent);font-weight:600;font-size:11px;">3 — Moderate</span></label>
@@ -1293,17 +1353,9 @@ html{scroll-behavior:smooth;}
           <div class="sev-pips" id="m-sev-pips"></div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-lbl">Date (optional)</label>
-          <input type="date" class="form-input" id="m-date"/>
-        </div>
-        <div class="form-group">
-          <label class="form-lbl">Image (optional)</label>
-          <div class="img-upload-area" id="img-upload-area">📷  Click or drop image</div>
-          <input type="file" id="img-file-input" accept="image/*" style="display:none"/>
-          <img id="img-preview" class="img-preview" style="display:none"/>
-        </div>
+      <div class="form-group">
+        <label class="form-lbl">Date (optional)</label>
+        <input type="date" class="form-input" id="m-date"/>
       </div>
       <button class="add-btn" id="add-mistake-btn">Add mistake</button>
     </div>
@@ -6465,7 +6517,20 @@ document.querySelectorAll('.mk-filter-btn[data-group]').forEach(b=>b.addEventLis
 }));
 
 // Image upload with heavy compression
-let pendingImgData=null;
+let pendingImgData=null;          // readable question photo (data URL); uploaded to its own cloud record on save
+let mMode='quick';
+function setMistakeMode(mode){
+  mMode=mode;
+  document.getElementById('m-mode-quick').classList.toggle('active',mode==='quick');
+  document.getElementById('m-mode-detailed').classList.toggle('active',mode==='detailed');
+  document.getElementById('m-detailed-fields').style.display=mode==='detailed'?'block':'none';
+  document.getElementById('m-mode-hint').textContent=mode==='detailed'
+    ? 'A full record — the question, your worked answer & a photo. These feed the re-attempt loop above.'
+    : 'A fast note — just the topic and what went wrong.';
+}
+document.getElementById('m-mode-quick').addEventListener('click',()=>setMistakeMode('quick'));
+document.getElementById('m-mode-detailed').addEventListener('click',()=>setMistakeMode('detailed'));
+
 document.getElementById('img-upload-area').addEventListener('click',()=>document.getElementById('img-file-input').click());
 document.getElementById('img-file-input').addEventListener('change',function(){
   const file=this.files[0];if(!file)return;
@@ -6473,39 +6538,77 @@ document.getElementById('img-file-input').addEventListener('change',function(){
   reader.onload=e=>{
     const img=new Image();
     img.onload=()=>{
-      // Compress to max 200px wide, quality 0.25  very small file
       const canvas=document.createElement('canvas');
-      const maxW=200;const scale=Math.min(1,maxW/img.width);
+      const maxW=1000;const scale=Math.min(1,maxW/img.width);   // readable for re-attempt, still ~60-150KB
       canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
-      const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      pendingImgData=canvas.toDataURL('image/jpeg',0.25);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      pendingImgData=canvas.toDataURL('image/jpeg',0.55);
       const preview=document.getElementById('img-preview');
       preview.src=pendingImgData;preview.style.display='block';
+      document.getElementById('m-img-clear').style.display='block';
+      document.getElementById('img-upload-area').textContent='\u{1F4F7}  Change photo';
     };
     img.src=e.target.result;
   };
   reader.readAsDataURL(file);this.value='';
 });
+document.getElementById('m-img-clear').addEventListener('click',function(){
+  pendingImgData=null;
+  document.getElementById('img-preview').style.display='none';
+  this.style.display='none';
+  document.getElementById('img-upload-area').textContent='\u{1F4F7}  Add a photo of the question';
+});
 
-document.getElementById('add-mistake-btn').addEventListener('click',()=>{
+document.getElementById('add-mistake-btn').addEventListener('click',function(){
+  const btn=this;
   const topic=document.getElementById('m-topic-sel').value;
   const cat=document.getElementById('m-cat-sel').value;
   const text=document.getElementById('m-text').value.trim();
   const date=document.getElementById('m-date').value||today();
   const severity=+document.getElementById('m-severity').value||3;
   if(!text){document.getElementById('m-text').focus();return;}
-  mistakes.push({id:Date.now(),topic,cat,text,date,img:pendingImgData||null,severity});
-  // Mistakes now feed scheduling automatically via mistakeLoad() (severity + recency weighted):
-  // a logged mistake raises the topic's effective difficulty and pulls its next review earlier.
+  const m={id:Date.now(),topic,cat,text,date,severity};
+  if(mMode==='detailed'){
+    const question=document.getElementById('m-question').value.trim();
+    const answer=document.getElementById('m-answer').value.trim();
+    if(!answer){ if(typeof toast==='function')toast('Add the answer so you can self-mark on re-attempt'); document.getElementById('m-answer').focus(); return; }
+    m.question=question; m.answer=answer;
+    if(pendingImgData){
+      const data=pendingImgData;
+      if(typeof window.mhCloudReady==='function' && window.mhCloudReady()){
+        const imgId='mq_'+m.id;
+        btn.disabled=true; btn.textContent='Saving photo...';
+        window.mhPutImage(imgId,data).then(function(){
+          m.qImgId=imgId; btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
+        }).catch(function(){
+          m.img=data; btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
+          if(typeof toast==='function')toast('Saved - photo kept on this device (publish the Firebase rules to sync it)');
+        });
+        return;
+      }
+      m.img=data;
+    }
+  }
+  finishAddMistake(m);
+});
+// A logged mistake raises the topic's effective difficulty and pulls its next review earlier (mistakeLoad).
+function finishAddMistake(m){
+  mistakes.push(m);
   saveState();
   renderReviewPanel();
   if(activeTab==='checklist')renderAll();
   document.getElementById('m-text').value='';
+  var q=document.getElementById('m-question'),a=document.getElementById('m-answer');
+  if(q)q.value=''; if(a)a.value='';
   document.getElementById('m-severity').value=3;sevUpdateUI(3,'m-sev-lbl','m-sev-pips');
   pendingImgData=null;
   document.getElementById('img-preview').style.display='none';
+  var clr=document.getElementById('m-img-clear'); if(clr)clr.style.display='none';
+  document.getElementById('img-upload-area').textContent='\u{1F4F7}  Add a photo of the question';
   renderMistakesTab();
-});
+  renderReattempt();
+  if(typeof toast==='function')toast(m.answer?'Logged - re-attempt it from the panel above':'Mistake logged');
+}
 
 // Generic sliding pill positioner — works for any container with position:relative
 function positionPill(containerId, pillId){
@@ -6642,7 +6745,63 @@ function renderTrendChart(range){
   });
 }
 
+// ---- Re-attempt loop: surface a random detailed mistake (has answer + photo) to redo ----
+var reattemptCur=null;
+function reattemptCandidates(){ return mistakes.filter(function(m){ return m.answer && (m.qImgId || m.img); }); }
+function pickReattempt(cands,avoidId){ var pool=cands.filter(function(m){return m.id!==avoidId;}); if(!pool.length)pool=cands; return pool[Math.floor(Math.random()*pool.length)]; }
+function renderReattempt(){
+  var card=document.getElementById('m-reattempt'); if(!card)return;
+  var cands=reattemptCandidates();
+  if(!cands.length){ card.style.display='none'; reattemptCur=null; return; }
+  card.style.display='block';
+  if(!reattemptCur || !cands.some(function(m){return m.id===reattemptCur.id;})) reattemptCur=pickReattempt(cands,null);
+  paintReattempt();
+}
+function paintReattempt(){
+  var m=reattemptCur; if(!m)return;
+  document.getElementById('m-reattempt-topic').textContent=m.topic;
+  document.getElementById('m-reattempt-q').textContent=m.question||'(no question text — see the photo)';
+  var imgEl=document.getElementById('m-reattempt-img'); imgEl.style.display='none'; imgEl.src='';
+  if(m.img){ imgEl.src=m.img; imgEl.style.display='block'; }
+  else if(m.qImgId && typeof window.mhGetImage==='function'){ window.mhGetImage(m.qImgId).then(function(src){ if(src&&reattemptCur&&reattemptCur.id===m.id){ imgEl.src=src; imgEl.style.display='block'; } }); }
+  document.getElementById('m-reattempt-ans-text').textContent=m.answer||'';
+  document.getElementById('m-reattempt-wrong').textContent=m.text||'';
+  document.getElementById('m-reattempt-answer').style.display='none';
+  document.getElementById('m-reattempt-reveal').style.display='block';
+  document.getElementById('m-reattempt-ai-out').innerHTML='';
+}
+(function(){
+  var rev=document.getElementById('m-reattempt-reveal'),shuf=document.getElementById('m-reattempt-shuffle'),ai=document.getElementById('m-reattempt-ai');
+  if(rev)rev.addEventListener('click',function(){ document.getElementById('m-reattempt-answer').style.display='block'; rev.style.display='none'; });
+  if(shuf)shuf.addEventListener('click',function(){ var c=reattemptCandidates(); if(!c.length)return; reattemptCur=pickReattempt(c,reattemptCur?reattemptCur.id:null); paintReattempt(); });
+  if(ai)ai.addEventListener('click',reattemptExplain);
+})();
+async function reattemptExplain(){
+  var m=reattemptCur; if(!m)return;
+  var key=loadGeminiKey(); var out=document.getElementById('m-reattempt-ai-out');
+  if(!key){ out.innerHTML='<span style="color:var(--overdue)">Add your Gemini key in Settings &rarr; AI Tutor first.</span>'; return; }
+  var ai=document.getElementById('m-reattempt-ai'); ai.disabled=true;
+  out.innerHTML='<div class="tutor-spinner"><span class="tutor-spin-dot"></span>Explaining...</div>';
+  var prompt='You are an A-Level maths tutor. A student is re-attempting a question they previously got wrong.\n\nQuestion: '+(m.question||'(see the image)')+'\n\nThe correct answer they recorded: '+m.answer+'\n\nWhat they got wrong last time: '+m.text+'\n\nExplain step by step how to do it correctly, and specifically address their mistake so they do not repeat it. Use $...$ for inline maths and $$...$$ for display maths.';
+  var parts=[{text:prompt}];
+  function addImg(src){ var mt=(src.match(/^data:(image\/\w+);base64,/)||[])[1]||'image/jpeg'; parts.push({inline_data:{mime_type:mt,data:src.split(',')[1]}}); }
+  if(m.img) addImg(m.img);
+  else if(m.qImgId && typeof window.mhGetImage==='function'){ var s=await window.mhGetImage(m.qImgId); if(s)addImg(s); }
+  try{
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.3}})});
+    var data=await r.json();
+    if(!r.ok)throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
+    var cand=data.candidates&&data.candidates[0];
+    var t=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
+    if(!t)throw new Error('No answer returned. Try again.');
+    out.innerHTML=tutorMd(t);
+    if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([out]).catch(function(){});
+  }catch(e){ out.innerHTML='<span style="color:var(--overdue)">Could not explain: '+tutorEsc(e.message||String(e))+'</span>'; }
+  finally{ ai.disabled=false; }
+}
+
 function renderMistakesTab(){
+  renderReattempt();
   const logList=document.getElementById('mistake-list');logList.innerHTML='';
   if(!mistakes.length){
     const em=document.createElement('div');em.className='mistakes-empty';em.textContent='No mistakes logged yet.';logList.appendChild(em);
@@ -6671,23 +6830,24 @@ function renderMistakesTab(){
     topRow.append(tb,cb,sevEl);
     const txt=document.createElement('div');txt.className='m-text';txt.textContent=m.text;
     const dt=document.createElement('div');dt.className='m-date';dt.textContent=fmtDate(m.date);
-    left.append(topRow,txt);
-    if(m.img){
-      const img=document.createElement('img');img.className='m-img';img.src=m.img;img.alt='mistake image';
-      img.addEventListener('click',()=>{
-        document.getElementById('img-viewer-img').src=m.img;
-        document.getElementById('img-viewer').classList.add('open');
-      });
-      left.appendChild(img);
-    }
-    left.appendChild(dt);
+    left.append(topRow);
+    if(m.question){ const qd=document.createElement('div');qd.textContent='Q: '+m.question;qd.style.cssText='font-size:12px;color:var(--muted);margin-bottom:4px;font-style:italic;line-height:1.4;'; left.appendChild(qd); }
+    left.appendChild(txt);
+    if(m.answer){ const rb=document.createElement('span');rb.textContent='\u{1F501} re-attemptable';rb.style.cssText='display:inline-block;font-size:10px;color:var(--accent);font-weight:600;margin-bottom:4px;'; left.appendChild(rb); }
+    function showImg(src){ const img=document.createElement('img');img.className='m-img';img.src=src;img.alt='question image';
+      img.addEventListener('click',()=>{ document.getElementById('img-viewer-img').src=src; document.getElementById('img-viewer').classList.add('open'); });
+      left.appendChild(img); }
+    if(m.img){ showImg(m.img); left.appendChild(dt); }
+    else if(m.qImgId && typeof window.mhGetImage==='function'){ left.appendChild(dt); window.mhGetImage(m.qImgId).then(function(src){ if(src){ const im=document.createElement('img');im.className='m-img';im.src=src;im.alt='question image';im.addEventListener('click',()=>{document.getElementById('img-viewer-img').src=src;document.getElementById('img-viewer').classList.add('open');}); left.insertBefore(im,dt); } }); }
+    else { left.appendChild(dt); }
     const actions=document.createElement('div');actions.className='m-card-actions';
     const edit=document.createElement('button');edit.className='m-edit';edit.innerHTML='&#9998;';edit.setAttribute('aria-label','Edit mistake entry');
     edit.addEventListener('click',()=>openEditMistake(m.id));
     const del=document.createElement('button');del.className='m-del';del.innerHTML='&times;';del.setAttribute('aria-label','Delete mistake entry');
     del.addEventListener('click',()=>{
       if(!confirm('Delete this mistake entry?'))return;
-      mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();
+      if(m.qImgId&&typeof window.mhDelImage==='function')window.mhDelImage(m.qImgId);
+      mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();renderReattempt();
       toast('Mistake entry deleted');
     });
     actions.append(edit,del);
@@ -6790,15 +6950,14 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   let newImg=existing.img;
   if(editPendingImg==='clear')newImg=null;
   else if(editPendingImg)newImg=editPendingImg;
-  mistakes[idx]={
-    id:existing.id,
+  mistakes[idx]=Object.assign({},existing,{   // keep question/answer/qImgId (re-attempt data)
     topic:document.getElementById('em-topic-sel').value,
     cat:document.getElementById('em-cat-sel').value,
     text,
     date:document.getElementById('em-date').value||today(),
     img:newImg,
     severity:+document.getElementById('em-severity').value||3
-  };
+  });
   saveState();
   renderMistakesTab();
   if(activeTab==='checklist')renderAll();
@@ -7659,6 +7818,31 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   // Sign out (exposed for a settings button / console use).
   window.mhSignOut=function(){ sessionStorage.removeItem('mh_synced'); auth.signOut().then(function(){ location.reload(); }); };
   window.mhCurrentEmail=function(){ return currentUser?currentUser.email:null; };
+
+  // ---- Per-photo cloud storage (Firestore subcollection users/{uid}/mImages/{id}) ----
+  // Big question/answer photos live in their own docs so they never bloat the main store doc.
+  var _imgCache={};
+  window.mhPutImage=function(id,dataURL){
+    if(!currentUser) return Promise.reject(new Error('not signed in'));
+    _imgCache[id]=dataURL;
+    return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id)
+      .set({data:dataURL, ts:firebase.firestore.FieldValue.serverTimestamp()});
+  };
+  window.mhGetImage=function(id){
+    if(!id) return Promise.resolve(null);
+    if(_imgCache[id]!=null) return Promise.resolve(_imgCache[id]);
+    if(!currentUser) return Promise.resolve(null);
+    return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).get()
+      .then(function(s){ var d=s.exists?(s.data()||{}).data:null; if(d)_imgCache[id]=d; return d||null; })
+      .catch(function(){ return null; });
+  };
+  window.mhDelImage=function(id){
+    if(!id) return Promise.resolve();
+    delete _imgCache[id];
+    if(!currentUser) return Promise.resolve();
+    return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).delete().catch(function(){});
+  };
+  window.mhCloudReady=function(){ return !!currentUser; };
 })();
 </script>
 </body>
