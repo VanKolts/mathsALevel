@@ -504,9 +504,14 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
 /* ============ Mobile / tablet app-shell (desktop is never affected) ============ */
 @media (max-width:900px), (pointer:coarse){
   /* Lock the view horizontally — like a native app, vertical scroll only */
-  html,body{overflow-x:hidden;max-width:100%;}
+  html,body{overflow-x:clip;max-width:100%;}
   body{overscroll-behavior-x:none;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
   .page,main,.review-panel,.tab-content,footer{max-width:100%;overflow-x:hidden;}
+  /* Lock horizontal panning inside EVERY overlay/menu too (settings, stats, tutor, logger, timer, modals…) */
+  .stats-overlay,.modal-overlay,.tutor-overlay,.img-viewer-overlay,#mh-login,#onboard-overlay,#topicpp-overlay{overflow-x:hidden;overscroll-behavior:contain;}
+  .stats-panel,.stats-body,.modal,.modal-overlay>*,.stats-overlay>*{max-width:100%;overflow-x:hidden;overscroll-behavior:contain;}
+  /* …but the few elements meant to scroll sideways keep doing so within their own box */
+  .pp-type-seg,.prog-bar-section,.fx-body,.pp-slider-ticks{overflow-x:auto;}
 
   /* Hide the desktop top tab bar — replaced by the bottom nav + three-dots menu */
   .tab-bar{display:none!important;}
