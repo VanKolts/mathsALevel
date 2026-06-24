@@ -1654,6 +1654,19 @@ html{scroll-behavior:smooth;}
           <button class="settings-btn" id="logout-btn">Log out</button>
         </div>
       </div>
+      <div class="settings-card" id="sync-card" style="display:none">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-title">Sync &amp; devices</div>
+            <div class="settings-row-sub" id="sync-status">Checking…</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="settings-btn" id="sync-push-btn">⬆ Push this device → cloud</button>
+          <button class="settings-btn" id="sync-pull-btn">⬇ Pull cloud → this device</button>
+        </div>
+        <div class="settings-row-sub" id="sync-msg" style="margin-top:8px"></div>
+      </div>
       <div class="settings-card">
         <div class="settings-row">
           <div class="settings-row-info">
@@ -5803,6 +5816,7 @@ function openSettings(){
       card.style.display='none';
     }
   }
+  if(typeof renderSyncCard==='function')renderSyncCard();
   document.getElementById('settings-overlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
@@ -5813,6 +5827,39 @@ function openSettings(){
     if(confirm('Log out? Your progress is safely saved to your account — you can log back in any time, on any device.'))window.mhSignOut();
   });
 })();
+
+/* ---- Sync diagnostics & manual push/pull (Settings) ---- */
+(function(){
+  var pushB=document.getElementById('sync-push-btn'), pullB=document.getElementById('sync-pull-btn');
+  function setMsg(t,err){ var m=document.getElementById('sync-msg'); if(m){ m.textContent=t; m.style.color=err?'var(--overdue)':'var(--accent2)'; } }
+  if(pushB)pushB.addEventListener('click',function(){
+    if(typeof window.mhForcePush!=='function')return;
+    pushB.disabled=true; setMsg('Pushing…');
+    window.mhForcePush().then(function(r){ pushB.disabled=false;
+      if(r&&r.ok)setMsg('Saved to cloud ✓  ('+Math.round(r.bytes/1024)+' KB)');
+      else setMsg('Push failed: '+((r&&r.error)||'unknown')+((r&&r.bytes>1000000)?' — over the 1 MB cloud limit':''),true);
+      renderSyncCard();
+    });
+  });
+  if(pullB)pullB.addEventListener('click',function(){
+    if(typeof window.mhForcePull!=='function')return;
+    pullB.disabled=true; setMsg('Pulling…');
+    window.mhForcePull().then(function(r){
+      if(r&&r.applied){ setMsg('Got '+Math.round(r.bytes/1024)+' KB from the cloud — reloading…'); setTimeout(function(){location.reload();},800); }
+      else if(r&&r.empty){ pullB.disabled=false; setMsg('Cloud is EMPTY for this account. On the device that HAS your data, press “Push this device → cloud”.',true); }
+      else { pullB.disabled=false; setMsg('Pull failed: '+((r&&r.error)||'unknown'),true); }
+    });
+  });
+})();
+function renderSyncCard(){
+  var card=document.getElementById('sync-card'); if(!card)return;
+  if(typeof window.mhSyncStatus!=='function'){ card.style.display='none'; return; }
+  var s=window.mhSyncStatus();
+  if(!s.email){ card.style.display='none'; return; }
+  card.style.display='';
+  var el=document.getElementById('sync-status');
+  if(el)el.textContent='This device holds '+Math.round(s.localBytes/1024)+' KB · build '+s.build+(s.lastError?(' · ⚠ last save error: '+s.lastError):' · saving OK');
+}
 function closeSettings(){
   document.getElementById('settings-overlay').classList.remove('open');
   document.body.style.overflow='';
@@ -7771,6 +7818,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var currentUser=null, pushTimer=null;
   var myWriter=localStorage.getItem('mh_writer'); if(!myWriter){ myWriter=Math.random().toString(36).slice(2)+Date.now().toString(36); nativeSet('mh_writer',myWriter); }
   function docStamp(d){ var u=d&&d.updatedAt; if(u&&u.seconds!=null)u=u.seconds*1000; return ((d&&d.writer)||'?')+'|'+(u||0); }
+  var lastPushError='';
 
   function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
   function applyToLocal(store){ if(!store)return; SYNC_KEYS.forEach(function(k){ if(store[k]!=null)nativeSet(k,store[k]); }); }
@@ -7780,7 +7828,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     db.collection('users').doc(currentUser.uid).set(
       { store:collectLocal(), updatedAt:stamp, writer:myWriter },
       { merge:true }
-    ).catch(function(e){ console.warn('[cloud] save failed',e); });
+    ).catch(function(e){ console.warn('[cloud] save failed',e); lastPushError=(e&&e.message)||String(e); });
   }
   // Re-pull when the app regains focus / periodically, so a 2nd device sees the 1st's changes.
   var pulling=false;
@@ -7923,6 +7971,25 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).delete().catch(function(){});
   };
   window.mhCloudReady=function(){ return !!currentUser; };
+  window.MH_BUILD='2026-06-24-sync2';
+  window.mhForcePush=function(){
+    if(!currentUser)return Promise.resolve({error:'Not signed in'});
+    var store=collectLocal(), bytes=JSON.stringify(store).length, stamp=Date.now();
+    nativeSet('mh_stamp',myWriter+'|'+stamp);
+    return db.collection('users').doc(currentUser.uid).set({store:store,updatedAt:stamp,writer:myWriter},{merge:true})
+      .then(function(){ lastPushError=''; return {ok:true,bytes:bytes}; })
+      .catch(function(e){ lastPushError=(e&&e.message)||String(e); return {error:lastPushError,bytes:bytes}; });
+  };
+  window.mhForcePull=function(){
+    if(!currentUser)return Promise.resolve({error:'Not signed in'});
+    return db.collection('users').doc(currentUser.uid).get().then(function(snap){
+      if(!snap.exists||!(snap.data()&&snap.data().store)) return {empty:true};
+      var d=snap.data(), bytes=JSON.stringify(d.store).length, u=d.updatedAt; if(u&&u.seconds!=null)u=u.seconds*1000;
+      applyToLocal(d.store); nativeSet('mh_stamp',docStamp(d));
+      return {applied:true,bytes:bytes,writer:d.writer||'?',when:u||0,mine:d.writer===myWriter};
+    }).catch(function(e){ return {error:(e&&e.message)||String(e)}; });
+  };
+  window.mhSyncStatus=function(){ return {email:currentUser?currentUser.email:null, device:myWriter.slice(0,6), localBytes:JSON.stringify(collectLocal()).length, lastError:lastPushError, build:(window.MH_BUILD||'?')}; };
 })();
 </script>
 </body>
