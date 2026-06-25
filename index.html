@@ -542,9 +542,11 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
   .m-nav-pill{position:absolute;border-radius:14px;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);
     opacity:0;pointer-events:none;z-index:0;
     transition:left .34s cubic-bezier(.34,1.1,.45,1),top .34s ease,width .34s cubic-bezier(.34,1.1,.45,1),height .34s ease,opacity .25s;}
-  .m-nav-btn{flex:1 1 0;display:flex;align-items:center;justify-content:center;
-    min-height:52px;max-width:92px;background:none;border:none;border-radius:14px;
-    cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:transparent;transition:transform .12s;padding:4px 0;}
+  .m-nav-btn{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:54px;max-width:92px;background:none;border:none;border-radius:14px;
+    cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:transparent;transition:transform .12s;padding:5px 0;}
+  .m-nav-lbl{font-size:9.5px;font-weight:600;line-height:1;height:11px;color:var(--muted);opacity:0;transition:opacity .22s,color .22s;font-family:'Inter',sans-serif;letter-spacing:.01em;}
+  .m-nav-btn.active .m-nav-lbl{opacity:1;color:var(--text);}
   .m-nav-btn:active{transform:scale(.9);}
   .m-nav-btn svg{width:26px;height:26px;fill:none;stroke:var(--muted);stroke-width:1.85;
     stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s;}
@@ -580,6 +582,16 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
     box-shadow:0 4px 14px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;}
   .m-menu-item.peek .m-menu-label{opacity:1;transform:translateY(-50%) translateX(0);}
   .m-menu-btn.open{transform:rotate(90deg);}
+  /* Tap "click" feel — a quick press-scale on every button */
+  button:active{transform:scale(.96);}
+  /* Directional tab slides (swipe) */
+  body.tab-switching.mtab-fwd .page.active{animation:mTabFromRight .3s cubic-bezier(.22,.61,.36,1) both;}
+  body.tab-switching.mtab-back .page.active{animation:mTabFromLeft .3s cubic-bezier(.22,.61,.36,1) both;}
+  /* A little more breathing room */
+  .review-box{padding:13px 15px;}
+  .cluster{margin-bottom:.6rem;}
+  .m-card{padding:14px 15px;}
+  .settings-card{padding:16px 17px;}
 
   /* ---- Bigger, comfortable touch targets ---- */
   .settings-btn{min-height:42px;padding:10px 15px;font-size:13px;}
@@ -846,6 +858,8 @@ html{scroll-behavior:smooth;}
 /* ── TAB SLIDE TRANSITION ───────────────────────────────── */
 @keyframes tabFadeIn{from{opacity:0;}to{opacity:1;}}
 .tab-switching .page.active{animation:tabFadeIn .18s ease both;}
+@keyframes mTabFromRight{from{opacity:.4;transform:translateX(26px);}to{opacity:1;transform:translateX(0);}}
+@keyframes mTabFromLeft{from{opacity:.4;transform:translateX(-26px);}to{opacity:1;transform:translateX(0);}}
 #fm-options-overlay{z-index:700;}
 #shortcuts-modal{z-index:700;}
 
@@ -5489,16 +5503,19 @@ TAB_ORDER.forEach(t=>{
 (function(){
   // Bottom nav icons drive the same switchTab() as desktop
   document.querySelectorAll('.m-nav-btn').forEach(function(b){
-    b.addEventListener('click',function(){ switchTab(b.getAttribute('data-tab')); });
+    var lbl=document.createElement('span'); lbl.className='m-nav-lbl'; lbl.textContent=b.getAttribute('aria-label')||''; b.appendChild(lbl);
+    b.addEventListener('click',function(){ if(navigator.vibrate)navigator.vibrate(7); switchTab(b.getAttribute('data-tab')); });
   });
   function positionMNavPill(){
     var nav=document.getElementById('m-nav'), pill=document.getElementById('m-nav-pill');
-    var act=nav&&nav.querySelector('.m-nav-btn.active'); if(!nav||!pill||!act||!act.offsetWidth)return;
-    var inset=7;
-    pill.style.left=(act.offsetLeft+inset)+'px';
-    pill.style.top=(act.offsetTop+inset)+'px';
-    pill.style.width=(act.offsetWidth-inset*2)+'px';
-    pill.style.height=(act.offsetHeight-inset*2)+'px';
+    var act=nav&&nav.querySelector('.m-nav-btn.active'); if(!nav||!pill||!act)return;
+    var svg=act.querySelector('svg'); if(!svg)return;
+    var nr=nav.getBoundingClientRect(), sr=svg.getBoundingClientRect(); if(!sr.width)return; // SVG has no offset* props
+    var pad=9;
+    pill.style.left=(sr.left-nr.left-pad)+'px';
+    pill.style.top=(sr.top-nr.top-pad)+'px';
+    pill.style.width=(sr.width+pad*2)+'px';
+    pill.style.height=(sr.height+pad*2)+'px';
     pill.style.opacity='0.17';
   }
   function updateMNav(){
@@ -5511,7 +5528,11 @@ TAB_ORDER.forEach(t=>{
   setTimeout(positionMNavPill,300);
   // Keep the nav highlight in sync with every tab change (wrap the existing fn)
   var _origSwitch=switchTab;
-  switchTab=function(t){ _origSwitch(t); updateMNav(); };
+  switchTab=function(t){
+    var oi=TAB_ORDER.indexOf(activeTab), ni=TAB_ORDER.indexOf(t);
+    if(ni>=0&&oi>=0&&ni!==oi){ document.body.classList.toggle('mtab-fwd',ni>oi); document.body.classList.toggle('mtab-back',ni<oi); }
+    _origSwitch(t); updateMNav();
+  };
   updateMNav();
 
   // Mirror the "due" badge onto the checklist nav icon
@@ -5543,6 +5564,33 @@ TAB_ORDER.forEach(t=>{
     it.addEventListener('touchend',function(){ clearTimeout(lpTimer); if(lp){ setTimeout(function(){ it.classList.remove('peek'); },1100); } });
     it.addEventListener('click',function(e){ if(lp){ lp=false; e.preventDefault(); e.stopPropagation(); return; } doAct(); });
   });
+})();
+
+/* ===== Mobile: swipe left/right between the main tabs ===== */
+(function(){
+  var EXCLUDE='input,textarea,select,.pp-type-seg,.pp-slider,.rating-slider,.plog-slider,.prog-bar-section,.fx-body,.m-menu,.m-menu-btn';
+  var sx=0,sy=0,tracking=false;
+  function blocked(){
+    if(document.querySelector('.stats-overlay.open,.modal-overlay.open'))return true;
+    var lg=document.getElementById('mh-login'); if(lg&&getComputedStyle(lg).display!=='none')return true;
+    return false;
+  }
+  document.addEventListener('touchstart',function(e){
+    tracking=false;
+    if(e.touches.length!==1)return;
+    var t=e.target; if(t&&t.closest&&t.closest(EXCLUDE))return;
+    if(blocked()||TAB_ORDER.indexOf(activeTab)<0)return;
+    sx=e.touches[0].clientX; sy=e.touches[0].clientY; tracking=true;
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(!tracking)return; tracking=false;
+    var dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.6)return;
+    var oi=TAB_ORDER.indexOf(activeTab), ni=dx<0?oi+1:oi-1;
+    if(ni<0||ni>=TAB_ORDER.length)return;
+    if(navigator.vibrate)navigator.vibrate(7);
+    switchTab(TAB_ORDER[ni]);
+  },{passive:true});
 })();
 
 // ---- Stats panel ----
