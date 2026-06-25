@@ -558,17 +558,28 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
   .m-menu-backdrop{display:block;position:fixed;inset:0;z-index:470;background:rgba(0,0,0,.28);
     opacity:0;pointer-events:none;transition:opacity .18s;}
   .m-menu-backdrop.open{opacity:1;pointer-events:auto;}
-  .m-menu{display:block;position:fixed;top:calc(60px + env(safe-area-inset-top));
-    right:calc(12px + env(safe-area-inset-right));z-index:480;background:var(--surface2);
-    border:1px solid var(--border);border-radius:16px;padding:7px;min-width:200px;
-    box-shadow:0 16px 44px rgba(0,0,0,.42);transform-origin:top right;
-    transform:scale(.9) translateY(-6px);opacity:0;pointer-events:none;transition:transform .16s,opacity .16s;}
-  .m-menu.open{transform:scale(1) translateY(0);opacity:1;pointer-events:auto;}
-  .m-menu-item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 13px;border:none;
-    background:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;font-weight:500;
-    text-align:left;border-radius:10px;cursor:pointer;}
-  .m-menu-item:active{background:rgba(var(--accent-rgb),.16);}
-  .m-menu-ico{font-size:17px;width:22px;text-align:center;flex-shrink:0;}
+  /* Speed-dial: icon buttons spring out of the ⋯ button; icon-only, label peeks on long-press */
+  .m-menu{display:flex;flex-direction:column;align-items:flex-end;gap:13px;position:fixed;
+    top:calc(62px + env(safe-area-inset-top));right:calc(15px + env(safe-area-inset-right));z-index:480;pointer-events:none;}
+  .m-menu.open{pointer-events:auto;}
+  .m-menu-item{position:relative;display:flex;align-items:center;justify-content:center;width:48px;height:48px;
+    border-radius:50%;cursor:pointer;color:var(--text);
+    background:linear-gradient(var(--surface2),var(--surface2)) padding-box,linear-gradient(135deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa) border-box;
+    border:1.6px solid transparent;box-shadow:0 7px 20px rgba(0,0,0,.42);
+    opacity:0;transform:scale(.2) translateY(-18px);
+    transition:opacity .18s ease,transform .42s cubic-bezier(.34,1.56,.64,1);}
+  .m-menu.open .m-menu-item{opacity:1;transform:scale(1) translateY(0);}
+  .m-menu.open .m-menu-item:nth-child(1){transition-delay:.02s;}
+  .m-menu.open .m-menu-item:nth-child(2){transition-delay:.07s;}
+  .m-menu.open .m-menu-item:nth-child(3){transition-delay:.12s;}
+  .m-menu.open .m-menu-item:nth-child(4){transition-delay:.17s;}
+  .m-menu-item svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .m-menu-label{position:absolute;right:calc(100% + 11px);top:50%;transform:translateY(-50%) translateX(7px);
+    white-space:nowrap;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:9px;
+    box-shadow:0 4px 14px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;}
+  .m-menu-item.peek .m-menu-label{opacity:1;transform:translateY(-50%) translateX(0);}
+  .m-menu-btn.open{transform:rotate(90deg);}
 
   /* ---- Bigger, comfortable touch targets ---- */
   .settings-btn{min-height:42px;padding:10px 15px;font-size:13px;}
@@ -2017,10 +2028,22 @@ html{scroll-behavior:smooth;}
 
 <div class="m-menu-backdrop" id="m-menu-backdrop"></div>
 <div class="m-menu" id="m-menu" role="menu" aria-label="More options">
-  <button class="m-menu-item" data-act="settings" role="menuitem"><span class="m-menu-ico">⚙️</span>Settings</button>
-  <button class="m-menu-item" data-act="stats" role="menuitem"><span class="m-menu-ico">📊</span>Statistics</button>
-  <button class="m-menu-item" data-act="focus" role="menuitem"><span class="m-menu-ico">🍅</span>Focus timer</button>
-  <button class="m-menu-item" data-act="tutor" role="menuitem"><span class="m-menu-ico">✨</span>AI Tutor</button>
+  <button class="m-menu-item" data-act="settings" role="menuitem" aria-label="Settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span class="m-menu-label">Settings</span>
+  </button>
+  <button class="m-menu-item" data-act="stats" role="menuitem" aria-label="Statistics">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span class="m-menu-label">Statistics</span>
+  </button>
+  <button class="m-menu-item" data-act="focus" role="menuitem" aria-label="Focus timer">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><polyline points="12 9.5 12 13.5 14.8 15.3"/><line x1="9.2" y1="2.2" x2="14.8" y2="2.2"/><line x1="12" y1="2.2" x2="12" y2="6"/></svg>
+    <span class="m-menu-label">Focus timer</span>
+  </button>
+  <button class="m-menu-item" data-act="tutor" role="menuitem" aria-label="AI Tutor">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3l1.7 4.6L17.5 9.3 12.7 11 11 15.6 9.3 11 4.5 9.3 9.3 7.6z"/><path d="M18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>
+    <span class="m-menu-label">AI Tutor</span>
+  </button>
 </div>
 
 <footer>A-Level Maths &middot; Progress saved locally in your browser &middot; Adaptive memory model (FSRS): each topic is scheduled by its difficulty, your self-test grades and logged mistakes</footer>
@@ -5503,21 +5526,22 @@ TAB_ORDER.forEach(t=>{
   var menu=document.getElementById('m-menu'),
       back=document.getElementById('m-menu-backdrop'),
       btn=document.getElementById('m-menu-btn');
-  function openMenu(){ menu.classList.add('open'); back.classList.add('open'); btn.setAttribute('aria-expanded','true'); }
-  function closeMenu(){ menu.classList.remove('open'); back.classList.remove('open'); btn.setAttribute('aria-expanded','false'); }
+  function openMenu(){ menu.classList.add('open'); back.classList.add('open'); btn.classList.add('open'); btn.setAttribute('aria-expanded','true'); if(navigator.vibrate)navigator.vibrate(6); }
+  function closeMenu(){ menu.classList.remove('open'); back.classList.remove('open'); btn.classList.remove('open'); btn.setAttribute('aria-expanded','false'); menu.querySelectorAll('.m-menu-item.peek').forEach(function(x){x.classList.remove('peek');}); }
   if(btn)btn.addEventListener('click',function(e){ e.stopPropagation(); menu.classList.contains('open')?closeMenu():openMenu(); });
   if(back)back.addEventListener('click',closeMenu);
   document.querySelectorAll('.m-menu-item').forEach(function(it){
-    it.addEventListener('click',function(){
-      closeMenu();
-      var a=it.getAttribute('data-act');
-      setTimeout(function(){
-        if(a==='settings'&&typeof openSettings==='function')openSettings();
-        else if(a==='stats'&&typeof openStats==='function')openStats();
-        else if(a==='focus'&&typeof openPomodoro==='function')openPomodoro();
-        else if(a==='tutor'&&typeof openTutor==='function')openTutor();
-      },130);
-    });
+    var lpTimer=null,lp=false;
+    function doAct(){ closeMenu(); var a=it.getAttribute('data-act'); setTimeout(function(){
+      if(a==='settings'&&typeof openSettings==='function')openSettings();
+      else if(a==='stats'&&typeof openStats==='function')openStats();
+      else if(a==='focus'&&typeof openPomodoro==='function')openPomodoro();
+      else if(a==='tutor'&&typeof openTutor==='function')openTutor();
+    },150); }
+    it.addEventListener('touchstart',function(){ lp=false; clearTimeout(lpTimer); lpTimer=setTimeout(function(){ lp=true; it.classList.add('peek'); if(navigator.vibrate)navigator.vibrate(8); },350); },{passive:true});
+    it.addEventListener('touchmove',function(){ clearTimeout(lpTimer); },{passive:true});
+    it.addEventListener('touchend',function(){ clearTimeout(lpTimer); if(lp){ setTimeout(function(){ it.classList.remove('peek'); },1100); } });
+    it.addEventListener('click',function(e){ if(lp){ lp=false; e.preventDefault(); e.stopPropagation(); return; } doAct(); });
   });
 })();
 
