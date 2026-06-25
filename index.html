@@ -538,17 +538,20 @@ footer{border-top:1px solid var(--border);padding:1rem 1.5rem;text-align:center;
     padding:7px 6px calc(7px + env(safe-area-inset-bottom));
     background:var(--surface-glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
     border-top:1px solid var(--border);}
-  .m-nav-btn{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:4px;min-height:52px;max-width:92px;background:none;border:none;border-radius:14px;
-    cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;transition:transform .12s;padding:4px 0;}
-  .m-nav-btn:active{transform:scale(.88);}
-  .m-nav-btn svg{width:26px;height:26px;fill:none;stroke:var(--muted);stroke-width:1.8;
-    stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s;}
+  /* sliding rainbow indicator that flows behind the active icon */
+  .m-nav-pill{position:absolute;border-radius:14px;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);
+    opacity:0;pointer-events:none;z-index:0;
+    transition:left .34s cubic-bezier(.34,1.1,.45,1),top .34s ease,width .34s cubic-bezier(.34,1.1,.45,1),height .34s ease,opacity .25s;}
+  .m-nav-btn{flex:1 1 0;display:flex;align-items:center;justify-content:center;
+    min-height:52px;max-width:92px;background:none;border:none;border-radius:14px;
+    cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:transparent;transition:transform .12s;padding:4px 0;}
+  .m-nav-btn:active{transform:scale(.9);}
+  .m-nav-btn svg{width:26px;height:26px;fill:none;stroke:var(--muted);stroke-width:1.85;
+    stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s;}
   .m-nav-btn.active svg{stroke:url(#m-rainbow);}
-  .m-nav-dot{width:5px;height:5px;border-radius:50%;background:transparent;transition:background .18s;}
-  .m-nav-btn.active .m-nav-dot{background:linear-gradient(90deg,#fb923c,#34d399,#60a5fa);}
-  .m-nav-badge{position:absolute;top:3px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;
-    background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;}
+  .m-nav-dot{display:none;}
+  .m-nav-badge{position:absolute;top:6px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;
+    background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
   .m-nav-badge.show{display:block;}
 
   /* ---- Three-dots dropdown menu ---- */
@@ -1993,6 +1996,7 @@ html{scroll-behavior:smooth;}
 </button>
 
 <nav class="m-nav" id="m-nav" aria-label="Main sections">
+  <span class="m-nav-pill" id="m-nav-pill"></span>
   <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l1.6 1.6L8.4 4.8"/><path d="M4 12l1.6 1.6L8.4 10.8"/><path d="M4 18l1.6 1.6L8.4 16.8"/><line x1="11" y1="6" x2="20" y2="6"/><line x1="11" y1="12" x2="20" y2="12"/><line x1="11" y1="18" x2="20" y2="18"/></svg>
     <span class="m-nav-badge" id="m-nav-badge"></span><span class="m-nav-dot"></span>
@@ -5464,11 +5468,24 @@ TAB_ORDER.forEach(t=>{
   document.querySelectorAll('.m-nav-btn').forEach(function(b){
     b.addEventListener('click',function(){ switchTab(b.getAttribute('data-tab')); });
   });
+  function positionMNavPill(){
+    var nav=document.getElementById('m-nav'), pill=document.getElementById('m-nav-pill');
+    var act=nav&&nav.querySelector('.m-nav-btn.active'); if(!nav||!pill||!act||!act.offsetWidth)return;
+    var inset=7;
+    pill.style.left=(act.offsetLeft+inset)+'px';
+    pill.style.top=(act.offsetTop+inset)+'px';
+    pill.style.width=(act.offsetWidth-inset*2)+'px';
+    pill.style.height=(act.offsetHeight-inset*2)+'px';
+    pill.style.opacity='0.17';
+  }
   function updateMNav(){
     document.querySelectorAll('.m-nav-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-tab')===activeTab);
     });
+    positionMNavPill();
   }
+  window.addEventListener('resize',function(){ setTimeout(positionMNavPill,60); });
+  setTimeout(positionMNavPill,300);
   // Keep the nav highlight in sync with every tab change (wrap the existing fn)
   var _origSwitch=switchTab;
   switchTab=function(t){ _origSwitch(t); updateMNav(); };
