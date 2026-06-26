@@ -674,6 +674,37 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .mem-k{color:var(--muted);}
 .mem-v{font-family:'JetBrains Mono',monospace;color:var(--text);text-align:right;}
 
+/*   AI PRACTICE QUESTION   */
+.pq-panel{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:11px 12px;}
+.pq-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.pq-title{font-size:12px;font-weight:600;color:var(--text);font-family:'Inter',sans-serif;}
+.pq-diff{display:inline-flex;gap:0;border:1px solid var(--border2);border-radius:7px;overflow:hidden;}
+.pq-diff-btn{font-size:10.5px;padding:4px 9px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;border-right:1px solid var(--border2);}
+.pq-diff-btn:last-child{border-right:none;}
+.pq-diff-btn.on{background:rgba(var(--accent-rgb),.18);color:var(--accent);font-weight:600;}
+.pq-body{margin-top:10px;}
+.pq-gen-btn{width:100%;font-size:12.5px;font-weight:600;padding:9px;border-radius:7px;border:none;background:var(--grad);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;}
+.pq-gen-btn:disabled{opacity:.55;cursor:default;}
+.pq-note{font-size:11px;color:var(--dim);line-height:1.5;}
+.pq-note a,.pq-note .lk{color:var(--accent);cursor:pointer;text-decoration:underline;}
+.pq-spinner{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);padding:6px 2px;}
+.pq-spin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);animation:pq-pulse 1s ease-in-out infinite;}
+@keyframes pq-pulse{0%,100%{opacity:.3;transform:scale(.8);}50%{opacity:1;transform:scale(1.15);}}
+.pq-q{font-size:13.5px;color:var(--text);line-height:1.65;}
+.pq-q .pq-marks{float:right;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.35);border-radius:9px;padding:1px 8px;margin-left:8px;}
+.pq-hint{font-size:10.5px;color:var(--dim);margin-top:8px;font-style:italic;}
+.pq-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.pq-act{font-size:11px;padding:6px 11px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;font-family:'Inter',sans-serif;}
+.pq-act:hover{border-color:var(--accent);color:var(--accent);}
+.pq-act:disabled{opacity:.5;cursor:default;}
+.pq-ms{margin-top:10px;border-top:1px dashed var(--border2);padding-top:9px;display:none;}
+.pq-ms.open{display:block;}
+.pq-ms-step{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:var(--muted);line-height:1.55;padding:4px 0;}
+.pq-ms-mk{flex-shrink:0;font-size:9.5px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);background:rgba(var(--accent-rgb),.14);border-radius:5px;padding:1px 6px;margin-top:2px;}
+.pq-ans{font-size:12.5px;color:var(--text);margin-top:8px;background:rgba(var(--accent-rgb),.08);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:7px 11px;}
+.pq-ans b{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-right:7px;}
+.pq-err{font-size:11.5px;color:#f87171;line-height:1.5;}
+
 /*   RATING SLIDER   */
 .rating-slider-wrap{display:flex;flex-direction:column;gap:5px;}
 .rating-slider{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);outline:none;}
@@ -1538,6 +1569,17 @@ html{scroll-behavior:smooth;}
         <input type="date" class="modal-date-input" id="modal-date"/>
       </div>
       <a class="modal-practice" id="modal-practice" target="_blank" rel="noopener">Worksheets on PMT ↗</a>
+    </div>
+    <div class="pq-panel" id="pq-panel">
+      <div class="pq-head">
+        <span class="pq-title">✨ Practice question</span>
+        <div class="pq-diff" id="pq-diff">
+          <button class="pq-diff-btn" data-d="easier" type="button">Easier</button>
+          <button class="pq-diff-btn on" data-d="standard" type="button">Standard</button>
+          <button class="pq-diff-btn" data-d="harder" type="button">Harder</button>
+        </div>
+      </div>
+      <div class="pq-body" id="pq-body"></div>
     </div>
     <div>
       <div class="modal-lbl">How did it go? <span style="font-size:10px;color:var(--dim)">(after attempting a question, no notes)</span></div>
@@ -6274,6 +6316,7 @@ function openModal(topicName,fromReviewPanel){
 
   renderMemDetails();
   updateSchedPreview();
+  pqOpen();
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(syncSpringSliders,50);
 }
@@ -6312,6 +6355,111 @@ function renderMemDetails(){
   });
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');modalTopic=null;}
+
+// ---- AI practice questions (per-topic, generated via Gemini, cached locally) ----
+const PQ_KEY='alevel-practiceq-v1';
+var pqBank={}, pqDiff='standard', pqLoaded=false;
+function pqLoad(){ try{pqBank=JSON.parse(localStorage.getItem(PQ_KEY)||'{}');}catch(e){pqBank={};} pqLoaded=true; }
+function pqSave(){ try{localStorage.setItem(PQ_KEY,JSON.stringify(pqBank));}catch(e){} }
+function pqCurrent(topic){ var a=pqBank[topic]; return (a&&a.length)?a[a.length-1]:null; }
+function pqSyncDiffUI(){ document.querySelectorAll('#pq-diff .pq-diff-btn').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-d')===pqDiff); }); }
+function pqOpen(){
+  if(!pqLoaded) pqLoad();
+  var cur=pqCurrent(modalTopic);
+  pqDiff=(cur&&cur.diff)||'standard';
+  pqSyncDiffUI();
+  renderPQ();
+}
+function renderPQ(){
+  var body=document.getElementById('pq-body'); if(!body||!modalTopic) return;
+  var cur=pqCurrent(modalTopic);
+  if(cur){ pqRenderQuestion(cur); return; }
+  if(!loadGeminiKey()){
+    body.innerHTML='<div class="pq-note">Add your free Gemini key in <span class="lk" id="pq-go-settings">Settings → AI Tutor</span> to generate unlimited practice questions for any topic.</div>';
+    var g=document.getElementById('pq-go-settings'); if(g)g.addEventListener('click',function(){ closeModal(); if(typeof openSettings==='function')openSettings(); });
+    return;
+  }
+  body.innerHTML='<button class="pq-gen-btn" id="pq-gen" type="button">✨ Generate a practice question</button>';
+  document.getElementById('pq-gen').addEventListener('click',pqGenerate);
+}
+function pqParse(raw){
+  if(!raw) return null;
+  var s=String(raw).trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  var o=null; try{o=JSON.parse(s);}catch(e){ var m=s.match(/\{[\s\S]*\}/); if(m){ try{o=JSON.parse(m[0]);}catch(e2){o=null;} } }
+  if(!o||typeof o.question!=='string'||!o.question.trim()) return null;
+  return { q:o.question, marks:(typeof o.marks==='number'?o.marks:null),
+           ms:(Array.isArray(o.markscheme)?o.markscheme:[]), ans:(typeof o.answer==='string'?o.answer:'') };
+}
+function pqRenderQuestion(q){
+  var body=document.getElementById('pq-body'); if(!body) return;
+  var hasKey=!!loadGeminiKey();
+  var marksBadge=q.marks?('<span class="pq-marks">'+q.marks+' mark'+(q.marks===1?'':'s')+'</span>'):'';
+  var ms='';
+  (q.ms||[]).forEach(function(st){
+    var mk=(typeof st.marks==='number')?('<span class="pq-ms-mk">'+st.marks+'</span>'):'<span class="pq-ms-mk">·</span>';
+    ms+='<div class="pq-ms-step">'+mk+'<span>'+tutorMd(st.step||'')+'</span></div>';
+  });
+  if(q.ans) ms+='<div class="pq-ans"><b>Answer</b>'+tutorMd(q.ans)+'</div>';
+  body.innerHTML='<div class="pq-q">'+marksBadge+tutorMd(q.q)+'</div>'
+    +'<div class="pq-hint">Attempt it on paper with no notes, then rate how it went below.</div>'
+    +'<div class="pq-actions">'
+      +'<button class="pq-act" id="pq-reveal" type="button">Show mark scheme</button>'
+      +'<button class="pq-act" id="pq-new" type="button"'+(hasKey?'':' disabled')+'>↻ New question</button>'
+    +'</div>'
+    +'<div class="pq-ms" id="pq-ms">'+ms+'</div>';
+  if(window.MathJax&&MathJax.typesetPromise){ MathJax.typesetPromise([body]).catch(function(){}); }
+  document.getElementById('pq-reveal').addEventListener('click',function(){
+    var msEl=document.getElementById('pq-ms'); var open=msEl.classList.toggle('open');
+    this.textContent=open?'Hide mark scheme':'Show mark scheme';
+    if(open&&window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([msEl]).catch(function(){});
+  });
+  var nb=document.getElementById('pq-new'); if(nb)nb.addEventListener('click',pqGenerate);
+}
+async function pqGenerate(){
+  var topic=modalTopic; if(!topic) return;
+  var key=loadGeminiKey(); if(!key){ renderPQ(); return; }
+  var body=document.getElementById('pq-body'); if(!body) return;
+  var td=allTopics.find(function(t){return t.name===topic;});
+  var base=td?td.diff:2;
+  var diffWord = pqDiff==='easier'?'slightly easier than the typical exam standard for this topic (build confidence)':
+                 pqDiff==='harder'?'more challenging — a harder, multi-step problem-solving question like the back end of a paper':
+                 'at the typical exam standard for this topic';
+  body.innerHTML='<div class="pq-spinner"><span class="pq-spin-dot"></span>Writing a fresh question…</div>';
+  var prompt=[
+   'You are an Edexcel A-Level Mathematics (9MA0) examiner. Write ONE original, exam-style question on the topic: "'+topic+'".',
+   'Pitch it '+diffWord+'. Use only methods, formulae and notation within the 9MA0 specification. It must be fully self-contained and solvable on paper in a few minutes.',
+   'Give a realistic mark allocation (usually 3 to 8 marks). The mark scheme must show the method (M) and accuracy (A) marks a UK examiner would award.',
+   'Return ONLY a JSON object (no markdown, no code fences) of exactly this shape:',
+   '{"question": string, "marks": number, "markscheme": [{"step": string, "marks": number}], "answer": string}',
+   'Use LaTeX for ALL mathematics: $...$ for inline and $$...$$ for displayed maths. Do NOT reveal the answer inside the question text.'
+  ].join('\n');
+  try{
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.9,responseMimeType:'application/json'}})
+    });
+    var data=await r.json();
+    if(!r.ok) throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
+    var cand=data.candidates&&data.candidates[0];
+    var raw=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
+    var q=pqParse(raw);
+    if(!q) throw new Error('Could not read the generated question — please try again.');
+    q.diff=pqDiff; q.ts=Date.now();
+    if(!pqBank[topic]) pqBank[topic]=[];
+    pqBank[topic].push(q); if(pqBank[topic].length>8) pqBank[topic]=pqBank[topic].slice(-8);
+    pqSave();
+    pqRenderQuestion(q);
+  }catch(err){
+    var msg=err&&err.message?err.message:String(err);
+    if(/API key not valid|API_KEY_INVALID/i.test(msg)) msg='Your Gemini key was rejected — check it in Settings → AI Tutor.';
+    if(/quota|RESOURCE_EXHAUSTED|limit/i.test(msg)) msg='Gemini free-tier limit hit — wait a moment and try again.';
+    body.innerHTML='<div class="pq-err">'+tutorEsc(msg)+'</div><div class="pq-actions"><button class="pq-act" id="pq-retry" type="button">Try again</button></div>';
+    var rb=document.getElementById('pq-retry'); if(rb)rb.addEventListener('click',pqGenerate);
+  }
+}
+document.querySelectorAll('#pq-diff .pq-diff-btn').forEach(function(b){
+  b.addEventListener('click',function(){ pqDiff=b.getAttribute('data-d'); pqSyncDiffUI(); });
+});
 
 function updateSchedPreview(){
   const dateVal=document.getElementById('modal-date').value;
