@@ -6070,9 +6070,10 @@ function renderSyncCard(){
       +' · last checked '+ago(s.lastPullAt)
       +(s.pending?' · ⏳ change waiting to save':'')
       +(s.persistence?' · offline cache on':'')
-      +' · '+Math.round(s.localBytes/1024)+' KB · '+s.build
+      +'\nexam date: '+s.examDate+' · device date: '+s.deviceDate+' · these MUST match on both devices'
+      +'\n'+Math.round(s.localBytes/1024)+' KB · '+s.build
       +(s.lastError?(' · ⚠ '+s.lastError):'');
-    el.textContent=line;
+    el.textContent=line; el.style.whiteSpace='pre-line';
   }
 }
 function closeSettings(){
@@ -8303,7 +8304,16 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var lastPushError='';
 
   function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
-  function applyToLocal(store){ if(!store)return; SYNC_KEYS.forEach(function(k){ if(store[k]!=null)nativeSet(k,store[k]); }); }
+  // TRUE MIRROR: set keys present upstream AND clear keys absent upstream. Without the clear,
+  // a value one device unset (e.g. exam date → removeItem) could never propagate, leaving the
+  // two devices on permanently different schedules even though "everything looks synced".
+  function applyToLocal(store){
+    if(!store)return;
+    SYNC_KEYS.forEach(function(k){
+      if(store[k]!=null) nativeSet(k,store[k]);
+      else localStorage.removeItem(k);
+    });
+  }
   var lastPushedJson='', lastSyncAt=0, lastPullAt=0;
   function pushNow(){
     if(!currentUser)return;
@@ -8471,7 +8481,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).delete().catch(function(){});
   };
   window.mhCloudReady=function(){ return !!currentUser; };
-  window.MH_BUILD='2026-06-27-sync4-persist';
+  window.MH_BUILD='2026-06-27-sync5-mirror';
   window.mhForcePush=function(){
     if(!currentUser)return Promise.resolve({error:'Not signed in'});
     var store=collectLocal(), bytes=JSON.stringify(store).length, stamp=Date.now();
@@ -8489,7 +8499,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       return {applied:true,bytes:bytes,writer:d.writer||'?',when:u||0,mine:d.writer===myWriter};
     }).catch(function(e){ return {error:(e&&e.message)||String(e)}; });
   };
-  window.mhSyncStatus=function(){ return {email:currentUser?currentUser.email:null, device:myWriter.slice(0,6), localBytes:JSON.stringify(collectLocal()).length, lastError:lastPushError, build:(window.MH_BUILD||'?'), online:(navigator.onLine!==false), persistence:hasPersistence, lastSyncAt:lastSyncAt, lastPullAt:lastPullAt, pending:!!pushTimer}; };
+  window.mhSyncStatus=function(){ return {email:currentUser?currentUser.email:null, device:myWriter.slice(0,6), localBytes:JSON.stringify(collectLocal()).length, lastError:lastPushError, build:(window.MH_BUILD||'?'), online:(navigator.onLine!==false), persistence:hasPersistence, lastSyncAt:lastSyncAt, lastPullAt:lastPullAt, pending:!!pushTimer, examDate:(typeof getExamDate==='function'?(getExamDate()||'(none)'):'?'), deviceDate:(typeof today==='function'?today():'?')}; };
 })();
 </script>
 </body>
