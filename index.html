@@ -6063,7 +6063,17 @@ function renderSyncCard(){
   if(!s.email){ card.style.display='none'; return; }
   card.style.display='';
   var el=document.getElementById('sync-status');
-  if(el)el.textContent='This device holds '+Math.round(s.localBytes/1024)+' KB · build '+s.build+(s.lastError?(' · ⚠ last save error: '+s.lastError):' · saving OK');
+  if(el){
+    function ago(t){ if(!t)return 'not yet'; var s=Math.round((Date.now()-t)/1000); if(s<60)return s+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; return Math.round(s/3600)+'h ago'; }
+    var line=(s.online?'🟢 Online':'🔴 Offline')
+      +' · last saved to cloud '+ago(s.lastSyncAt)
+      +' · last checked '+ago(s.lastPullAt)
+      +(s.pending?' · ⏳ change waiting to save':'')
+      +(s.persistence?' · offline cache on':'')
+      +' · '+Math.round(s.localBytes/1024)+' KB · '+s.build
+      +(s.lastError?(' · ⚠ '+s.lastError):'');
+    el.textContent=line;
+  }
 }
 function closeSettings(){
   document.getElementById('settings-overlay').classList.remove('open');
@@ -8268,6 +8278,17 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   if(typeof firebase==='undefined'){ console.warn('[cloud] Firebase SDK did not load — app runs in local-only mode'); return; }
   firebase.initializeApp(firebaseConfig);
   var auth=firebase.auth(), db=firebase.firestore();
+  // Offline persistence (IndexedDB): the SINGLE most important reliability fix. Writes are
+  // committed to a local queue immediately and the SDK resends them automatically until the
+  // server acknowledges — surviving the laptop lid closing, the phone freezing a backgrounded
+  // PWA, lost wifi, or even a full app restart. Reads also serve instantly from cache.
+  // Must run before any other Firestore call. Safe to fail (e.g. Safari private mode).
+  var hasPersistence=false;
+  try{
+    db.enablePersistence({synchronizeTabs:true})
+      .then(function(){ hasPersistence=true; })
+      .catch(function(e){ console.warn('[cloud] persistence unavailable:', e&&e.code); });
+  }catch(e){ console.warn('[cloud] persistence threw:', e); }
 
   // Everything is synced EXCEPT the Gemini API key, which stays device-local on purpose.
   var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
@@ -8283,13 +8304,18 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
 
   function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
   function applyToLocal(store){ if(!store)return; SYNC_KEYS.forEach(function(k){ if(store[k]!=null)nativeSet(k,store[k]); }); }
+  var lastPushedJson='', lastSyncAt=0, lastPullAt=0;
   function pushNow(){
     if(!currentUser)return;
+    var store=collectLocal(), json=JSON.stringify(store);
+    if(json===lastPushedJson)return;                          // nothing actually changed → skip redundant write
+    lastPushedJson=json;
     var stamp=Date.now(); try{nativeSet('mh_stamp',myWriter+'|'+stamp);}catch(e){}
     db.collection('users').doc(currentUser.uid).set(
-      { store:collectLocal(), updatedAt:stamp, writer:myWriter },
+      { store:store, updatedAt:stamp, writer:myWriter },
       { merge:true }
-    ).catch(function(e){ console.warn('[cloud] save failed',e); lastPushError=(e&&e.message)||String(e); });
+    ).then(function(){ lastPushError=''; lastSyncAt=Date.now(); })
+     .catch(function(e){ console.warn('[cloud] save failed',e); lastPushError=(e&&e.message)||String(e); });
   }
   // Apply another device's cloud data to this device (last-write-wins on the whole store).
   function applyRemote(d){
@@ -8307,21 +8333,22 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   function attachListener(uid){
     if(unsub){ try{unsub();}catch(e){} unsub=null; }
     gotFirst=false;
-    unsub=db.collection('users').doc(uid).onSnapshot(function(snap){
+    unsub=db.collection('users').doc(uid).onSnapshot({includeMetadataChanges:false},function(snap){
+      lastPullAt=Date.now();
       if(snap.metadata&&snap.metadata.hasPendingWrites)return;        // ignore our own optimistic write
       if(!snap.exists||!snap.data()||!snap.data().store){
         if(!gotFirst){ gotFirst=true; pushNow(); }                    // brand-new account → migrate local up
         return;
       }
       gotFirst=true; applyRemote(snap.data());
-    }, function(err){ console.warn('[cloud] listener error',err); });
+    }, function(err){ console.warn('[cloud] listener error',err); setTimeout(function(){ if(currentUser)attachListener(currentUser.uid); },4000); });
   }
-  // Manual .get() pull — backup for when a listener was dropped, and used on the focus event.
+  // Manual .get() pull — backup for when a listener was dropped, and used on focus / reconnect.
   var pulling=false;
   function syncPull(){
     if(!currentUser||pulling)return; pulling=true;
     db.collection('users').doc(currentUser.uid).get().then(function(snap){
-      pulling=false; if(snap.exists)applyRemote(snap.data());
+      pulling=false; lastPullAt=Date.now(); if(snap.exists)applyRemote(snap.data());
     }).catch(function(){ pulling=false; });
   }
   // Flush a pending push the instant the app is hidden/closed, so a change made just before
@@ -8331,6 +8358,8 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   window.addEventListener('focus',syncPull);
   window.addEventListener('pagehide',flushPush);
   window.addEventListener('beforeunload',flushPush);
+  // When the connection comes back, send anything pending and pull the latest immediately.
+  window.addEventListener('online',function(){ flushPush(); syncPull(); if(currentUser)attachListener(currentUser.uid); });
   function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1000); }
 
   // Mirror every app save up to the cloud (debounced). localStorage stays the fast local cache.
@@ -8442,7 +8471,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).delete().catch(function(){});
   };
   window.mhCloudReady=function(){ return !!currentUser; };
-  window.MH_BUILD='2026-06-27-sync3-realtime';
+  window.MH_BUILD='2026-06-27-sync4-persist';
   window.mhForcePush=function(){
     if(!currentUser)return Promise.resolve({error:'Not signed in'});
     var store=collectLocal(), bytes=JSON.stringify(store).length, stamp=Date.now();
@@ -8460,7 +8489,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       return {applied:true,bytes:bytes,writer:d.writer||'?',when:u||0,mine:d.writer===myWriter};
     }).catch(function(e){ return {error:(e&&e.message)||String(e)}; });
   };
-  window.mhSyncStatus=function(){ return {email:currentUser?currentUser.email:null, device:myWriter.slice(0,6), localBytes:JSON.stringify(collectLocal()).length, lastError:lastPushError, build:(window.MH_BUILD||'?')}; };
+  window.mhSyncStatus=function(){ return {email:currentUser?currentUser.email:null, device:myWriter.slice(0,6), localBytes:JSON.stringify(collectLocal()).length, lastError:lastPushError, build:(window.MH_BUILD||'?'), online:(navigator.onLine!==false), persistence:hasPersistence, lastSyncAt:lastSyncAt, lastPullAt:lastPullAt, pending:!!pushTimer}; };
 })();
 </script>
 </body>
