@@ -8291,24 +8291,47 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       { merge:true }
     ).catch(function(e){ console.warn('[cloud] save failed',e); lastPushError=(e&&e.message)||String(e); });
   }
-  // Re-pull when the app regains focus / periodically, so a 2nd device sees the 1st's changes.
+  // Apply another device's cloud data to this device (last-write-wins on the whole store).
+  function applyRemote(d){
+    if(!d||!d.store)return;
+    var remote=docStamp(d), mine=localStorage.getItem('mh_stamp')||'';
+    if(remote===mine)return;                                          // nothing new
+    if(d.writer===myWriter){ nativeSet('mh_stamp',remote); return; }  // our own write echoed back
+    applyToLocal(d.store); nativeSet('mh_stamp',remote);
+    location.reload();                                                // re-read everything cleanly
+  }
+  // REALTIME pull: a Firestore listener delivers another device's changes within ~1s while the
+  // app is open, and re-fires automatically when the phone wakes from sleep and reconnects —
+  // so sync is near-instant instead of waiting on a focus/poll cycle.
+  var unsub=null, gotFirst=false;
+  function attachListener(uid){
+    if(unsub){ try{unsub();}catch(e){} unsub=null; }
+    gotFirst=false;
+    unsub=db.collection('users').doc(uid).onSnapshot(function(snap){
+      if(snap.metadata&&snap.metadata.hasPendingWrites)return;        // ignore our own optimistic write
+      if(!snap.exists||!snap.data()||!snap.data().store){
+        if(!gotFirst){ gotFirst=true; pushNow(); }                    // brand-new account → migrate local up
+        return;
+      }
+      gotFirst=true; applyRemote(snap.data());
+    }, function(err){ console.warn('[cloud] listener error',err); });
+  }
+  // Manual .get() pull — backup for when a listener was dropped, and used on the focus event.
   var pulling=false;
   function syncPull(){
     if(!currentUser||pulling)return; pulling=true;
     db.collection('users').doc(currentUser.uid).get().then(function(snap){
-      pulling=false;
-      if(!snap.exists)return; var d=snap.data(); if(!d||!d.store)return;
-      var remote=docStamp(d), mine=localStorage.getItem('mh_stamp')||'';
-      if(remote===mine)return;
-      if(d.writer===myWriter){ nativeSet('mh_stamp',remote); return; }
-      applyToLocal(d.store); nativeSet('mh_stamp',remote);
-      location.reload();
+      pulling=false; if(snap.exists)applyRemote(snap.data());
     }).catch(function(){ pulling=false; });
   }
-  document.addEventListener('visibilitychange',function(){ if(!document.hidden)syncPull(); });
+  // Flush a pending push the instant the app is hidden/closed, so a change made just before
+  // locking the laptop or backgrounding the phone is never stranded by the debounce.
+  function flushPush(){ if(pushTimer){ clearTimeout(pushTimer); pushTimer=null; pushNow(); } }
+  document.addEventListener('visibilitychange',function(){ if(document.hidden)flushPush(); else syncPull(); });
   window.addEventListener('focus',syncPull);
-  setInterval(function(){ if(!document.hidden)syncPull(); },25000);
-  function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1500); }
+  window.addEventListener('pagehide',flushPush);
+  window.addEventListener('beforeunload',flushPush);
+  function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1000); }
 
   // Mirror every app save up to the cloud (debounced). localStorage stays the fast local cache.
   localStorage.setItem=function(k,v){ nativeSet(k,v); if(currentUser&&SYNC_KEYS.indexOf(k)>=0)schedulePush(); };
@@ -8385,23 +8408,10 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
 
   auth.onAuthStateChanged(function(user){
     currentUser=user;
+    if(unsub){ try{unsub();}catch(e){} unsub=null; }
     if(!user){ showForm(); return; }
     hide();
-    if(sessionStorage.getItem('mh_synced')==='1'){ return; } // already reconciled this browser session
-    db.collection('users').doc(user.uid).get().then(function(snap){
-      if(snap.exists && snap.data() && snap.data().store){
-        applyToLocal(snap.data().store);        // pull cloud -> local
-        nativeSet('mh_stamp',docStamp(snap.data()));
-        sessionStorage.setItem('mh_synced','1');
-        location.reload();                       // re-read everything cleanly
-      }else{
-        sessionStorage.setItem('mh_synced','1'); // first login on this account
-        pushNow();                               // migrate whatever's on this device up
-      }
-    }).catch(function(e){
-      console.warn('[cloud] pull failed',e);
-      sessionStorage.setItem('mh_synced','1');   // never trap the user behind a transient error
-    });
+    attachListener(user.uid);   // realtime listener reconciles cloud↔local and keeps them in sync
   });
 
   // Sign out (exposed for a settings button / console use).
@@ -8432,7 +8442,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     return db.collection('users').doc(currentUser.uid).collection('mImages').doc(id).delete().catch(function(){});
   };
   window.mhCloudReady=function(){ return !!currentUser; };
-  window.MH_BUILD='2026-06-24-sync2';
+  window.MH_BUILD='2026-06-27-sync3-realtime';
   window.mhForcePush=function(){
     if(!currentUser)return Promise.resolve({error:'Not signed in'});
     var store=collectLocal(), bytes=JSON.stringify(store).length, stamp=Date.now();
