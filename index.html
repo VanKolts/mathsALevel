@@ -1009,7 +1009,8 @@ html{scroll-behavior:smooth;}
 .gloss-pop-more{margin-top:10px;width:100%;font-size:11px;font-weight:600;padding:6px;border-radius:7px;border:none;background:var(--grad);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;}
 
 /* ── CHECKLIST QUICK BUTTONS (resources + skill tree) ─────────────── */
-.cl-quick{display:flex;gap:9px;margin:0 0 14px;flex-wrap:wrap;}
+.cl-quick{display:none;gap:9px;margin:0 0 14px;flex-wrap:wrap;}  /* desktop: lives in the header instead */
+@media (max-width:900px),(pointer:coarse){ .cl-quick{display:flex;} }
 .cl-quick-btn{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 14px;cursor:pointer;transition:all .15s;}
 .cl-quick-btn:hover{border-color:rgba(var(--accent-rgb),.5);color:var(--accent);transform:translateY(-1px);}
 .cl-quick-btn .cqi{font-size:15px;}
@@ -1312,6 +1313,8 @@ html{scroll-behavior:smooth;}
     <span class="streak-chip" id="streak-chip" title="Day streak">🔥 <span id="streak-num">0</span></span>
     <div class="tab-spacer"></div>
     <div class="hdr-actions">
+      <button class="hdr-btn js-open-tree" aria-label="Skill tree" title="Skill tree">🌳 Skill tree</button>
+      <button class="hdr-btn js-open-resources" aria-label="Resources" title="Resources">📚 Resources</button>
       <button class="hdr-btn" id="focus-btn" aria-label="Focus timer" title="Start a focus session">🍅 Focus</button>
       <button class="hdr-btn" id="tutor-btn" aria-label="AI tutor" title="Get a step-by-step walkthrough">✨ Tutor</button>
     </div>
@@ -1321,8 +1324,8 @@ html{scroll-behavior:smooth;}
 <!--            CHECKLIST TAB             -->
 <div class="page active" id="page-checklist">
   <div class="cl-quick">
-    <button class="cl-quick-btn" id="open-tree-btn"><span class="cqi">🌳</span> Skill tree</button>
-    <button class="cl-quick-btn" id="open-resources-btn"><span class="cqi">📚</span> Resources</button>
+    <button class="cl-quick-btn js-open-tree"><span class="cqi">🌳</span> Skill tree</button>
+    <button class="cl-quick-btn js-open-resources"><span class="cqi">📚</span> Resources</button>
   </div>
   <div class="review-panel">
     <div class="today-card" id="today-card">
@@ -6021,7 +6024,8 @@ function renderTree(){
 // Checklist quick-access buttons + overlay close (Esc handled by the global .stats-overlay handler)
 (function(){
   var w=function(id,fn){ var el=document.getElementById(id); if(el)el.addEventListener('click',fn); };
-  w('open-tree-btn',openTree); w('open-resources-btn',openResources);
+  document.querySelectorAll('.js-open-tree').forEach(function(el){ el.addEventListener('click',openTree); });
+  document.querySelectorAll('.js-open-resources').forEach(function(el){ el.addEventListener('click',openResources); });
   w('tree-close',closeTree); w('resources-close',closeResources);
   var to=document.getElementById('tree-overlay'); if(to)to.addEventListener('click',function(e){if(e.target===this)closeTree();});
   var ro=document.getElementById('resources-overlay'); if(ro)ro.addEventListener('click',function(e){if(e.target===this)closeResources();});
