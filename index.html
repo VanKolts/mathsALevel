@@ -1008,6 +1008,43 @@ html{scroll-behavior:smooth;}
 .gloss-pop-eg{font-size:12px;color:var(--muted);line-height:1.5;margin-top:7px;font-family:'JetBrains Mono','Georgia',serif;}
 .gloss-pop-more{margin-top:10px;width:100%;font-size:11px;font-weight:600;padding:6px;border-radius:7px;border:none;background:var(--grad);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;}
 
+/* ── CHECKLIST QUICK BUTTONS (resources + skill tree) ─────────────── */
+.cl-quick{display:flex;gap:9px;margin:0 0 14px;flex-wrap:wrap;}
+.cl-quick-btn{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 14px;cursor:pointer;transition:all .15s;}
+.cl-quick-btn:hover{border-color:rgba(var(--accent-rgb),.5);color:var(--accent);transform:translateY(-1px);}
+.cl-quick-btn .cqi{font-size:15px;}
+
+/* ── SKILL TREE OVERLAY ───────────────────────────────────────────── */
+.tree-panel{width:min(840px,98vw);}
+.tree-summary{display:flex;align-items:center;gap:16px;margin-bottom:14px;}
+.tree-ring{width:66px;height:66px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(#34d399 calc(var(--p)*1%), var(--border2) 0);}
+.tree-ring span{width:52px;height:52px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:var(--text);font-family:'Manrope',sans-serif;}
+.tree-sum-big{font-size:15px;font-weight:700;color:var(--text);font-family:'Manrope',sans-serif;}
+.tree-sum-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.tree-legend{display:flex;flex-wrap:wrap;gap:13px;padding:9px 0 15px;margin-bottom:6px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--muted);}
+.tree-legend span{display:inline-flex;align-items:center;gap:5px;}
+.tree-comp{margin-bottom:18px;}
+.tree-comp-hdr{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin:6px 0 9px;}
+.tree-branch{display:flex;gap:11px;margin-bottom:11px;}
+.tree-branch-spine{width:4px;border-radius:3px;flex-shrink:0;opacity:.85;}
+.tree-branch-main{flex:1;min-width:0;}
+.tree-branch-hdr{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px;}
+.tree-cl-name{font-size:13px;font-weight:600;color:var(--text);font-family:'Manrope',sans-serif;}
+.tree-crown{font-size:12px;}
+.tree-cl-count{font-size:10.5px;font-family:'JetBrains Mono',monospace;color:var(--muted);flex-shrink:0;}
+.tree-cl-track{height:4px;border-radius:3px;background:var(--border2);overflow:hidden;margin-bottom:8px;}
+.tree-cl-fill{height:100%;border-radius:3px;transition:width .4s;}
+.tree-leaves{display:flex;flex-wrap:wrap;gap:7px;}
+.tdot{width:15px;height:15px;border-radius:50%;border:none;cursor:pointer;padding:0;transition:transform .12s;position:relative;}
+.tdot:hover{transform:scale(1.35);z-index:2;}
+.tdot.locked{background:var(--border2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);}
+.tdot.weak{background:#f87171;}
+.tdot.ok{background:#fb923c;}
+.tdot.strong{background:#34d399;}
+.tdot.mastered{background:#fbbf24;box-shadow:0 0 7px rgba(251,191,36,.75);}
+.tree-branch.tree-done .tree-cl-name{color:#fbbf24;}
+.tree-branch.tree-done .tree-branch-spine{opacity:1;box-shadow:0 0 8px rgba(251,191,36,.5);}
+
 /* ── PAPER LOGGER ──────────────────────────────────────────────────── */
 .plog-modal{width:min(560px,96vw);}
 .plog-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -1268,7 +1305,6 @@ html{scroll-behavior:smooth;}
   <div class="tab-bar-inner">
     <span class="tab-indicator" id="tab-indicator"></span>
     <button class="tab-btn active" id="tab-checklist-btn" role="tab" aria-selected="true">Checklist<span class="tab-due-badge" id="tab-due-badge"></span></button>
-    <button class="tab-btn" id="tab-resources-btn" role="tab" aria-selected="false">Resources</button>
     <button class="tab-btn" id="tab-mistakes-btn" role="tab" aria-selected="false">Mistakes</button>
     <button class="tab-btn" id="tab-papers-btn" role="tab" aria-selected="false">Past Papers</button>
     <button class="tab-btn tab-icon-btn si-btn" id="tab-settings-btn" role="tab" aria-selected="false" aria-label="Settings" title="Settings"><span class="si-ico">⚙</span></button>
@@ -1284,6 +1320,10 @@ html{scroll-behavior:smooth;}
 
 <!--            CHECKLIST TAB             -->
 <div class="page active" id="page-checklist">
+  <div class="cl-quick">
+    <button class="cl-quick-btn" id="open-tree-btn"><span class="cqi">🌳</span> Skill tree</button>
+    <button class="cl-quick-btn" id="open-resources-btn"><span class="cqi">📚</span> Resources</button>
+  </div>
   <div class="review-panel">
     <div class="today-card" id="today-card">
       <div class="today-main">
@@ -1361,9 +1401,16 @@ html{scroll-behavior:smooth;}
   </main>
 </div>
 
-<!--            RESOURCES TAB             -->
-<div class="page" id="page-resources">
-  <div class="res-section">
+<!--      RESOURCES OVERLAY (folded into the Checklist via a top button)     -->
+<div class="stats-overlay" id="resources-overlay">
+  <div class="stats-panel">
+    <div class="stats-hdr">
+      <div class="stats-title">Resources</div>
+      <span class="stats-subtitle">Hand-picked sites for learning, revising &amp; practising</span>
+      <button class="stats-close" id="resources-close" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="stats-body">
+      <div class="res-section">
     <div class="fav-strip">
       <div class="fav-strip-title">Favourites</div>
       <div class="fav-grid" id="fav-grid"><div class="fav-empty" id="fav-empty">No favourites yet  click the star on any resource below.</div></div>
@@ -1373,7 +1420,32 @@ html{scroll-behavior:smooth;}
     <div class="res-cat-lbl">🔁  Revision  for going back through and solidifying topics</div>
     <div class="res-grid" id="res-revise"></div>
     <div class="res-cat-lbl">Practice  for drilling exam questions</div>
-    <div class="res-grid" id="res-practice"></div>
+        <div class="res-grid" id="res-practice"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--            MISTAKES TAB             -->
+<!-- SKILL TREE OVERLAY -->
+<div class="stats-overlay" id="tree-overlay">
+  <div class="stats-panel tree-panel">
+    <div class="stats-hdr">
+      <div class="stats-title">🌳 Skill Tree</div>
+      <span class="stats-subtitle">Your whole course, lit up by how well you know it</span>
+      <button class="stats-close" id="tree-close" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="stats-body">
+      <div class="tree-summary" id="tree-summary"></div>
+      <div class="tree-legend">
+        <span><i class="tdot locked"></i>Not started</span>
+        <span><i class="tdot weak"></i>Shaky</span>
+        <span><i class="tdot ok"></i>Getting there</span>
+        <span><i class="tdot strong"></i>Strong</span>
+        <span><i class="tdot mastered"></i>Mastered</span>
+      </div>
+      <div id="tree-body"></div>
+    </div>
   </div>
 </div>
 
@@ -2132,10 +2204,6 @@ html{scroll-behavior:smooth;}
   <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l1.6 1.6L8.4 4.8"/><path d="M4 12l1.6 1.6L8.4 10.8"/><path d="M4 18l1.6 1.6L8.4 16.8"/><line x1="11" y1="6" x2="20" y2="6"/><line x1="11" y1="12" x2="20" y2="12"/><line x1="11" y1="18" x2="20" y2="18"/></svg>
     <span class="m-nav-badge" id="m-nav-badge"></span><span class="m-nav-dot"></span>
-  </button>
-  <button class="m-nav-btn" data-tab="resources" aria-label="Resources">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3H19a1 1 0 0 1 1 1v13"/><path d="M6.5 3A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 1 6.5 16H20"/><path d="M6.5 16A2.5 2.5 0 0 0 4 18.5A2.5 2.5 0 0 0 6.5 21H20"/></svg>
-    <span class="m-nav-dot"></span>
   </button>
   <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5L21.5 20H2.5L12 3.5z"/><line x1="12" y1="10" x2="12" y2="14.5"/><line x1="12" y1="17.4" x2="12" y2="17.5"/></svg>
@@ -5566,7 +5634,7 @@ function updateDueBadge(){
   badge.className='tab-due-badge'+(ov>0?' urgency':'');
 }
 
-const TAB_ORDER=['checklist','resources','mistakes','papers'];
+const TAB_ORDER=['checklist','mistakes','papers'];
 let activeTab='checklist';
 function positionTabIndicator(){
   const ind=document.getElementById('tab-indicator');
@@ -5587,7 +5655,6 @@ function switchTab(tab){
     btn.setAttribute('aria-selected',t===tab?'true':'false');
   });
   positionTabIndicator();
-  if(tab==='resources')renderResources();
   if(tab==='mistakes'){renderMistakesTab();setTimeout(()=>positionPill('mv-tabs','mv-pill'),50);}
   if(tab==='papers'){renderPaperBrowser();setTimeout(positionPpPill,50);}
   setTimeout(syncSpringSliders,50);
@@ -5885,10 +5952,84 @@ function closeStats(){
   document.getElementById('stats-overlay').classList.remove('open');
   document.body.style.overflow='';
 }
+
+// ---- Resources overlay (folded into the Checklist) ----
+function openResources(){ renderResources(); document.getElementById('resources-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeResources(){ document.getElementById('resources-overlay').classList.remove('open'); document.body.style.overflow=''; }
+
+// ---- Skill Tree overlay ----
+function treeNode(name){
+  const rec=sr[name];
+  if(!validRec(rec)) return {cls:'locked', mastered:false, started:false};
+  if(rec.S>=MASTERY_STABILITY) return {cls:'mastered', mastered:true, started:true};
+  const r=currentRetrievability(name)||0;
+  let cls = r>=0.92?'strong' : r>=0.80?'ok' : 'weak';
+  return {cls, mastered:false, started:true};
+}
+function openTree(){ renderTree(); document.getElementById('tree-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeTree(){ document.getElementById('tree-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function renderTree(){
+  const body=document.getElementById('tree-body'); if(!body)return;
+  const cls=activeClusters();
+  // overall mastery
+  let total=0, mastered=0, started=0;
+  cls.forEach(c=>c.topics.forEach(t=>{ total++; const n=treeNode(t); if(n.mastered)mastered++; if(n.started)started++; }));
+  const pct = total?Math.round(mastered/total*100):0;
+  const sum=document.getElementById('tree-summary');
+  if(sum){
+    sum.innerHTML=
+      '<div class="tree-ring" style="--p:'+pct+'"><span>'+pct+'%</span></div>'+
+      '<div class="tree-sum-txt"><div class="tree-sum-big">'+mastered+' of '+total+' topics mastered</div>'+
+      '<div class="tree-sum-sub">'+started+' started · '+(total-started)+' not yet touched · keep watering 🌱</div></div>';
+  }
+  // group clusters by qual+component, preserving cluster order
+  const groups=[]; const seen={};
+  cls.forEach(c=>{
+    const key=c.qual+'|'+c.component;
+    if(!seen[key]){ seen[key]={qual:c.qual, component:c.component, name:componentName(c.qual,c.component), clusters:[]}; seen[key].order=groups.length; groups.push(seen[key]); }
+    seen[key].clusters.push(c);
+  });
+  let html='';
+  groups.forEach(g=>{
+    html+='<div class="tree-comp"><div class="tree-comp-hdr">'+tutorEsc(g.name)+'</div>';
+    g.clusters.forEach(c=>{
+      let cMast=0, cStart=0;
+      c.topics.forEach(t=>{ const n=treeNode(t); if(n.mastered)cMast++; if(n.started)cStart++; });
+      const cPct=Math.round(cMast/c.topics.length*100);
+      const done = cMast===c.topics.length;
+      html+='<div class="tree-branch'+(done?' tree-done':'')+'">'+
+        '<div class="tree-branch-spine" style="background:'+c.color+'"></div>'+
+        '<div class="tree-branch-main">'+
+          '<div class="tree-branch-hdr"><span class="tree-cl-name">'+tutorEsc(c.name)+(done?' <span class="tree-crown">👑</span>':'')+'</span>'+
+          '<span class="tree-cl-count">'+cMast+'/'+c.topics.length+'</span></div>'+
+          '<div class="tree-cl-track"><div class="tree-cl-fill" style="width:'+cPct+'%;background:'+c.color+'"></div></div>'+
+          '<div class="tree-leaves">';
+      c.topics.forEach(t=>{
+        const n=treeNode(t);
+        html+='<button class="tdot '+n.cls+'" data-topic="'+tutorEsc(t).replace(/"/g,'&quot;')+'" title="'+tutorEsc(t).replace(/"/g,'&quot;')+'" aria-label="'+tutorEsc(t).replace(/"/g,'&quot;')+'"></button>';
+      });
+      html+='</div></div></div>';
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+  // clicking a leaf opens that topic's study modal
+  body.querySelectorAll('.tdot[data-topic]').forEach(b=>{
+    b.addEventListener('click',function(){ const t=this.getAttribute('data-topic'); closeTree(); if(typeof openModal==='function')openModal(t,false); });
+  });
+}
+// Checklist quick-access buttons + overlay close (Esc handled by the global .stats-overlay handler)
+(function(){
+  var w=function(id,fn){ var el=document.getElementById(id); if(el)el.addEventListener('click',fn); };
+  w('open-tree-btn',openTree); w('open-resources-btn',openResources);
+  w('tree-close',closeTree); w('resources-close',closeResources);
+  var to=document.getElementById('tree-overlay'); if(to)to.addEventListener('click',function(e){if(e.target===this)closeTree();});
+  var ro=document.getElementById('resources-overlay'); if(ro)ro.addEventListener('click',function(e){if(e.target===this)closeResources();});
+})();
 // ── Keyboard shortcuts ──────────────────────────────────────────────────────
 const SHORTCUTS_DEF=[
   {id:'nav-checklist',label:'Go to Checklist',   defaultKey:'1',group:'Navigation'},
-  {id:'nav-resources',label:'Go to Resources',   defaultKey:'2',group:'Navigation'},
+  {id:'nav-resources',label:'Open Resources',    defaultKey:'2',group:'Actions'},
   {id:'nav-mistakes', label:'Go to Mistakes',    defaultKey:'3',group:'Navigation'},
   {id:'nav-papers',   label:'Go to Past Papers', defaultKey:'4',group:'Navigation'},
   {id:'act-formula',  label:'Open Formula Sheet',defaultKey:'f',group:'Actions'},
@@ -5917,7 +6058,7 @@ function fireShortcut(id){
   if(anyOpen&&id.startsWith('act'))return;
   switch(id){
     case 'nav-checklist':switchTab('checklist');break;
-    case 'nav-resources':switchTab('resources');break;
+    case 'nav-resources':openResources();break;
     case 'nav-mistakes': switchTab('mistakes'); break;
     case 'nav-papers':   switchTab('papers');   break;
     case 'act-formula':  openFormula();         break;
