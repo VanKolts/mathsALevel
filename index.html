@@ -313,6 +313,29 @@ main{max-width:1060px;margin:0 auto;padding:1.2rem 1.5rem 2rem;}
 .reason-bar-track{background:var(--surface2);border-radius:4px;height:10px;overflow:hidden;}
 .reason-bar-fill{height:100%;border-radius:4px;background:var(--grad);transition:width .4s cubic-bezier(.4,0,.2,1);}
 .reason-count{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:right;}
+/* Leaks ("Where I lost marks") view */
+.leak-head{background:linear-gradient(135deg,rgba(248,113,113,.12),rgba(251,146,60,.08));border:1px solid rgba(248,113,113,.28);border-radius:10px;padding:13px 15px;margin-bottom:12px;}
+.leak-head-empty{background:var(--surface);border-color:var(--border);}
+.leak-head-big{font-size:15px;font-weight:700;color:var(--text);font-family:'Manrope',sans-serif;margin-bottom:4px;}
+.leak-head-big b{color:#f87171;}
+.leak-head-sub{font-size:12px;color:var(--muted);line-height:1.55;}
+.leak-head-sub b{color:var(--text);}
+.leak-sort{display:flex;align-items:center;gap:7px;margin-bottom:11px;}
+.leak-sort-lbl{font-size:11px;color:var(--dim);}
+.leak-sort-btn{font-size:11px;padding:4px 11px;border-radius:13px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;}
+.leak-sort-btn.on{background:rgba(var(--accent-rgb),.18);color:var(--accent);border-color:rgba(var(--accent-rgb),.4);}
+.leak-list{display:flex;flex-direction:column;gap:8px;}
+.leak-row{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 13px;cursor:pointer;transition:border-color .15s,transform .1s;font-family:inherit;}
+.leak-row:hover{border-color:rgba(var(--accent-rgb),.45);}
+.leak-row:active{transform:scale(.99);}
+.leak-row-top{display:flex;align-items:baseline;justify-content:space-between;gap:9px;margin-bottom:6px;}
+.leak-topic{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;}
+.leak-mtag{flex-shrink:0;font-size:9.5px;font-weight:600;color:#fb923c;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);border-radius:9px;padding:1px 7px;white-space:nowrap;}
+.leak-bar-track{background:var(--surface2);border-radius:4px;height:7px;overflow:hidden;margin-bottom:6px;}
+.leak-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#f87171,#fb923c);transition:width .4s cubic-bezier(.4,0,.2,1);}
+.leak-row-meta{font-size:10.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.leak-row-meta b{color:#f87171;}
+.leak-dim{color:var(--dim);font-style:italic;}
 .trend-range-tabs{display:flex;gap:0;border:1px solid var(--border2);border-radius:7px;overflow:hidden;margin-bottom:12px;width:fit-content;position:relative;}
 .trend-range-btn{font-size:11px;padding:4px 12px;background:transparent;border:none;color:var(--muted);cursor:pointer;transition:color .2s;font-family:'Inter',sans-serif;position:relative;z-index:1;}
 .trend-range-btn.active{background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600;}
@@ -1540,6 +1563,7 @@ html{scroll-behavior:smooth;}
       <button class="mv-tab" id="mv-topics-btn">Topics</button>
       <button class="mv-tab" id="mv-reasons-btn">Reasons</button>
       <button class="mv-tab" id="mv-trend-btn">Trend</button>
+      <button class="mv-tab" id="mv-leaks-btn">Leaks</button>
     </div>
     <div style="min-height:260px;">
     <div id="mv-log">
@@ -1567,6 +1591,7 @@ html{scroll-behavior:smooth;}
       </div>
     </div>
     <div id="mv-reasons" style="display:none"></div>
+    <div id="mv-leaks" style="display:none"></div>
     <div id="mv-trend" style="display:none">
       <div class="trend-range-tabs" id="trend-range-tabs">
         <span class="trend-range-pill" id="trend-range-pill"></span>
@@ -7137,7 +7162,7 @@ function positionPill(containerId, pillId){
 
 let mvView='log';
 let mvTrendRange='month';
-const MV_PANELS=['log','topics','reasons','trend'];
+const MV_PANELS=['log','topics','reasons','trend','leaks'];
 function switchMvTab(view){
   mvView=view;
   MV_PANELS.forEach(v=>{
@@ -7147,11 +7172,13 @@ function switchMvTab(view){
   positionPill('mv-tabs','mv-pill');
   if(view==='topics')renderPieChart('mistake');
   if(view==='reasons')renderReasonChart();
+  if(view==='leaks')renderLeaks();
   if(view==='trend'){renderTrendChart(mvTrendRange);setTimeout(()=>positionPill('trend-range-tabs','trend-range-pill'),20);}
 }
 document.getElementById('mv-log-btn').addEventListener('click',()=>switchMvTab('log'));
 document.getElementById('mv-topics-btn').addEventListener('click',()=>switchMvTab('topics'));
 document.getElementById('mv-reasons-btn').addEventListener('click',()=>switchMvTab('reasons'));
+document.getElementById('mv-leaks-btn').addEventListener('click',()=>switchMvTab('leaks'));
 document.getElementById('mv-trend-btn').addEventListener('click',()=>switchMvTab('trend'));
 document.querySelectorAll('.trend-range-btn').forEach(b=>b.addEventListener('click',()=>{
   mvTrendRange=b.getAttribute('data-range');
@@ -7177,6 +7204,106 @@ function renderReasonChart(){
   });
   html+='</div>';
   el.innerHTML=html;
+}
+
+// ===================== "Where I lost marks" — leak + frequency report =====================
+function leakEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// How often each topic appears across the bundled 9MA0 (A-Level) past-paper dataset.
+var _topicFreq=null;
+function topicFrequency(){
+  if(_topicFreq) return _topicFreq;
+  var f={}, papers={}, mod=(typeof PAPER_QUESTIONS!=='undefined'&&PAPER_QUESTIONS.alevel)?PAPER_QUESTIONS.alevel:{};
+  Object.keys(mod).forEach(function(year){
+    var byPaper=mod[year];
+    Object.keys(byPaper).forEach(function(pn){
+      var pid=year+'|'+pn; papers[pid]=1;
+      (byPaper[pn]||[]).forEach(function(q){
+        (q.topics||[]).forEach(function(tp){
+          if(!f[tp]) f[tp]={papers:{},marks:0};
+          f[tp].papers[pid]=1; f[tp].marks+=(q.marks||0);
+        });
+      });
+    });
+  });
+  var total=Object.keys(papers).length||1, out={};
+  Object.keys(f).forEach(function(tp){
+    var np=Object.keys(f[tp].papers).length;
+    out[tp]={papers:np, share:np/total, marksPerPaper:f[tp].marks/np};
+  });
+  _topicFreq=out; return out;
+}
+var leakSort='lost';   // 'lost' | 'priority'
+function leakRows(){
+  if(typeof refreshPaperTopicStats==='function') refreshPaperTopicStats();
+  var freq=topicFrequency(), rows={};
+  function ensure(tp){ if(!rows[tp]) rows[tp]={topic:tp,got:0,max:0,lost:0,attempts:0,mistakes:0,causes:{}}; return rows[tp]; }
+  Object.keys(paperTopicStats||{}).forEach(function(tp){
+    var s=paperTopicStats[tp], r=ensure(tp);
+    r.got=s.got; r.max=s.max; r.lost=Math.max(0,s.max-s.got); r.attempts=s.attempts.length;
+  });
+  mistakes.forEach(function(m){ if(!m.topic)return; var r=ensure(m.topic); r.mistakes++; if(m.cat)r.causes[m.cat]=(r.causes[m.cat]||0)+1; });
+  var list=Object.keys(rows).map(function(tp){
+    var r=rows[tp];
+    r.topCause=Object.keys(r.causes).sort(function(a,b){return r.causes[b]-r.causes[a];})[0]||null;
+    r.freq=freq[tp]||null;
+    var rec=(typeof sr!=='undefined')?sr[tp]:null;
+    r.recall=(rec&&validRec(rec))?currentRetrievability(tp):null;
+    var lostFrac=r.max?r.lost/r.max:0;
+    var freqShare=r.freq?r.freq.share:0.25;
+    var weak=(r.recall!=null)?(1-r.recall):(r.mistakes>0?0.7:0.5);
+    r.priority=lostFrac*0.45 + freqShare*0.30 + weak*0.25;
+    r.lostPct=r.max?Math.round(r.lost/r.max*100):null;
+    return r;
+  });
+  list.sort(function(a,b){ return leakSort==='priority' ? (b.priority-a.priority) : ((b.lost-a.lost)||(b.priority-a.priority)); });
+  return list;
+}
+function renderLeaks(){
+  var el=document.getElementById('mv-leaks'); if(!el)return;
+  var rows=leakRows();
+  if(!rows.length){ el.innerHTML='<div class="mistakes-empty">Log a past paper <b>question-by-question</b> (Past Papers → Log a paper), or log a few mistakes, and this will show exactly where you’re leaking marks.</div>'; return; }
+  // Real marks lost = per-QUESTION (counted once), not per-topic — a question tagged with several
+  // topics credits its marks to each topic, so summing rows would double-count the headline total.
+  var totalLost=0;
+  paperLog.forEach(function(e){
+    if(!e.qMarks)return;
+    var qs=(typeof ppQuestionsFor==='function')?ppQuestionsFor(e.moduleId,e.paperN,e.year):null; if(!qs)return;
+    qs.forEach(function(q){ if(e.qMarks[q.q]==null)return; var g=Math.max(0,Math.min(q.marks,+e.qMarks[q.q]||0)); totalLost+=(q.marks-g); });
+  });
+  var byLost=rows.slice().sort(function(a,b){return b.lost-a.lost;});
+  var top3=byLost.slice(0,3), top3Lost=top3.reduce(function(s,r){return s+r.lost;},0);
+  var html='';
+  if(totalLost>0){
+    var pb=GRADE_BOUNDARIES.alevel.years['2024'].papers[1], gaps=[];
+    for(var i=1;i<GB_GRADE_ORDER.length;i++) gaps.push(pb[GB_GRADE_ORDER[i-1]]-pb[GB_GRADE_ORDER[i]]);
+    var avgGap=Math.round(gaps.reduce(function(s,x){return s+x;},0)/gaps.length)||11;
+    var jumps=Math.max(1,Math.round(top3Lost/avgGap));
+    html+='<div class="leak-head"><div class="leak-head-big">You’ve dropped <b>'+totalLost+'</b> marks across your logged papers</div>'+
+      '<div class="leak-head-sub">Your top 3 leaks alone are <b>'+top3Lost+' marks</b> — roughly <b>'+jumps+' grade boundar'+(jumps>1?'ies':'y')+'</b>’ worth on a paper. Plug those first. 🔧</div></div>';
+  } else {
+    html+='<div class="leak-head leak-head-empty"><div class="leak-head-sub">💡 Log a past paper <b>question-by-question</b> to see exact marks lost. For now these priorities come from your mistakes + how often each topic appears in 9MA0 exams.</div></div>';
+  }
+  html+='<div class="leak-sort"><span class="leak-sort-lbl">Sort</span>'+
+    '<button class="leak-sort-btn'+(leakSort==='lost'?' on':'')+'" data-s="lost">Marks lost</button>'+
+    '<button class="leak-sort-btn'+(leakSort==='priority'?' on':'')+'" data-s="priority">Revise first</button></div>';
+  var maxLost=Math.max.apply(null,rows.map(function(r){return r.lost;}).concat([1]));
+  html+='<div class="leak-list">';
+  rows.slice(0,25).forEach(function(r){
+    var lostTxt = r.max ? ('<b>'+r.lost+'</b>/'+r.max+' marks lost ('+r.lostPct+'%)') : '<span class="leak-dim">no paper marks yet</span>';
+    var recallTxt = (r.recall!=null) ? (Math.round(r.recall*100)+'% recall') : 'not started';
+    var freqTxt = r.freq ? (Math.round(r.freq.share*100)+'% of papers · ~'+Math.round(r.freq.marksPerPaper)+' marks/paper') : 'rare in papers';
+    var barW = r.max ? Math.round(r.lost/maxLost*100) : 0;
+    html+='<button class="leak-row" data-topic="'+leakEsc(r.topic)+'">'+
+      '<div class="leak-row-top"><span class="leak-topic">'+leakEsc(r.topic)+'</span>'+
+        (r.mistakes?'<span class="leak-mtag">'+r.mistakes+'× '+leakEsc(r.topCause||'mistakes')+'</span>':'')+'</div>'+
+      '<div class="leak-bar-track"><div class="leak-bar-fill" style="width:'+barW+'%"></div></div>'+
+      '<div class="leak-row-meta">'+lostTxt+' · '+recallTxt+' · '+freqTxt+'</div>'+
+    '</button>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
+  el.querySelectorAll('.leak-sort-btn').forEach(function(b){ b.addEventListener('click',function(){ leakSort=b.getAttribute('data-s'); renderLeaks(); }); });
+  el.querySelectorAll('.leak-row[data-topic]').forEach(function(b){ b.addEventListener('click',function(){ if(typeof openModal==='function')openModal(this.getAttribute('data-topic'),false); }); });
 }
 
 let _mvTrendBuckets=[];
