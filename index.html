@@ -6585,10 +6585,30 @@ function pqParse(raw){
   return { q:o.question, marks:(typeof o.marks==='number'?o.marks:null),
            ms:ms, ans:(typeof o.answer==='string'?o.answer:'') };
 }
+// Structural check that a generated scheme obeys real Edexcel marking conventions.
+function pqValidate(q){
+  if(!q||!q.ms.length) return false;
+  var labelOk=/^(?:\(?[a-z]\)?\s*)?(dd?M1?|[MAB]1?)(ft)?\b/i;      // M1 / A1 / B1 / dM1 / M1ft, optional part prefix
+  if(!q.ms.every(function(st){ return labelOk.test(String(st.mark||'').trim()); })) return false;
+  if(typeof q.marks==='number' && q.ms.length!==q.marks) return false;   // total must equal the number of marks
+  // A marks are dependent on method: an A must never appear before the first M (B marks are independent).
+  var seenM=false;
+  for(var i=0;i<q.ms.length;i++){
+    var lab=String(q.ms[i].mark).trim().toUpperCase().replace(/^\([A-Z]\)\s*/,'');  // strip "(a) " part prefix only
+    if(/^D?D?M/.test(lab)) seenM=true;
+    if(/^A/.test(lab) && !seenM) return false;
+  }
+  if(q.ms.length>=3 && !seenM) return false;                             // a 3+ mark question always has method marks
+  return true;
+}
 function pqRenderQuestion(q){
   var body=document.getElementById('pq-body'); if(!body) return;
   var hasKey=!!loadGeminiKey();
-  var marksBadge=q.marks?('<span class="pq-marks">'+q.marks+' mark'+(q.marks===1?'':'s')+'</span>'):'';
+  // For notation-style schemes (M1/A1/B1…) each line IS one mark, so the true total is
+  // the line count — trust that over the model's claimed number (covers cached items too).
+  var notation=(q.ms||[]).length && q.ms.every(function(st){ return st.mark && /[MAB]/i.test(String(st.mark)); });
+  var total=notation ? q.ms.length : q.marks;
+  var marksBadge=total?('<span class="pq-marks">'+total+' mark'+(total===1?'':'s')+'</span>'):'';
   var ms='';
   if((q.ms||[]).length){
     ms+='<div class="pq-ms-hd"><span>Scheme</span><span>Marks</span></div>';
@@ -6596,7 +6616,7 @@ function pqRenderQuestion(q){
       ms+='<div class="pq-ms-row"><span class="pq-ms-sch">'+tutorMd(st.step||'')+'</span>'
         +'<span class="pq-ms-mk">'+tutorEsc(st.mark||(st.marks!=null?String(st.marks):''))+'</span></div>';
     });
-    if(q.marks) ms+='<div class="pq-ms-total">Total  ['+q.marks+']</div>';
+    if(total) ms+='<div class="pq-ms-total">Total  ['+total+']</div>';
   }
   if(q.ans) ms+='<div class="pq-ans"><b>Answer</b>'+tutorMd(q.ans)+'</div>';
   body.innerHTML='<div class="pq-q">'+marksBadge+tutorMd(q.q)+'</div>'
@@ -6631,26 +6651,32 @@ async function pqGenerate(){
    'Pitch it '+diffWord+'. Use only methods, formulae and notation within the 9MA0 specification. It must be fully self-contained and solvable on paper in a few minutes.',
    (prev.length?('It must be CLEARLY DIFFERENT (different structure, context and numbers) from these earlier questions:\n'+prev.join('\n')):''),
    'Then write its OFFICIAL mark scheme in the exact style of a real Edexcel examiner.',
-   'Split the solution into individual marks. For EACH mark give the correct Edexcel notation in the "mark" field — one of: M1 (method), A1 (accuracy), B1 (independent/stated result), dM1 (method dependent on an earlier M), M1ft or A1ft (follow through). Append cao, oe or awrt where a real scheme would (e.g. "A1 cao").',
+   'Decide the mark allocation FIRST, the way a principal examiner would: 1 mark per distinct creditable step. A routine substitution or formula application earns M1; each correct simplified result earns A1; a stated fact, sketch feature or written-down value earns B1. Do not inflate — a step a student does in one line is ONE mark.',
+   'MARK GRAMMAR (obey strictly, as in real 9MA0 schemes):',
+   '- Each markscheme item is exactly ONE mark. The "mark" field is its Edexcel label: M1 (method), A1 (accuracy), B1 (independent), dM1 (method dependent on an earlier M), M1ft/A1ft (follow through). Never a plain number.',
+   '- A1 marks are DEPENDENT on method: an A1 may only appear after the M1 that sets it up. Independent correct statements are B1, not A1.',
+   '- Any question worth 3+ marks must contain at least one M mark. Final answers to "show that" questions are A1 cso; final numeric answers are A1 cao or A1 awrt as a real scheme would tag them.',
+   '- If the question has parts (a), (b)…, begin each scheme line with its part label, e.g. "(a) Attempts …", keep the lines in solution order, and make each part\'s printed mark allocation match its number of scheme lines exactly.',
+   '- The total "marks" number MUST equal the number of markscheme items EXACTLY (typically 4 to 9).',
    'The "scheme" field for each mark is a terse examiner description of exactly what earns that one mark (e.g. "Attempts $R=\\sqrt{3^2+4^2}$", "$R=5$", "$\\alpha=0.927$ awrt").',
-   'The number of markscheme items MUST equal the total marks for the question (usually 4 to 9). Do NOT put a plain number in the mark field — it must be the letter notation (M1/A1/B1/dM1/…).',
    'Return ONLY a JSON object (no markdown, no code fences) of exactly this shape:',
    '{"question": string, "marks": number, "markscheme": [{"scheme": string, "mark": string}], "answer": string}',
    'Use LaTeX for ALL mathematics: $...$ for inline and $$...$$ for displayed maths. Do NOT reveal the answer inside the question text.'
   ].join('\n');
   try{
-    var q=null;
-    // Up to 2 attempts: retry once if the reply is unparseable or the scheme is
-    // malformed (item count far from the stated total, or bare-number mark labels).
+    var q=null, fallback=null;
+    // Up to 2 attempts: a scheme must pass pqValidate (valid M1/A1/B1 labels, total ==
+    // number of marks, no A before its M, method marks present). If the retry is also
+    // imperfect, use the best parseable reply but RECONCILE the total to the actual
+    // number of scheme marks so the displayed allocation is always self-consistent.
     for(var attempt=0; attempt<2 && !q; attempt++){
       var raw=await geminiCall([{text:prompt}],{temperature:0.9,responseMimeType:'application/json'});
       var cand=pqParse(raw);
       if(!cand) continue;
-      var wellFormed = cand.ms.length>0
-        && cand.ms.every(function(st){ return /[MAB]/i.test(st.mark||''); })
-        && (!cand.marks || Math.abs(cand.ms.length-cand.marks)<=1);
-      if(wellFormed || attempt===1) q=cand;   // accept a slightly-off scheme rather than fail twice
+      if(pqValidate(cand)) q=cand;
+      else if(cand.ms.length && cand.ms.every(function(st){ return /[MAB]/i.test(st.mark||''); })) fallback=cand;
     }
+    if(!q && fallback){ q=fallback; q.marks=q.ms.length; }   // reconcile: total = real mark count
     if(!q) throw new Error('Could not read the generated question — please try again.');
     q.diff=pqDiff; q.ts=Date.now();
     if(!pqBank[topic]) pqBank[topic]=[];
