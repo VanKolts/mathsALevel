@@ -6585,6 +6585,32 @@ function pqParse(raw){
   return { q:o.question, marks:(typeof o.marks==='number'?o.marks:null),
            ms:ms, ans:(typeof o.answer==='string'?o.answer:'') };
 }
+// Second-examiner pass: the model independently solves and reviews the draft question.
+// Fail-open by design — a broken/slow check must never stop the student getting a question.
+async function pqVerify(q){
+  var lines=q.ms.map(function(s,i){ return (i+1)+'. ['+s.mark+'] '+s.step; }).join('\n');
+  var p=[
+   'You are a second Edexcel A-Level Mathematics examiner reviewing a colleague\'s draft practice question before it is shown to a student.',
+   'QUESTION: '+q.q,
+   'TOTAL MARKS: '+q.marks,
+   'MARK SCHEME:\n'+lines,
+   'STATED ANSWER: '+q.ans,
+   'Solve the question yourself from scratch, then decide if it is fit to use. REJECT it if ANY of these hold:',
+   '- information needed to solve it is missing or contradictory, or the wording has more than one reasonable interpretation',
+   '- the answer is not uniquely determined, or the stated answer / mark scheme does not match a correct solution',
+   '- a constant or variable is undefined, a needed domain/interval is not given, or the required form or accuracy is unstated where it matters',
+   '- the numbers make the working absurdly messy for the mark tariff, or the phrasing is not how an Edexcel paper would put it',
+   'Minor style quibbles are NOT grounds for rejection — only genuine ambiguity or errors.',
+   'Return ONLY JSON: {"ok": boolean, "issue": string} where issue is ONE short sentence describing the problem (empty string if ok).'
+  ].join('\n');
+  try{
+    var raw=await geminiCall([{text:p}],{temperature:0,responseMimeType:'application/json'});
+    var s=String(raw).trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    var o=null; try{ o=JSON.parse(s); }catch(e){ var m=s.match(/\{[\s\S]*\}/); if(m){ try{o=JSON.parse(m[0]);}catch(e2){} } }
+    if(o&&typeof o.ok==='boolean') return {ok:o.ok, issue:String(o.issue||'').slice(0,200)};
+  }catch(e){}
+  return {ok:true, issue:''};
+}
 // Structural check that a generated scheme obeys real Edexcel marking conventions.
 function pqValidate(q){
   if(!q||!q.ms.length) return false;
@@ -6659,22 +6685,38 @@ async function pqGenerate(){
    '- If the question has parts (a), (b)…, begin each scheme line with its part label, e.g. "(a) Attempts …", keep the lines in solution order, and make each part\'s printed mark allocation match its number of scheme lines exactly.',
    '- The total "marks" number MUST equal the number of markscheme items EXACTLY (typically 4 to 9).',
    'The "scheme" field for each mark is a terse examiner description of exactly what earns that one mark (e.g. "Attempts $R=\\sqrt{3^2+4^2}$", "$R=5$", "$\\alpha=0.927$ awrt").',
+   'QUALITY CHECK — before returning, solve your own question in full and verify every one of these:',
+   '- every constant and variable is defined; any needed domain/interval is stated; the required form or accuracy (exact, 3 s.f., in terms of k, …) is explicit',
+   '- the wording has exactly ONE reasonable interpretation and reads like a real Edexcel paper (command words: find, show that, hence, solve, express)',
+   '- the numbers work out cleanly enough for the tariff, and your worked answer matches the mark scheme and stated answer',
+   'If any check fails, REWRITE the question until it passes, then return it.',
    'Return ONLY a JSON object (no markdown, no code fences) of exactly this shape:',
    '{"question": string, "marks": number, "markscheme": [{"scheme": string, "mark": string}], "answer": string}',
    'Use LaTeX for ALL mathematics: $...$ for inline and $$...$$ for displayed maths. Do NOT reveal the answer inside the question text.'
   ].join('\n');
   try{
-    var q=null, fallback=null;
-    // Up to 2 attempts: a scheme must pass pqValidate (valid M1/A1/B1 labels, total ==
-    // number of marks, no A before its M, method marks present). If the retry is also
-    // imperfect, use the best parseable reply but RECONCILE the total to the actual
-    // number of scheme marks so the displayed allocation is always self-consistent.
+    var q=null, fallback=null, feedback='';
+    // Up to 2 generation attempts. A draft must pass pqValidate (labels, total==count,
+    // no A before its M, method marks present); the FIRST valid draft is then reviewed
+    // by a second-examiner pass (pqVerify) for ambiguity/solvability — if rejected, we
+    // regenerate once with the examiner's criticism fed back. Worst case = 3 API calls.
     for(var attempt=0; attempt<2 && !q; attempt++){
-      var raw=await geminiCall([{text:prompt}],{temperature:0.9,responseMimeType:'application/json'});
+      var p=prompt+(feedback?('\n\nIMPORTANT: a second examiner REJECTED your previous draft because: "'+feedback+'". Write a NEW question that completely avoids this problem.'):'');
+      var raw=await geminiCall([{text:p}],{temperature:0.9,responseMimeType:'application/json'});
       var cand=pqParse(raw);
       if(!cand) continue;
-      if(pqValidate(cand)) q=cand;
-      else if(cand.ms.length && cand.ms.every(function(st){ return /[MAB]/i.test(st.mark||''); })) fallback=cand;
+      if(!pqValidate(cand)){
+        if(cand.ms.length && cand.ms.every(function(st){ return /[MAB]/i.test(st.mark||''); })) fallback=cand;
+        continue;
+      }
+      if(attempt===0){   // second-examiner review of the first good draft only
+        body.innerHTML='<div class="pq-spinner"><span class="pq-spin-dot"></span>Second examiner checking it&rsquo;s clear and solvable&hellip;</div>';
+        var v=await pqVerify(cand);
+        if(!v.ok){ feedback=v.issue||'the wording was ambiguous'; fallback=cand;
+          body.innerHTML='<div class="pq-spinner"><span class="pq-spin-dot"></span>Rewriting &mdash; the first draft wasn&rsquo;t clear enough&hellip;</div>';
+          continue; }
+      }
+      q=cand;
     }
     if(!q && fallback){ q=fallback; q.marks=q.ms.length; }   // reconcile: total = real mark count
     if(!q) throw new Error('Could not read the generated question — please try again.');
