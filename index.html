@@ -5143,16 +5143,22 @@ function tutorHandleFile(file){
 function tutorEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function tutorInlineBold(s){return s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');}
 function tutorMd(text){
-  var lines=tutorEsc(text).split(/\n/);
+  // Protect $$...$$ display-maths blocks BEFORE line-splitting: MathJax cannot parse
+  // across the <br> tags we insert, so multi-line display equations would silently break.
+  var mjx=[];
+  var t0=String(text).replace(/\$\$([\s\S]*?)\$\$/g,function(_,m){ mjx.push(m); return ' MJX'+(mjx.length-1)+' '; });
+  var lines=tutorEsc(t0).split(/\n/);
   var out=lines.map(function(ln){
     var t=ln.trim();
     if(!t) return '';
     var h=t.match(/^#{1,4}\s+(.*)$/);
     if(h) return '<div class="tutor-ans-h">'+tutorInlineBold(h[1])+'</div>';
     if(/^[-*]\s+/.test(t)) t='• '+t.replace(/^[-*]\s+/,'');
+    if(/^\d+\.\s+/.test(t)) t='<strong>'+t.match(/^\d+\./)[0]+'</strong> '+t.replace(/^\d+\.\s+/,'');
     return tutorInlineBold(t);
   });
-  return out.join('<br>').replace(/(<br>)+(<div class="tutor-ans-h">)/g,'$2').replace(/(<\/div>)(<br>)+/g,'$1');
+  var html=out.join('<br>').replace(/(<br>)+(<div class="tutor-ans-h">)/g,'$2').replace(/(<\/div>)(<br>)+/g,'$1');
+  return html.replace(/ MJX(\d+) /g,function(_,i){ return '$$'+tutorEsc(mjx[+i])+'$$'; });
 }
 var TUTOR_MODEL="gemini-2.5-flash"; // free-tier vision model (gemini-2.0-flash retired Mar 2026). Swap here if Google changes the free model.
 var TUTOR_PROMPT=[
@@ -5165,6 +5171,8 @@ var TUTOR_PROMPT=[
 "- Use the standard textbook method for the topic: completing the square, the discriminant b^2-4ac, factor/remainder theorem, binomial expansion, chain/product/quotient rules, integration by substitution or by parts, differentiation from first principles only when asked, implicit and parametric differentiation, the trapezium rule, Newton-Raphson, etc.",
 "- Work in radians for any calculus with trig. Give answers in exact form (surds, fractions, e, ln, pi) when exact form is expected, then a decimal to 3 significant figures where helpful. Always include +c for indefinite integrals and units where relevant.",
 "- Show every step that earns method (M) and accuracy (A) marks: define variables, quote the formula used, substitute explicitly, then simplify. Do not skip algebra a student must show on paper.",
+"- Where a formula is printed in the Edexcel formulae booklet (e.g. the sum of a geometric series, integration by parts, the trapezium rule), say 'from the formulae booklet' when you quote it, so the student learns what they do NOT need to memorise.",
+"- If the question shows its mark allocation, add the mark each step earns in brackets at the end of that step, e.g. (M1) or (A1), so the working mirrors the official mark scheme.",
 "- Statistics: state the distribution (e.g. X ~ B(n, p), X ~ N(mu, sigma^2)); for a hypothesis test write H0 and H1, the significance level, the probability or test statistic, the comparison, and a conclusion IN CONTEXT. Use the calculator-based approach where that is what is taught.",
 "- Mechanics: state the modelling assumptions, define the positive direction, describe the forces acting, quote SUVAT or F = ma, use g = 9.8 m/s^2 unless told otherwise, and keep units throughout.",
 "FORMAT:",
@@ -5173,6 +5181,51 @@ var TUTOR_PROMPT=[
 "- End with a line '### Final answer' giving the answer to the correct degree of accuracy with units.",
 "- If the image is unclear or it is not an A-Level maths question, say so in one short sentence. No greeting or preamble - start at Step 1."
 ].join("\n");
+// ---- Shared Gemini plumbing: one hardened call used by the Tutor, practice questions
+//      and mistake re-attempts. 60s timeout, one automatic retry on transient failures. ----
+async function geminiCall(parts, genCfg){
+  var key=loadGeminiKey(); if(!key) throw new Error('NO_KEY');
+  var lastErr=null;
+  for(var attempt=0; attempt<2; attempt++){
+    try{
+      var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctrl?setTimeout(function(){ ctrl.abort(); },60000):null;
+      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:parts}],generationConfig:genCfg||{temperature:0.3}}),
+        signal:ctrl?ctrl.signal:undefined
+      });
+      if(tm)clearTimeout(tm);
+      var data=null; try{ data=await r.json(); }catch(e){}
+      if(!r.ok){
+        var msg=(data&&data.error&&data.error.message)||('Request failed ('+r.status+')');
+        if(attempt===0&&(r.status===429||r.status>=500)){ lastErr=new Error(msg); await new Promise(function(res){setTimeout(res,2000);}); continue; }
+        throw new Error(msg);
+      }
+      var cand=data&&data.candidates&&data.candidates[0];
+      var txt=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
+      if(!txt) throw new Error('No answer returned'+(cand&&cand.finishReason?(' — '+cand.finishReason):''));
+      return txt;
+    }catch(err){
+      if(err&&err.name==='AbortError') err=new Error('timed out');
+      lastErr=err;
+      var m=String(err&&err.message||'');
+      if(attempt===0&&/timed out|Failed to fetch|NetworkError|load failed|quota|RESOURCE_EXHAUSTED|overloaded|UNAVAILABLE/i.test(m)){ await new Promise(function(res){setTimeout(res,2000);}); continue; }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+function geminiFriendly(err){
+  var msg=String((err&&err.message)||err||'');
+  if(/NO_KEY/.test(msg)) return 'Add your free Gemini key in Settings → AI Tutor first.';
+  if(/API key not valid|API_KEY_INVALID/i.test(msg)) return 'Your Gemini key was rejected — check it in Settings → AI Tutor.';
+  if(/quota|RESOURCE_EXHAUSTED|429/i.test(msg)) return 'The free AI limit was hit — wait about 30 seconds and try again.';
+  if(/overloaded|UNAVAILABLE|503/i.test(msg)) return 'The AI service is briefly overloaded — try again in a moment.';
+  if(/timed out/i.test(msg)) return 'That took too long and timed out — try again.';
+  if(/Failed to fetch|NetworkError|load failed/i.test(msg)) return 'No connection — check your internet and try again.';
+  return msg;
+}
 function tutorMatchTopic(raw){
   if(!raw || /^none\b/i.test(raw.trim())) return null;
   var r=raw.trim().replace(/[.\s]+$/,'');
@@ -5226,15 +5279,7 @@ async function askTutor(){
   var parts=[{text:TUTOR_PROMPT+(note?('\n\nStudent note: '+note):'')+topicInstr}];
   if(tutorImg) parts.push({inline_data:{mime_type:tutorImg.mime,data:tutorImg.b64}});
   try{
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.3}})
-    });
-    var data=await r.json();
-    if(!r.ok){ throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')')); }
-    var cand=data.candidates&&data.candidates[0];
-    var txt=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
-    if(!txt){ throw new Error('No answer returned'+(cand&&cand.finishReason?(' — '+cand.finishReason):'')+'. Try a clearer photo.'); }
+    var txt=await geminiCall(parts,{temperature:0.3});
     var rawTopic=null;
     txt=txt.replace(/^\s*@@TOPIC:\s*(.*)$/mi,function(_,g){ rawTopic=g.trim(); return ''; }).trim();
     var matchedTopic=tutorMatchTopic(rawTopic);
@@ -5244,9 +5289,7 @@ async function askTutor(){
     if(window.MathJax&&MathJax.typesetPromise){ MathJax.typesetPromise([el]).catch(function(){}); }
     if(matchedTopic) renderTutorTopic(matchedTopic);
   }catch(err){
-    var msg=err&&err.message?err.message:String(err);
-    if(/API key not valid|API_KEY_INVALID/i.test(msg)) msg='That API key was rejected. Check it in Settings → AI Tutor.';
-    res.innerHTML='<div class="tutor-answer err">Couldn\'t get a walkthrough: '+tutorEsc(msg)+'</div>';
+    res.innerHTML='<div class="tutor-answer err">Couldn\'t get a walkthrough: '+tutorEsc(geminiFriendly(err))+'</div>';
   }finally{ btn.disabled=false; }
 }
 document.getElementById('tutor-btn').addEventListener('click',openTutor);
@@ -6581,9 +6624,12 @@ async function pqGenerate(){
                  pqDiff==='harder'?'more challenging — a harder, multi-step problem-solving question like the back end of a paper':
                  'at the typical exam standard for this topic';
   body.innerHTML='<div class="pq-spinner"><span class="pq-spin-dot"></span>Writing a fresh question…</div>';
+  // Anti-repeat: tell the model what it already generated for this topic.
+  var prev=(pqBank[topic]||[]).slice(-4).map(function(x){ return '- '+String(x.q||'').replace(/\s+/g,' ').slice(0,110); });
   var prompt=[
    'You are an Edexcel A-Level Mathematics (9MA0) examiner. Write ONE original, exam-style question on the topic: "'+topic+'".',
    'Pitch it '+diffWord+'. Use only methods, formulae and notation within the 9MA0 specification. It must be fully self-contained and solvable on paper in a few minutes.',
+   (prev.length?('It must be CLEARLY DIFFERENT (different structure, context and numbers) from these earlier questions:\n'+prev.join('\n')):''),
    'Then write its OFFICIAL mark scheme in the exact style of a real Edexcel examiner.',
    'Split the solution into individual marks. For EACH mark give the correct Edexcel notation in the "mark" field — one of: M1 (method), A1 (accuracy), B1 (independent/stated result), dM1 (method dependent on an earlier M), M1ft or A1ft (follow through). Append cao, oe or awrt where a real scheme would (e.g. "A1 cao").',
    'The "scheme" field for each mark is a terse examiner description of exactly what earns that one mark (e.g. "Attempts $R=\\sqrt{3^2+4^2}$", "$R=5$", "$\\alpha=0.927$ awrt").',
@@ -6593,15 +6639,18 @@ async function pqGenerate(){
    'Use LaTeX for ALL mathematics: $...$ for inline and $$...$$ for displayed maths. Do NOT reveal the answer inside the question text.'
   ].join('\n');
   try{
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.9,responseMimeType:'application/json'}})
-    });
-    var data=await r.json();
-    if(!r.ok) throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
-    var cand=data.candidates&&data.candidates[0];
-    var raw=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
-    var q=pqParse(raw);
+    var q=null;
+    // Up to 2 attempts: retry once if the reply is unparseable or the scheme is
+    // malformed (item count far from the stated total, or bare-number mark labels).
+    for(var attempt=0; attempt<2 && !q; attempt++){
+      var raw=await geminiCall([{text:prompt}],{temperature:0.9,responseMimeType:'application/json'});
+      var cand=pqParse(raw);
+      if(!cand) continue;
+      var wellFormed = cand.ms.length>0
+        && cand.ms.every(function(st){ return /[MAB]/i.test(st.mark||''); })
+        && (!cand.marks || Math.abs(cand.ms.length-cand.marks)<=1);
+      if(wellFormed || attempt===1) q=cand;   // accept a slightly-off scheme rather than fail twice
+    }
     if(!q) throw new Error('Could not read the generated question — please try again.');
     q.diff=pqDiff; q.ts=Date.now();
     if(!pqBank[topic]) pqBank[topic]=[];
@@ -6609,10 +6658,7 @@ async function pqGenerate(){
     pqSave();
     pqRenderQuestion(q);
   }catch(err){
-    var msg=err&&err.message?err.message:String(err);
-    if(/API key not valid|API_KEY_INVALID/i.test(msg)) msg='Your Gemini key was rejected — check it in Settings → AI Tutor.';
-    if(/quota|RESOURCE_EXHAUSTED|limit/i.test(msg)) msg='Gemini free-tier limit hit — wait a moment and try again.';
-    body.innerHTML='<div class="pq-err">'+tutorEsc(msg)+'</div><div class="pq-actions"><button class="pq-act" id="pq-retry" type="button">Try again</button></div>';
+    body.innerHTML='<div class="pq-err">'+tutorEsc(geminiFriendly(err))+'</div><div class="pq-actions"><button class="pq-act" id="pq-retry" type="button">Try again</button></div>';
     var rb=document.getElementById('pq-retry'); if(rb)rb.addEventListener('click',pqGenerate);
   }
 }
@@ -7366,61 +7412,9 @@ function renderTrendChart(range){
 }
 
 // ---- Re-attempt loop: surface a random detailed mistake (has answer + photo) to redo ----
-var reattemptCur=null;
-function reattemptCandidates(){ return mistakes.filter(function(m){ return m.answer && (m.qImgId || m.img); }); }
-function pickReattempt(cands,avoidId){ var pool=cands.filter(function(m){return m.id!==avoidId;}); if(!pool.length)pool=cands; return pool[Math.floor(Math.random()*pool.length)]; }
-function renderReattempt(){
-  var card=document.getElementById('m-reattempt'); if(!card)return;
-  var cands=reattemptCandidates();
-  if(!cands.length){ card.style.display='none'; reattemptCur=null; return; }
-  card.style.display='block';
-  if(!reattemptCur || !cands.some(function(m){return m.id===reattemptCur.id;})) reattemptCur=pickReattempt(cands,null);
-  paintReattempt();
-}
-function paintReattempt(){
-  var m=reattemptCur; if(!m)return;
-  document.getElementById('m-reattempt-topic').textContent=m.topic;
-  document.getElementById('m-reattempt-q').textContent=m.question||'(no question text — see the photo)';
-  var imgEl=document.getElementById('m-reattempt-img'); imgEl.style.display='none'; imgEl.src='';
-  if(m.img){ imgEl.src=m.img; imgEl.style.display='block'; }
-  else if(m.qImgId && typeof window.mhGetImage==='function'){ window.mhGetImage(m.qImgId).then(function(src){ if(src&&reattemptCur&&reattemptCur.id===m.id){ imgEl.src=src; imgEl.style.display='block'; } }); }
-  document.getElementById('m-reattempt-ans-text').textContent=m.answer||'';
-  document.getElementById('m-reattempt-wrong').textContent=m.text||'';
-  document.getElementById('m-reattempt-answer').style.display='none';
-  document.getElementById('m-reattempt-reveal').style.display='block';
-  document.getElementById('m-reattempt-ai-out').innerHTML='';
-}
-(function(){
-  var rev=document.getElementById('m-reattempt-reveal'),shuf=document.getElementById('m-reattempt-shuffle'),ai=document.getElementById('m-reattempt-ai');
-  if(rev)rev.addEventListener('click',function(){ document.getElementById('m-reattempt-answer').style.display='block'; rev.style.display='none'; });
-  if(shuf)shuf.addEventListener('click',function(){ var c=reattemptCandidates(); if(!c.length)return; reattemptCur=pickReattempt(c,reattemptCur?reattemptCur.id:null); paintReattempt(); });
-  if(ai)ai.addEventListener('click',reattemptExplain);
-})();
-async function reattemptExplain(){
-  var m=reattemptCur; if(!m)return;
-  var key=loadGeminiKey(); var out=document.getElementById('m-reattempt-ai-out');
-  if(!key){ out.innerHTML='<span style="color:var(--overdue)">Add your Gemini key in Settings &rarr; AI Tutor first.</span>'; return; }
-  var ai=document.getElementById('m-reattempt-ai'); ai.disabled=true;
-  out.innerHTML='<div class="tutor-spinner"><span class="tutor-spin-dot"></span>Explaining...</div>';
-  var prompt='You are an A-Level maths tutor. A student is re-attempting a question they previously got wrong.\n\nQuestion: '+(m.question||'(see the image)')+'\n\nThe correct answer they recorded: '+m.answer+'\n\nWhat they got wrong last time: '+m.text+'\n\nExplain step by step how to do it correctly, and specifically address their mistake so they do not repeat it. Use $...$ for inline maths and $$...$$ for display maths.';
-  var parts=[{text:prompt}];
-  function addImg(src){ var mt=(src.match(/^data:(image\/\w+);base64,/)||[])[1]||'image/jpeg'; parts.push({inline_data:{mime_type:mt,data:src.split(',')[1]}}); }
-  if(m.img) addImg(m.img);
-  else if(m.qImgId && typeof window.mhGetImage==='function'){ var s=await window.mhGetImage(m.qImgId); if(s)addImg(s); }
-  try{
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.3}})});
-    var data=await r.json();
-    if(!r.ok)throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
-    var cand=data.candidates&&data.candidates[0];
-    var t=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
-    if(!t)throw new Error('No answer returned. Try again.');
-    out.innerHTML=tutorMd(t);
-    if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([out]).catch(function(){});
-  }catch(e){ out.innerHTML='<span style="color:var(--overdue)">Could not explain: '+tutorEsc(e.message||String(e))+'</span>'; }
-  finally{ ai.disabled=false; }
-}
-
 // ---- Re-attempt loop: resurface a detailed mistake (with a photo) to redo ----
+// (A superseded duplicate implementation was removed here 2026-06-29: it attached a
+//  second click listener to #m-reattempt-ai, causing double Gemini calls after Shuffle.)
 var reattemptCurrent=null;
 function reattemptPool(){ return mistakes.filter(function(m){ return m.answer && (m.qImgId||m.img); }); }
 function renderReattempt(pick){
@@ -7467,15 +7461,10 @@ async function reattemptExplainAI(btn){
     var imgSrc=m.img;
     if(!imgSrc&&m.qImgId&&typeof window.mhGetImage==='function') imgSrc=await window.mhGetImage(m.qImgId);
     if(imgSrc&&imgSrc.indexOf('data:')===0){ var b64=imgSrc.split(',')[1]; var mime=((imgSrc.split(';')[0]||'').split(':')[1])||'image/jpeg'; parts.push({inline_data:{mime_type:mime,data:b64}}); }
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+TUTOR_MODEL+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.3}})});
-    var data=await r.json();
-    if(!r.ok)throw new Error((data&&data.error&&data.error.message)||('Request failed ('+r.status+')'));
-    var cand=data.candidates&&data.candidates[0];
-    var txt=cand&&cand.content&&cand.content.parts?cand.content.parts.map(function(p){return p.text||'';}).join(''):'';
-    if(!txt)throw new Error('No answer returned. Try again.');
+    var txt=await geminiCall(parts,{temperature:0.3});
     out.innerHTML=(typeof tutorMd==='function')?tutorMd(txt):txt;
     if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([out]).catch(function(){});
-  }catch(e){ out.innerHTML='<span style="color:var(--overdue)">Couldn’t get an explanation: '+((typeof tutorEsc==='function')?tutorEsc(e.message):e.message)+'</span>'; }
+  }catch(e){ out.innerHTML='<span style="color:var(--overdue)">Couldn’t get an explanation: '+tutorEsc(geminiFriendly(e))+'</span>'; }
   finally{ btn.disabled=false; }
 }
 
