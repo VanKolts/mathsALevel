@@ -722,8 +722,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .pq-act:disabled{opacity:.5;cursor:default;}
 .pq-ms{margin-top:10px;border-top:1px dashed var(--border2);padding-top:9px;display:none;}
 .pq-ms.open{display:block;}
-.pq-ms-step{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:var(--muted);line-height:1.55;padding:4px 0;}
-.pq-ms-mk{flex-shrink:0;font-size:9.5px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);background:rgba(var(--accent-rgb),.14);border-radius:5px;padding:1px 6px;margin-top:2px;}
+.pq-ms-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-weight:700;padding-bottom:5px;border-bottom:1px solid var(--border2);margin-bottom:2px;}
+.pq-ms-row{display:flex;gap:12px;align-items:flex-start;font-size:12px;color:var(--muted);line-height:1.55;padding:5px 0;border-bottom:1px solid var(--border);}
+.pq-ms-row:last-child{border-bottom:none;}
+.pq-ms-sch{flex:1;min-width:0;overflow-x:auto;}
+.pq-ms-mk{flex-shrink:0;min-width:40px;text-align:right;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);white-space:nowrap;padding-top:1px;}
+.pq-ms-total{text-align:right;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);padding-top:7px;margin-top:3px;border-top:1px solid var(--border2);}
 .pq-ans{font-size:12.5px;color:var(--text);margin-top:8px;background:rgba(var(--accent-rgb),.08);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:7px 11px;}
 .pq-ans b{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-right:7px;}
 .pq-err{font-size:11.5px;color:#f87171;line-height:1.5;}
@@ -6530,18 +6534,27 @@ function pqParse(raw){
   var s=String(raw).trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
   var o=null; try{o=JSON.parse(s);}catch(e){ var m=s.match(/\{[\s\S]*\}/); if(m){ try{o=JSON.parse(m[0]);}catch(e2){o=null;} } }
   if(!o||typeof o.question!=='string'||!o.question.trim()) return null;
+  var ms=(Array.isArray(o.markscheme)?o.markscheme:[]).map(function(it){
+    if(!it||typeof it!=='object') return null;
+    return { step:String(it.scheme||it.step||'').trim(),
+             mark:(it.mark!=null?String(it.mark):(it.marks!=null?String(it.marks):'')).trim() };
+  }).filter(function(x){ return x&&x.step; });
   return { q:o.question, marks:(typeof o.marks==='number'?o.marks:null),
-           ms:(Array.isArray(o.markscheme)?o.markscheme:[]), ans:(typeof o.answer==='string'?o.answer:'') };
+           ms:ms, ans:(typeof o.answer==='string'?o.answer:'') };
 }
 function pqRenderQuestion(q){
   var body=document.getElementById('pq-body'); if(!body) return;
   var hasKey=!!loadGeminiKey();
   var marksBadge=q.marks?('<span class="pq-marks">'+q.marks+' mark'+(q.marks===1?'':'s')+'</span>'):'';
   var ms='';
-  (q.ms||[]).forEach(function(st){
-    var mk=(typeof st.marks==='number')?('<span class="pq-ms-mk">'+st.marks+'</span>'):'<span class="pq-ms-mk">·</span>';
-    ms+='<div class="pq-ms-step">'+mk+'<span>'+tutorMd(st.step||'')+'</span></div>';
-  });
+  if((q.ms||[]).length){
+    ms+='<div class="pq-ms-hd"><span>Scheme</span><span>Marks</span></div>';
+    q.ms.forEach(function(st){
+      ms+='<div class="pq-ms-row"><span class="pq-ms-sch">'+tutorMd(st.step||'')+'</span>'
+        +'<span class="pq-ms-mk">'+tutorEsc(st.mark||(st.marks!=null?String(st.marks):''))+'</span></div>';
+    });
+    if(q.marks) ms+='<div class="pq-ms-total">Total  ['+q.marks+']</div>';
+  }
   if(q.ans) ms+='<div class="pq-ans"><b>Answer</b>'+tutorMd(q.ans)+'</div>';
   body.innerHTML='<div class="pq-q">'+marksBadge+tutorMd(q.q)+'</div>'
     +'<div class="pq-hint">Attempt it on paper with no notes, then rate how it went below.</div>'
@@ -6571,9 +6584,12 @@ async function pqGenerate(){
   var prompt=[
    'You are an Edexcel A-Level Mathematics (9MA0) examiner. Write ONE original, exam-style question on the topic: "'+topic+'".',
    'Pitch it '+diffWord+'. Use only methods, formulae and notation within the 9MA0 specification. It must be fully self-contained and solvable on paper in a few minutes.',
-   'Give a realistic mark allocation (usually 3 to 8 marks). The mark scheme must show the method (M) and accuracy (A) marks a UK examiner would award.',
+   'Then write its OFFICIAL mark scheme in the exact style of a real Edexcel examiner.',
+   'Split the solution into individual marks. For EACH mark give the correct Edexcel notation in the "mark" field — one of: M1 (method), A1 (accuracy), B1 (independent/stated result), dM1 (method dependent on an earlier M), M1ft or A1ft (follow through). Append cao, oe or awrt where a real scheme would (e.g. "A1 cao").',
+   'The "scheme" field for each mark is a terse examiner description of exactly what earns that one mark (e.g. "Attempts $R=\\sqrt{3^2+4^2}$", "$R=5$", "$\\alpha=0.927$ awrt").',
+   'The number of markscheme items MUST equal the total marks for the question (usually 4 to 9). Do NOT put a plain number in the mark field — it must be the letter notation (M1/A1/B1/dM1/…).',
    'Return ONLY a JSON object (no markdown, no code fences) of exactly this shape:',
-   '{"question": string, "marks": number, "markscheme": [{"step": string, "marks": number}], "answer": string}',
+   '{"question": string, "marks": number, "markscheme": [{"scheme": string, "mark": string}], "answer": string}',
    'Use LaTeX for ALL mathematics: $...$ for inline and $$...$$ for displayed maths. Do NOT reveal the answer inside the question text.'
   ].join('\n');
   try{
