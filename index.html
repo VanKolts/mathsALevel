@@ -5663,12 +5663,9 @@ function renderTodayCard(){
 function updateDueBadge(){
   const badge=document.getElementById('tab-due-badge'); if(!badge)return;
   const ov=activeTopics().filter(t=>statusFor(t.name)==='overdue').length;
-  const du=activeTopics().filter(t=>statusFor(t.name)==='due').length;
-  if(ov+du===0){badge.textContent='';badge.className='tab-due-badge';return;}
-  let txt=ov>0?ov+'!':'';
-  if(du>0)txt+=(txt?' · ':'')+du+'d';
-  badge.textContent=txt;
-  badge.className='tab-due-badge'+(ov>0?' urgency':'');
+  if(ov===0){badge.textContent='';badge.className='tab-due-badge';return;}
+  badge.textContent=ov+'!';
+  badge.className='tab-due-badge urgency';
 }
 
 const TAB_ORDER=['checklist','mistakes','papers'];
