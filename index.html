@@ -4946,7 +4946,7 @@ function renderStreak(){
   const days=(streakData.days||[]).length;
   if(streakData.last){
     const met=days>=goal;
-    num.textContent=days+'/'+goal+(met?' ✓':'');
+    num.textContent=days+(met?' ✓':'');
     chip.classList.add('visible');
     chip.classList.toggle('streak-met',met);
     chip.title=met?('Weekly goal reached — '+days+' study days this week'):('Studied '+days+' of '+goal+' days this week');
