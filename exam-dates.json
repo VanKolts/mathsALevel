@@ -1,0 +1,18 @@
+{
+  "series": "Summer 2027 (provisional)",
+  "source": "Pearson Edexcel GCE Summer 2027 Examination Timetable (Provisional)",
+  "updated": "2026-07-04",
+  "papers": {
+    "as-p1": "2027-05-13",
+    "as-p2": "2027-05-21",
+    "al-p1": "2027-05-26",
+    "al-p2": "2027-06-09",
+    "al-p3": "2027-06-16",
+    "fm-cp1": "2027-05-12",
+    "fm-cp2": "2027-05-20",
+    "fm-fp1": "2027-06-18",
+    "fm-fs1": "2027-06-10",
+    "fm-fm1": "2027-05-25",
+    "fm-d1": "2027-06-15"
+  }
+}

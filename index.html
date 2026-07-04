@@ -244,6 +244,50 @@ main{max-width:1060px;margin:0 auto;padding:1.2rem 1.5rem 2rem;}
 .modal-btn.danger{color:var(--overdue);border-color:rgba(248,113,113,.3);}
 .modal-btn.danger:hover{background:rgba(248,113,113,.1);}
 
+/*   MY EXAMS + PLANNER   */
+.myexams-modal{width:min(500px,94vw);}
+.mex-sec-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:6px;}
+.mex-sec-note{text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;}
+.mex-tracks{display:flex;flex-direction:column;gap:8px;}
+.mex-track{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border2);border-radius:9px;background:var(--surface2);cursor:pointer;transition:all .15s;}
+.mex-track:hover{border-color:rgba(var(--accent-rgb),.4);}
+.mex-track.sel{border-color:transparent;background:linear-gradient(var(--surface2),var(--surface2)) padding-box,linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa) border-box;box-shadow:0 0 10px rgba(248,113,113,.12);}
+.mex-track-radio{width:15px;height:15px;border-radius:50%;border:2px solid var(--border2);flex:none;position:relative;}
+.mex-track.sel .mex-track-radio{border-color:var(--accent);}
+.mex-track.sel .mex-track-radio::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--accent);}
+.mex-track-name{font-size:13px;font-weight:600;color:var(--text);}
+.mex-track-code{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-left:auto;}
+.mex-fmopts{display:flex;flex-wrap:wrap;gap:7px;}
+.mex-fmchip{font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;}
+.mex-fmchip.sel{border-color:transparent;background:rgba(52,211,153,.14);color:#34d399;}
+.mex-papers{display:flex;flex-direction:column;gap:6px;}
+.mex-paper{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);}
+.mex-paper-name{font-size:12.5px;color:var(--text);flex:1;}
+.mex-paper-edited{font-size:9px;color:var(--due);font-family:'JetBrains Mono',monospace;}
+.mex-paper input{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px;}
+.mex-reset{align-self:flex-start;background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline;font-family:'Inter',sans-serif;}
+.myexams-current,.settings-current{font-size:11px;color:var(--muted);margin-top:8px;font-family:'JetBrains Mono',monospace;}
+.planner-modal{width:min(620px,95vw);}
+.planner-hd{display:flex;align-items:center;justify-content:space-between;}
+.planner-close{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1;}
+.plan-empty{font-size:13px;color:var(--muted);padding:14px;text-align:center;}
+.plan-today{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+.plan-today-hd{font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.plan-today-list{font-size:12.5px;color:var(--muted);line-height:1.6;}
+.plan-paper{border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.plan-paper-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px;}
+.plan-paper-name{font-size:13px;font-weight:700;color:var(--text);}
+.plan-paper-date{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.plan-paper-cd{font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.plan-cd-soon{color:var(--overdue);} .plan-cd-mid{color:var(--due);} .plan-cd-far{color:#34d399;}
+.plan-paper-meta{font-size:11px;color:var(--dim);margin:2px 0 8px;}
+.plan-topic{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;color:var(--text);border-top:1px solid var(--border);}
+.plan-topic:first-of-type{border-top:none;}
+.plan-topic-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.plan-topic-tag{margin-left:auto;font-size:9px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:8px;}
+.plan-more{font-size:11px;color:var(--muted);padding:5px 0 0;}
+.plan-passed{opacity:.55;}
+
 /*   RANDOM MODAL    */
 .rand-modal{width:min(500px,92vw);}
 .rand-filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;}
@@ -1353,6 +1397,7 @@ html{scroll-behavior:smooth;}
   <div class="cl-quick">
     <button class="cl-quick-btn js-open-tree"><span class="cqi">🌳</span> Skill tree</button>
     <button class="cl-quick-btn js-open-resources"><span class="cqi">📚</span> Resources</button>
+    <button class="cl-quick-btn" id="open-planner-btn"><span class="cqi">📅</span> Revision plan</button>
   </div>
   <div class="review-panel">
     <div class="today-card" id="today-card">
@@ -1927,6 +1972,16 @@ html{scroll-behavior:smooth;}
       <div class="settings-card">
         <div class="settings-row">
           <div class="settings-row-info">
+            <div class="settings-row-title">My exams</div>
+            <div class="settings-row-sub">Tell the app which qualification you're taking and your paper dates. The whole app — topics shown, review scheduling and your revision plan — adapts to it.</div>
+          </div>
+          <button class="settings-btn" id="open-myexams-btn">Set up my exams</button>
+        </div>
+        <div class="settings-current" id="myexams-current"></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-info">
             <div class="settings-row-title">Further Maths options</div>
             <div class="settings-row-sub">Choose which optional Further Maths modules you study. Core Pure is always included. You can change this any time.</div>
           </div>
@@ -2044,6 +2099,40 @@ html{scroll-behavior:smooth;}
       <button class="modal-btn" id="fm-options-cancel">Cancel</button>
       <button class="modal-btn primary" id="fm-options-save">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- MY EXAMS MODAL -->
+<div class="modal-overlay" id="myexams-overlay">
+  <div class="modal myexams-modal">
+    <div class="modal-title">My exams</div>
+    <div class="modal-sub">Pick your qualification and check your paper dates. Everything in the app adapts to this — which topics show, how reviews are scheduled, and your revision plan.</div>
+    <div class="mex-sec-lbl">Qualification</div>
+    <div class="mex-tracks" id="mex-tracks"></div>
+    <div id="mex-fm-wrap" style="display:none">
+      <div class="mex-sec-lbl">Further Maths options <span class="mex-sec-note">(pick the two you sit)</span></div>
+      <div class="mex-fmopts" id="mex-fmopts"></div>
+    </div>
+    <div class="mex-sec-lbl">Paper dates <span class="mex-sec-note" id="mex-series-note"></span></div>
+    <div class="mex-papers" id="mex-papers"></div>
+    <button class="mex-reset" id="mex-reset">↺ Reset all to the published dates</button>
+    <div class="modal-btns">
+      <button class="modal-btn" id="myexams-cancel">Cancel</button>
+      <button class="modal-btn primary" id="myexams-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- REVISION PLAN OVERLAY -->
+<div class="modal-overlay" id="planner-overlay">
+  <div class="modal planner-modal">
+    <div class="planner-hd">
+      <div class="modal-title" style="margin:0">Revision plan</div>
+      <button class="planner-close" id="planner-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-sub">Ordered by which exam is soonest. Each paper shows what to prioritise — overdue and shaky topics first.</div>
+    <div id="planner-body"></div>
+    <div class="modal-btns"><button class="modal-btn" id="planner-setup">Edit my exams</button></div>
   </div>
 </div>
 
@@ -2826,15 +2915,85 @@ const FM_OPTIONAL_IDS = ['fp1','fs1','fm1','d1'];
 // flat list (carries qual + component for grouping/filtering)
 const allTopics = clusters.flatMap(c => c.topics.map((name,i)=>({name,lvl:c.lvls[i],diff:c.diff[i],clusterId:c.id,qual:c.qual,component:c.component})));
 
-// A component is "active" (shown/scheduled) if it's A-level Maths, FM Core Pure,
-// or an FM optional the student has switched on in Settings.
-function isComponentActive(qual,component){
-  if(qual==='maths') return true;
-  if(component==='corepure') return true;
-  return fmOptions.has(component);
+// ── Qualification track + exam papers ─────────────────────────────
+// The student picks ONE track; the app auto-adjusts which modules, year
+// scope and exam papers are active. Papers carry provisional Summer 2027
+// Edexcel dates (editable). A topic ramps toward the EARLIEST active paper
+// that assesses its component.
+const EXAM_PAPERS = {
+  as: [
+    {id:'as-p1', name:'Paper 1 · Pure',                    date:'2027-05-13', comps:['pure']},
+    {id:'as-p2', name:'Paper 2 · Statistics & Mechanics',  date:'2027-05-21', comps:['stats','mech']}
+  ],
+  alevel: [
+    {id:'al-p1', name:'Paper 1 · Pure 1',                  date:'2027-05-26', comps:['pure']},
+    {id:'al-p2', name:'Paper 2 · Pure 2',                  date:'2027-06-09', comps:['pure']},
+    {id:'al-p3', name:'Paper 3 · Statistics & Mechanics',  date:'2027-06-16', comps:['stats','mech']}
+  ],
+  fm: [
+    {id:'fm-cp1', name:'Core Pure 1',              date:'2027-05-12', comps:['corepure']},
+    {id:'fm-cp2', name:'Core Pure 2',              date:'2027-05-20', comps:['corepure']},
+    {id:'fm-fp1', name:'FP1 · Further Pure 1',     date:'2027-06-18', comps:['fp1'], opt:'fp1'},
+    {id:'fm-fs1', name:'FS1 · Further Statistics 1',date:'2027-06-10', comps:['fs1'], opt:'fs1'},
+    {id:'fm-fm1', name:'FM1 · Further Mechanics 1',date:'2027-05-25', comps:['fm1'], opt:'fm1'},
+    {id:'fm-d1',  name:'D1 · Decision 1',          date:'2027-06-15', comps:['d1'],  opt:'d1'}
+  ]
+};
+const TRACKS = [
+  {id:'as',     name:'AS Maths',                   code:'8MA0'},
+  {id:'alevel', name:'A-Level Maths',              code:'9MA0'},
+  {id:'fm',     name:'A-Level Maths + Further',    code:'9MA0 + 9FM0'}
+];
+function getTrack(){ try{var v=localStorage.getItem('alevel-track'); if(v)return v;}catch(e){} return (typeof fmOptions!=='undefined'&&fmOptions.size>0)?'fm':'alevel'; }
+function setTrack(v){ try{localStorage.setItem('alevel-track',v);}catch(e){} }
+function getPaperDates(){ try{return JSON.parse(localStorage.getItem('alevel-paper-dates-v1')||'{}');}catch(e){return {};} }
+function setPaperDateOverride(id,v){ var d=getPaperDates(); if(v)d[id]=v; else delete d[id]; try{localStorage.setItem('alevel-paper-dates-v1',JSON.stringify(d));}catch(e){} }
+// Date priority: student override > yearly-refreshed exam-dates.json > embedded default.
+var _examDatesRemote=null, _examDatesSeries='';
+function paperDate(p){ var d=getPaperDates(); if(d[p.id])return d[p.id]; if(_examDatesRemote&&_examDatesRemote[p.id])return _examDatesRemote[p.id]; return p.date; }
+function paperDefaultDate(p){ if(_examDatesRemote&&_examDatesRemote[p.id])return _examDatesRemote[p.id]; return p.date; }
+function loadRemoteExamDates(){
+  try{ fetch('exam-dates.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
+    if(j&&j.papers){ _examDatesRemote=j.papers; _examDatesSeries=j.series||'';
+      if(typeof renderAll==='function')try{renderAll();}catch(e){}
+      if(typeof updateDueBadge==='function')try{updateDueBadge();}catch(e){} }
+  }).catch(function(){}); }catch(e){}
 }
-function activeClusters(){ return clusters.filter(c=>isComponentActive(c.qual,c.component)); }
-function activeTopics(){ return allTopics.filter(t=>isComponentActive(t.qual,t.component)); }
+// Papers active for the current track (+ chosen FM options), soonest first.
+function activePapers(){
+  var tr=getTrack(), out=[];
+  if(tr==='as'){ out=EXAM_PAPERS.as.slice(); }
+  else { out=EXAM_PAPERS.alevel.slice();
+    if(tr==='fm') EXAM_PAPERS.fm.forEach(function(p){ if(!p.opt||(typeof fmOptions!=='undefined'&&fmOptions.has(p.opt))) out.push(p); });
+  }
+  return out.map(function(p){ return {id:p.id,name:p.name,comps:p.comps,opt:p.opt,date:paperDate(p),deflt:p.date}; })
+            .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+}
+// Earliest active paper date assessing a component.
+function examDateForComponent(comp){ var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; }); return best; }
+function examDateForTopic(name){ var t=allTopics.find(function(x){return x.name===name;}); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
+
+// A component is active only if it belongs to the student's track.
+function isComponentActive(qual,component){
+  var tr=getTrack();
+  if(qual==='maths') return true;            // AS & A-Level Maths both cover Pure/Stats/Mechanics
+  if(tr!=='fm') return false;                // Further Maths content shows only on the FM track
+  if(component==='corepure') return true;
+  return (typeof fmOptions!=='undefined') && fmOptions.has(component);
+}
+function isTopicActive(t){
+  if(!isComponentActive(t.qual,t.component)) return false;
+  if(getTrack()==='as' && t.qual==='maths' && t.lvl==='y2') return false; // AS = Year 1 only
+  return true;
+}
+function _trackTrim(c){
+  if(getTrack()!=='as' || c.qual!=='maths') return c;
+  var idx=[]; c.lvls.forEach(function(l,i){ if(l!=='y2') idx.push(i); });
+  if(idx.length===c.topics.length) return c;
+  return Object.assign({},c,{topics:idx.map(function(i){return c.topics[i];}),lvls:idx.map(function(i){return c.lvls[i];}),diff:idx.map(function(i){return c.diff[i];})});
+}
+function activeClusters(){ return clusters.filter(function(c){return isComponentActive(c.qual,c.component);}).map(_trackTrim); }
+function activeTopics(){ return allTopics.filter(isTopicActive); }
 function componentName(qual,id){ const c=(COMPONENTS[qual]||[]).find(x=>x.id===id); return c?c.name:id; }
 
 const lvlLabel = {y1:'Y1',y2:'Y2',fm:'FM'};
@@ -5431,7 +5590,7 @@ function effectiveD(name){
 //      mistakes and topic hardness (higher target => sooner reviews) ----
 function targetRetention(name){
   let R=BASE_RETENTION;
-  const ex=getExamDate();
+  const ex=examDateForTopic(name);
   if(ex){
     const dte=daysDiff(today(),ex);
     if(dte<=0) R=MAX_RETENTION;
@@ -6332,6 +6491,7 @@ function renderSettings(){
   if(!cur) return;
   const chosen=COMPONENTS.fm.filter(c=>c.opt&&fmOptions.has(c.id)).map(c=>c.name);
   cur.textContent = chosen.length ? ('Currently studying: Core Pure + '+chosen.join(', ')) : 'Currently studying: Core Pure only';
+  if(typeof renderMyExamsCurrent==='function') renderMyExamsCurrent();
   renderThemePicker();
 }
 function renderFmOptList(){
@@ -6358,6 +6518,123 @@ document.getElementById('fm-options-save').addEventListener('click',()=>{
   renderSettings(); populateMistakeTopics(); renderReviewPanel(); renderAll();
   if(typeof toast==='function') toast('Further Maths options updated');
 });
+
+// ---- My exams (track + paper dates) ----
+var _mexTrack=null, _mexFm=null, _mexDates=null;
+function _mexDefault(p){ return (_examDatesRemote&&_examDatesRemote[p.id])||p.date; }
+function _mexActivePapers(){
+  var tr=_mexTrack, out=[];
+  if(tr==='as') out=EXAM_PAPERS.as.slice();
+  else { out=EXAM_PAPERS.alevel.slice(); if(tr==='fm') EXAM_PAPERS.fm.forEach(function(p){ if(!p.opt||_mexFm.has(p.opt)) out.push(p); }); }
+  return out;
+}
+function _mexDate(p){ return _mexDates[p.id]||_mexDefault(p); }
+function openMyExams(){
+  _mexTrack=getTrack(); _mexFm=new Set(fmOptions); _mexDates=Object.assign({},getPaperDates());
+  renderMyExams(); document.getElementById('myexams-overlay').classList.add('open'); document.body.style.overflow='hidden';
+}
+function closeMyExams(){ document.getElementById('myexams-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function renderMyExams(){
+  var tw=document.getElementById('mex-tracks'); tw.innerHTML='';
+  TRACKS.forEach(function(t){
+    var d=document.createElement('div'); d.className='mex-track'+(_mexTrack===t.id?' sel':'');
+    d.innerHTML='<span class="mex-track-radio"></span><span class="mex-track-name">'+t.name+'</span><span class="mex-track-code">'+t.code+'</span>';
+    d.addEventListener('click',function(){ _mexTrack=t.id; renderMyExams(); });
+    tw.appendChild(d);
+  });
+  document.getElementById('mex-fm-wrap').style.display=(_mexTrack==='fm')?'block':'none';
+  if(_mexTrack==='fm'){
+    var fo=document.getElementById('mex-fmopts'); fo.innerHTML='';
+    COMPONENTS.fm.filter(function(c){return c.opt;}).forEach(function(c){
+      var chip=document.createElement('button'); chip.className='mex-fmchip'+(_mexFm.has(c.id)?' sel':''); chip.textContent=c.name;
+      chip.addEventListener('click',function(){ if(_mexFm.has(c.id))_mexFm.delete(c.id); else _mexFm.add(c.id); renderMyExams(); });
+      fo.appendChild(chip);
+    });
+  }
+  document.getElementById('mex-series-note').textContent='· '+(_examDatesSeries||'Summer 2027 (provisional)');
+  var pw=document.getElementById('mex-papers'); pw.innerHTML='';
+  _mexActivePapers().forEach(function(p){
+    var row=document.createElement('div'); row.className='mex-paper';
+    var nm=document.createElement('span'); nm.className='mex-paper-name'; nm.textContent=p.name;
+    if(_mexDates[p.id]){ var e=document.createElement('span'); e.className='mex-paper-edited'; e.textContent=' edited'; nm.appendChild(e); }
+    var inp=document.createElement('input'); inp.type='date'; inp.value=_mexDate(p);
+    inp.addEventListener('change',function(){
+      if(this.value && this.value!==_mexDefault(p)) _mexDates[p.id]=this.value; else delete _mexDates[p.id];
+      renderMyExams();
+    });
+    row.append(nm,inp); pw.appendChild(row);
+  });
+}
+function renderMyExamsCurrent(){
+  var el=document.getElementById('myexams-current'); if(!el)return;
+  var tr=TRACKS.find(function(t){return t.id===getTrack();});
+  var ps=activePapers(); var next=ps.find(function(p){return daysDiff(today(),p.date)>=0;})||ps[ps.length-1];
+  var txt=tr?tr.name:'';
+  if(next){ var d=daysDiff(today(),next.date); txt+=' · next paper '+(d>=0?('in '+d+'d'):'passed'); }
+  el.textContent=txt;
+}
+document.getElementById('open-myexams-btn').addEventListener('click',openMyExams);
+document.getElementById('myexams-cancel').addEventListener('click',closeMyExams);
+document.getElementById('myexams-overlay').addEventListener('click',function(e){ if(e.target===this)closeMyExams(); });
+document.getElementById('mex-reset').addEventListener('click',function(){ _mexDates={}; renderMyExams(); });
+document.getElementById('myexams-save').addEventListener('click',function(){
+  setTrack(_mexTrack);
+  fmOptions=(_mexTrack==='fm')?new Set(_mexFm):new Set();
+  try{ localStorage.setItem('alevel-paper-dates-v1',JSON.stringify(_mexDates)); }catch(e){}
+  saveState(); closeMyExams();
+  renderMyExamsCurrent(); renderSettings(); populateMistakeTopics(); renderReviewPanel(); updateDueBadge(); renderAll();
+  if(typeof toast==='function') toast('Exams updated — the app has adapted to your papers');
+});
+
+// ---- Revision planner ----
+function _planFmtDate(iso){ try{return new Date(iso+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});}catch(e){return iso;} }
+function _weakScore(name){
+  var st=statusFor(name);
+  var base = st==='overdue'?3 : st==='due'?2 : (!sr[name]?2.5:0);
+  var r=currentRetrievability(name); if(r!=null) base += (1-r)*2;
+  base += mistakeLoad(name)*0.5;
+  return base;
+}
+function openPlanner(){ renderPlanner(); document.getElementById('planner-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
+function closePlanner(){ document.getElementById('planner-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function renderPlanner(){
+  var body=document.getElementById('planner-body'); if(!body)return;
+  var papers=activePapers();
+  if(!papers.length){ body.innerHTML='<div class="plan-empty">Set up your exams to build a plan.</div>'; return; }
+  var td=today(), html='';
+  var topicsByComp={}; activeTopics().forEach(function(t){ (topicsByComp[t.component]=topicsByComp[t.component]||[]).push(t.name); });
+  var upcoming=papers.filter(function(p){return daysDiff(td,p.date)>=0;});
+  var focusPool=[];
+  (upcoming.length?upcoming:papers).slice(0,2).forEach(function(p){ p.comps.forEach(function(c){ (topicsByComp[c]||[]).forEach(function(n){ focusPool.push(n); }); }); });
+  focusPool=Array.from(new Set(focusPool)).map(function(n){return {n:n,s:_weakScore(n)};}).filter(function(x){return x.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,5);
+  if(focusPool.length) html+='<div class="plan-today"><div class="plan-today-hd">🎯 Today\'s focus</div><div class="plan-today-list">'+focusPool.map(function(x){return '• '+x.n;}).join('<br>')+'</div></div>';
+  papers.forEach(function(p){
+    var d=daysDiff(td,p.date), passed=d<0;
+    var cd=passed?'done':(d===0?'today':d+' days');
+    var cdc=passed?'':(d<=14?'plan-cd-soon':d<=35?'plan-cd-mid':'plan-cd-far');
+    var pool=[]; p.comps.forEach(function(c){ (topicsByComp[c]||[]).forEach(function(n){ pool.push(n); }); }); pool=Array.from(new Set(pool));
+    var scored=pool.map(function(n){return {n:n,s:_weakScore(n),st:statusFor(n),r:currentRetrievability(n)};}).sort(function(a,b){return b.s-a.s;});
+    var focus=scored.filter(function(x){return x.s>0;});
+    var mastered=pool.filter(function(n){return statusFor(n)==='done';}).length;
+    html+='<div class="plan-paper'+(passed?' plan-passed':'')+'"><div class="plan-paper-hd"><span class="plan-paper-name">'+p.name+'</span><span class="plan-paper-cd '+cdc+'">'+cd+'</span></div>'+
+      '<div class="plan-paper-date">'+_planFmtDate(p.date)+'</div>'+
+      '<div class="plan-paper-meta">'+pool.length+' topics · '+mastered+' mastered · '+focus.length+' need work</div>';
+    focus.slice(0,6).forEach(function(x){
+      var col=x.st==='overdue'?'var(--overdue)':x.st==='due'?'var(--due)':(!sr[x.n]?'var(--dim)':'#fb923c');
+      var tag=x.st==='overdue'?'overdue':x.st==='due'?'due':(!sr[x.n]?'new':(x.r!=null?Math.round(x.r*100)+'%':''));
+      html+='<div class="plan-topic"><span class="plan-topic-dot" style="background:'+col+'"></span>'+x.n+'<span class="plan-topic-tag" style="color:'+col+';background:var(--surface3)">'+tag+'</span></div>';
+    });
+    if(focus.length>6) html+='<div class="plan-more">+'+(focus.length-6)+' more to revise</div>';
+    if(!focus.length) html+='<div class="plan-more">All caught up for this paper 🎉</div>';
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+document.getElementById('open-planner-btn').addEventListener('click',openPlanner);
+document.getElementById('planner-close').addEventListener('click',closePlanner);
+document.getElementById('planner-overlay').addEventListener('click',function(e){ if(e.target===this)closePlanner(); });
+document.getElementById('planner-setup').addEventListener('click',function(){ closePlanner(); openMyExams(); });
+
 renderSettings();
 
 // ---- First-run onboarding ----
@@ -8481,6 +8758,7 @@ renderMistakesTab();
 renderResources();
 renderStreak();
 applyPlainLang();
+loadRemoteExamDates();
 // First-run: show onboarding only for genuinely new users
 (function(){
   try{
@@ -8599,7 +8877,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
     'alevel-favs-v1','alevel-notes-v1','alevel-fm-options-v1','alevel-streak-v1',
     'alevel-exam-date','alevel-onboarded-v1','alevel-plainlang-v1','alevel-pomo-presets-v1',
-    'alevel-shortcuts-v1','msh-theme'];
+    'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1'];
 
   var nativeSet=localStorage.setItem.bind(localStorage);
   var currentUser=null, pushTimer=null;
