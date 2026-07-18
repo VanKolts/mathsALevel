@@ -77,13 +77,6 @@
         <div class="rev-empty">No topics scheduled yet. Tick a topic below to begin.</div>
       </div>
     </div>
-    <div class="exam-bar" id="exam-bar">
-      <span class="exam-bar-icon" aria-hidden="true">🎯</span>
-      <label for="global-exam-date" class="exam-bar-lbl">Exam date</label>
-      <input type="date" id="global-exam-date" class="exam-date-input"/>
-      <span class="exam-countdown" id="exam-countdown"></span>
-      <span class="exam-hint">We'll bring reviews forward as it nears — you don't have to plan it</span>
-    </div>
   </div>
   <div class="filters-bar">
     <div class="filters-inner">
@@ -3296,7 +3289,7 @@ function renderMyExamsCurrent(){
   if(next){ var d=daysDiff(today(),next.date); txt+=' · next paper '+(d>=0?('in '+d+'d'):'passed'); }
   el.textContent=txt;
 }
-document.getElementById('open-myexams-btn').addEventListener('click',openMyExams);
+document.getElementById('open-myexams-btn').addEventListener('click',function(){ if(typeof closeSettings==='function')closeSettings(); openMyExams(); });
 document.getElementById('myexams-cancel').addEventListener('click',closeMyExams);
 document.getElementById('myexams-overlay').addEventListener('click',function(e){ if(e.target===this)closeMyExams(); });
 document.getElementById('mex-reset').addEventListener('click',function(){ _mexDates={}; renderMyExams(); });
@@ -5470,9 +5463,7 @@ function syncExamInputs(){
     else cd.textContent='';
   }
 }
-document.getElementById('global-exam-date').addEventListener('change',function(){
-  setExamDate(this.value); syncExamInputs(); renderReviewPanel(); if(activeTab==='checklist')renderAll();
-});
+/* checklist exam-date bar removed; per-paper dates in My exams drive scheduling */
 document.getElementById('mem-details-toggle').addEventListener('click',()=>{
   const d=document.getElementById('mem-details');const open=d.classList.toggle('open');
   document.getElementById('mem-details-toggle').textContent=open?'Hide memory details':'Show memory details';
