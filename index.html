@@ -769,6 +769,7 @@
     <div class="mex-sec-lbl">Paper dates <span class="mex-sec-note" id="mex-series-note"></span></div>
     <div class="mex-papers" id="mex-papers"></div>
     <button class="mex-reset" id="mex-reset">↺ Reset all to the published dates</button>
+    <button class="mex-reset" id="mex-remove">✕ Remove exam dates (turn off the exam ramp)</button>
     <div class="modal-btns">
       <button class="modal-btn" id="myexams-cancel">Cancel</button>
       <button class="modal-btn primary" id="myexams-save">Save</button>
@@ -1197,8 +1198,8 @@ function activePapers(){
             .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
 }
 // Earliest active paper date assessing a component.
-function examDateForComponent(comp){ var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; }); return best; }
-function examDateForTopic(name){ var t=allTopics.find(function(x){return x.name===name;}); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
+function examDateForComponent(comp){ if(getExamOff())return ''; var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; }); return best; }
+function examDateForTopic(name){ if(getExamOff())return ''; var t=allTopics.find(function(x){return x.name===name;}); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
 
 // A component is active only if it belongs to the student's track.
 function isComponentActive(qual,component){
@@ -2279,6 +2280,8 @@ function practiceLinkFor(name){
 // ---- exam date drives the exam-proximity retention ramp ----
 function getExamDate(){ try{return localStorage.getItem('alevel-exam-date')||'';}catch(e){return '';} }
 function setExamDate(v){ try{ if(v) localStorage.setItem('alevel-exam-date',v); else localStorage.removeItem('alevel-exam-date'); }catch(e){} }
+function getExamOff(){ try{return localStorage.getItem('alevel-exam-off')==='1';}catch(e){return false;} }
+function setExamOff(v){ try{ if(v) localStorage.setItem('alevel-exam-off','1'); else localStorage.removeItem('alevel-exam-off'); }catch(e){} }
 
 // ---- forgetting curve & interval ----
 function forgetting(t,S){ return Math.pow(1 + FACTOR*t/Math.max(0.01,S), DECAY); }
@@ -3286,15 +3289,16 @@ function renderMyExamsCurrent(){
   var tr=TRACKS.find(function(t){return t.id===getTrack();});
   var ps=activePapers(); var next=ps.find(function(p){return daysDiff(today(),p.date)>=0;})||ps[ps.length-1];
   var txt=tr?tr.name:'';
-  if(next){ var d=daysDiff(today(),next.date); txt+=' · next paper '+(d>=0?('in '+d+'d'):'passed'); }
+  if(getExamOff()){ txt+=' · exam dates off'; } else if(next){ var d=daysDiff(today(),next.date); txt+=' · next paper '+(d>=0?('in '+d+'d'):'passed'); }
   el.textContent=txt;
 }
 document.getElementById('open-myexams-btn').addEventListener('click',function(){ if(typeof closeSettings==='function')closeSettings(); openMyExams(); });
 document.getElementById('myexams-cancel').addEventListener('click',closeMyExams);
 document.getElementById('myexams-overlay').addEventListener('click',function(e){ if(e.target===this)closeMyExams(); });
-document.getElementById('mex-reset').addEventListener('click',function(){ _mexDates={}; renderMyExams(); });
+document.getElementById('mex-reset').addEventListener('click',function(){ _mexDates={}; setExamOff(false); renderMyExams(); });
+document.getElementById('mex-remove').addEventListener('click',function(){ setExamOff(true); saveState(); closeMyExams(); renderMyExamsCurrent(); renderSettings(); populateMistakeTopics(); renderReviewPanel(); updateDueBadge(); renderAll(); if(typeof toast==='function') toast("Exam dates removed — reviews won't ramp toward an exam"); });
 document.getElementById('myexams-save').addEventListener('click',function(){
-  setTrack(_mexTrack);
+  setTrack(_mexTrack); setExamOff(false);
   fmOptions=(_mexTrack==='fm')?new Set(_mexFm):new Set();
   try{ localStorage.setItem('alevel-paper-dates-v1',JSON.stringify(_mexDates)); }catch(e){}
   saveState(); closeMyExams();
