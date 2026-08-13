@@ -3,8 +3,9 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **The entire app is one file:** [`index.html`](index.html) (~9,000 lines: HTML + CSS + JavaScript, no build step, no server, no dependencies beyond MathJax and the Firebase CDN).
-- **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (~5,900 lines); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
+- **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
 
 This document describes the app on **three levels**: the **visual/UX layer** (what a student sees), the **feature layer** (what each part does), and the **technical layer** (how it actually works — data model, the spaced-repetition maths, sync, and the AI subsystem).
 
@@ -16,6 +17,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 3. [The five pages, feature by feature](#the-five-pages-feature-by-feature)
 4. [The spaced-repetition engine (deep dive)](#the-spaced-repetition-engine-deep-dive)
 5. [Data model & storage](#data-model--storage)
+   - [Topic renames & the remap](#topic-renames--the-remap)
 6. [Cloud sync architecture](#cloud-sync-architecture)
 7. [The AI subsystem](#the-ai-subsystem)
 8. [Rendering & maths typesetting](#rendering--maths-typesetting)
@@ -27,35 +29,35 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
 10. [Editing, building & deploying](#editing-building--deploying)
+11. [Known gaps & roadmap](#known-gaps--roadmap)
 
 ---
 
 ## Architecture in one picture
 
 ```
-┌─────────────────────────── index.html (one file) ───────────────────────────┐
-│                                                                              │
-│  STATIC DATA (hard-coded)          UI LAYER                 LOGIC LAYER       │
-│  • allTopics  (spec topics)   →   5 pages / tab-bar    →   FSRS-4.5 engine   │
-│  • FORMULAS   (formula sheet)     8 themes, modals         (scheduling)      │
-│  • GLOSSARY   (223 terms)         MathJax rendering        mistake weighting │
-│  • PAPER_QUESTIONS (per-Q         responsive + PWA         Leaks analytics   │
-│     marks + topics)                                        AI tools          │
-│  • GRADE_BOUNDARIES                                                          │
-│                                                                              │
-│                         ┌──────────── STATE ────────────┐                    │
-│                         │  localStorage  (per device)   │                    │
-│                         └───────────────┬───────────────┘                    │
-└─────────────────────────────────────────┼───────────────────────────────────┘
-                                           │  (optional, if signed in)
-                                 ┌─────────▼──────────┐
-                                 │  Firebase          │  realtime onSnapshot
-                                 │  Auth + Firestore  │  + offline persistence
-                                 │  (maths-hub-3aa8c) │  true-mirror both ways
-                                 └────────────────────┘
+  data/*.js  (static)          index.html  (markup + all logic)      styles.css
+┌──────────────────────┐   ┌──────────────────────────────────┐   ┌────────────┐
+│ clusters.js          │   │  UI LAYER          LOGIC LAYER   │   │ 8 themes   │
+│   → allTopics        │──▶│  5 pages/tab-bar   FSRS-4.5      │◀──│ CSS vars   │
+│ formulas.js          │   │  modals            (scheduling)  │   │ responsive │
+│ glossary.js (223)    │   │  MathJax           mistake wgt   │   └────────────┘
+│ paper-questions.js   │   │  responsive        Leaks report  │
+│ grade-boundaries.js  │   │                    AI tools      │
+└──────────────────────┘   └────────────────┬─────────────────┘
+                                            │
+                   ┌──────────── STATE ─────▼──────┐    ┌──────────────────┐
+                   │  localStorage  (per device)   │    │ sw.js            │
+                   └───────────────┬───────────────┘    │ precaches shell  │
+                                   │ (optional, signed in)│ + data → works  │
+                         ┌─────────▼──────────┐          │ fully offline    │
+                         │  Firebase          │ realtime └──────────────────┘
+                         │  Auth + Firestore  │ onSnapshot + offline persistence
+                         │  (maths-hub-3aa8c) │ true-mirror both ways
+                         └────────────────────┘
 ```
 
-**Key idea:** the app has *no backend of its own*. All content ships inside the file; all student state lives in `localStorage`; Firebase is an *optional* mirror for multi-device sync. The three AI tools call Google Gemini directly with the student's own key.
+**Key idea:** the app has *no backend of its own*. All content ships with the app; all student state lives in `localStorage`; Firebase is an *optional* mirror for multi-device sync. The three AI tools call Google Gemini directly with the student's own key.
 
 ---
 
@@ -65,7 +67,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **8 built-in themes** — Rose, Ocean and Violet each in dark + light, plus Pure Black (OLED) and Pure White. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
 
-**Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** (home-screen icon, offline once loaded).
+**Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
 **Maths.** All mathematical content is written in LaTeX and typeset by **MathJax** (`$…$` inline, `$$…$$` displayed).
 
@@ -101,13 +103,14 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 - **🌳 Skill tree** — a visual mastery graph of topics and how they build up.
 - **🗂 Resources overlay** — reference links/material, opened from the header on desktop and a `.cl-quick` row on mobile.
 - **🧮 Formula sheet** — the `FORMULAS` data rendered as an interactive, searchable sheet styled like the real formulae booklet.
-- **Settings** (`#page-settings`) — theme picker, exam-date entry (which drives the scheduler's exam ramp), Gemini API key, and a **Sync diagnostics** panel.
+- **📅 Revision plan / My exams** — the multi-exam adaptive planner. Instead of one global exam date, you set a date **per paper** (AS P1–P2, A-Level P1–P3, and the Further modules), seeded from `exam-dates.json` (currently the provisional Edexcel Summer 2027 timetable) and overridable per paper. Each topic then ramps against the date of the paper that actually examines it, so Statistics tightens for the Stats paper rather than for whichever exam happens to be first. Reachable from Settings → My exams, with a plan generator on the Checklist quick-row.
+- **Settings** (`#page-settings`) — theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Gemini API key, a JSON backup export, and a **Sync diagnostics** panel.
 
 ---
 
 ## The spaced-repetition engine (deep dive)
 
-This is the heart of the app. It's a full **FSRS-4.5** implementation (Free Spaced Repetition Scheduler — the algorithm behind modern Anki), adapted for exam topics rather than flashcards. Everything below lives around lines 2374 and 5567 of `index.html`.
+This is the heart of the app. It's a full **FSRS-4.5** implementation (Free Spaced Repetition Scheduler — the algorithm behind modern Anki), adapted for exam topics rather than flashcards. Everything below lives in the main `<script>` block of `index.html` — grep for `FSRS_W` to land on the tuning constants, and the functions follow directly beneath.
 
 ### The forgetting curve
 Memory is modelled with FSRS's power-law forgetting curve:
@@ -191,7 +194,18 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 
 Older keys (`alevel-sr-v4`) are read for one-time migration.
 
-**Hard-coded content** (constants in the file, not user data): `allTopics`, `FORMULAS`, `GLOSSARY`, `PAPER_QUESTIONS`, `GRADE_BOUNDARIES`, and the FSRS weight/tuning constants.
+**Hard-coded content** (constants in `data/*.js`, not user data): `clusters` → `allTopics`, `FORMULAS`, `GLOSSARY`, `PAPER_QUESTIONS`, `GRADE_BOUNDARIES`. The FSRS weight/tuning constants live in `index.html`.
+
+### Topic renames & the remap
+
+Because every topic name is a primary key — `sr[name]`, notes, favourites, mistakes, and all 2,106 past-paper tags — renaming a topic means rewriting saved progress. The July 2026 chapter reorganisation renamed 94 Pure topics, so `index.html` carries a `CHAPTER_RENAMES` map and an `applyChapterRenames()` function that rewrites `alevel-sr-v5`, `alevel-notes-v1`, `alevel-favs-v1` and `alevel-mistakes-v2` in place.
+
+Two properties matter, and CI enforces both:
+
+- **It is idempotent.** No value in `CHAPTER_RENAMES` is also a key, so `mv()` applied twice equals `mv()` applied once. Nothing is written unless a name actually changed.
+- **It is not gated behind a one-time flag.** It runs on *every* load and again at the end of `applyToLocal()`. This is deliberate: sync mirrors `alevel-sr-v5` between devices, so a device still running an older build can push pre-rename names back down at any moment. The original one-shot flag (`alevel-chapter-mig-v1`) was device-local and *not* in `SYNC_KEYS`, which meant stale names could land **after** a device had already marked the migration done — silently orphaning study history, with topics reverting to "not started". Running unconditionally removes that whole class of bug, and because the remap goes through the hooked `setItem`, a correction also schedules a push that heals the cloud copy for every other device.
+
+If topics are ever renamed again, add the entries to `CHAPTER_RENAMES` (never rename an existing *target*, or idempotency breaks and CI will say so).
 
 ---
 
@@ -321,22 +335,35 @@ GRADE_BOUNDARIES = {
 
 ### 9.2 Topic taxonomy (full)
 
-**34 studyable clusters · 245 topics.** (Non-studyable nav-shortcut clusters are excluded.)
+**50 studyable clusters · 315 topics.** (Non-studyable nav-shortcut clusters are excluded.)
 
-**A-Level Mathematics (`qual:'maths'`) — 12 clusters, 138 topics**
+Pure was reorganised in July 2026 to follow the **Edexcel textbook chapters** rather than the spec's thematic headings, and every topic is now labelled with its section number (`9.1 The cosine rule`). That renamed 94 topics; the map lives in `CHAPTER_RENAMES` in `index.html` and is applied to saved progress on load — see [Topic renames & the remap](#topic-renames--the-remap).
+
+**A-Level Mathematics (`qual:'maths'`) — 28 clusters, 208 topics**
+
+*Pure — 26 chapters, 164 topics (Year 1 × 14, Year 2 × 12)*
+
+| Cluster id | Chapter | Topics | | Cluster id | Chapter | Topics |
+|---|---|--:|---|---|---|--:|
+| `p1c1` | 1 · Algebraic expressions | 6 | | `p2c1` | 1 · Algebraic methods | 4 |
+| `p1c2` | 2 · Quadratics | 6 | | `p2c2` | 2 · Functions and graphs | 7 |
+| `p1c3` | 3 · Equations and inequalities | 7 | | `p2c3` | 3 · Sequences and series | 8 |
+| `p1c4` | 4 · Graphs and transformations | 7 | | `p2c4` | 4 · Binomial expansion | 3 |
+| `p1c5` | 5 · Straight line graphs | 5 | | `p2c5` | 5 · Radians | 5 |
+| `p1c6` | 6 · Circles | 5 | | `p2c6` | 6 · Trigonometric functions | 5 |
+| `p1c7` | 7 · Algebraic methods | 5 | | `p2c7` | 7 · Trigonometry and modelling | 7 |
+| `p1c8` | 8 · The binomial expansion | 5 | | `p2c8` | 8 · Parametric equations | 5 |
+| `p1c9` | 9 · Trigonometric ratios | 6 | | `p2c9` | 9 · Differentiation | 10 |
+| `p1c10` | 10 · Trig identities and equations | 6 | | `p2c10` | 10 · Numerical methods | 4 |
+| `p1c11` | 11 · Vectors | 6 | | `p2c11` | 11 · Integration | 12 |
+| `p1c12` | 12 · Differentiation | 11 | | `p2c12` | 12 · Vectors | 4 |
+| `p1c13` | 13 · Integration | 7 | | | | |
+| `p1c14` | 14 · Exponentials and logarithms | 8 | | | | |
+
+*Statistics & Mechanics — 2 clusters, 44 topics*
 
 | Cluster id | Component | Topics | Group |
 |---|---|--:|---|
-| `proof` | Pure | 3 | Proof |
-| `algebra` | Pure | 16 | Algebra & Functions |
-| `coord` | Pure | 8 | Coordinate Geometry |
-| `seq` | Pure | 8 | Sequences & Series |
-| `trig` | Pure | 15 | Trigonometry |
-| `exp` | Pure | 6 | Exponentials & Logarithms |
-| `diff` | Pure | 15 | Calculus — Differentiation |
-| `integ` | Pure | 13 | Calculus — Integration |
-| `num` | Pure | 4 | Numerical Methods |
-| `vec` | Pure | 6 | Vectors |
 | `stats` | Statistics | 24 | Statistics |
 | `mech` | Mechanics | 20 | Mechanics |
 
@@ -427,7 +454,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`.
 - **Mistake feedback:** `mistakeLoad(name)`, `effectiveD(name)`, `targetRetention(name)`, `examDateForTopic(name)`, `sevPips`, `sevUpdateUI`.
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
-- **Sync:** `applyToLocal(store)`, `schedulePush()`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup.
+- **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
@@ -438,16 +465,37 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **MathJax** — LaTeX typesetting (CDN).
 - **Firebase compat SDK v10.14.1** — `firebase-app`, `firebase-auth`, `firebase-firestore` (CDN `gstatic.com`). Project **`maths-hub-3aa8c`** (`authDomain: maths-hub-3aa8c.firebaseapp.com`). Firestore doc per user at `users/{uid}`; profile-image writes to a sibling doc with a `serverTimestamp()`.
 - **Google Gemini** — `gemini-2.5-flash` via the student's own key in `localStorage['alevel-gemini-key-v1']`.
-- No other runtime dependencies; no build tooling.
+- **Service worker** (`sw.js`) — precaches the shell and `data/*.js`; cache-first with background refresh for MathJax and Google Fonts; network-first for own files so a push reaches you immediately; explicitly *bypasses* Firestore, Identity Toolkit and Gemini so realtime sync and AI calls are never served stale.
+- No runtime dependencies beyond those CDNs; the only tooling is `scripts/validate.mjs`, which uses nothing but Node's standard library.
 
 ---
 
 ## Editing, building & deploying
 
-- **One file, no build.** Open `index.html` in any browser and it runs. There is no bundler, transpiler, or package install.
-- **Edit `index.html` directly.** Git history is the backup — no `.bak`/duplicate files.
-- **Deploy = push.** Commits to `main` publish straight to GitHub Pages (the live site), so only push states that work: syntax-check the inline `<script>` blocks, verify in a browser, then commit + push.
-- **Stack recap:** vanilla HTML/CSS/JS · CSS-variable theming (8 themes) · MathJax · Firebase compat SDK (Auth + Firestore, offline persistence) · Google Gemini for AI · everything else in `localStorage`.
+- **No build.** Serve the folder (`npm start`, or any static server) and it runs. There is no bundler, transpiler or dependency install. Opening `index.html` via `file://` mostly works, but the `data/*.js` scripts and the service worker need a real origin — use the server.
+- **Edit in place.** Logic and markup in `index.html`, styling in `styles.css`, content in `data/*.js`. Git history is the backup — no `.bak`/duplicate files.
+- **Validate before pushing.** `npm test` (→ `node scripts/validate.mjs`) syntax-checks every inline `<script>`, `sw.js` and each `data/*.js`, then asserts the invariants the app quietly relies on:
+  - every paper's marks sum to its real Edexcel total (100 for A-Level and AS paper 1, 60 for AS paper 2, 75 for legacy Core and Further modules);
+  - every past-paper `topics:[…]` string resolves to a canonical topic name;
+  - `lvls[]` / `diff[]` line up with their `topics[]`, and no two topics share a name;
+  - `CHAPTER_RENAMES` stays idempotent and all its targets still exist;
+  - every local file referenced by `index.html` and precached by `sw.js` is actually present.
+- **Deploy = push.** Commits to `main` publish straight to GitHub Pages. The same validator runs in CI (`.github/workflows/ci.yml`) on every push and PR, so a broken commit is flagged within seconds. *Note:* with Pages set to "Deploy from a branch", CI reports a failure but cannot block the publish — switching the Pages source to GitHub Actions would make validation a true gate.
+- **Changing cached files?** Bump `CACHE_VERSION` in `sw.js`. Old caches are deleted on activate, so a bump is the clean way to push every device onto a new build.
+- **Stack recap:** vanilla HTML/CSS/JS · CSS-variable theming (8 themes) · MathJax · service worker for offline · Firebase compat SDK (Auth + Firestore, offline persistence) · Google Gemini for AI · everything else in `localStorage`.
+
+---
+
+## Known gaps & roadmap
+
+Honest list of what doesn't work yet, so nothing here looks like a bug you have to rediscover.
+
+- **Grade boundaries are A-Level only.** `GRADE_BOUNDARIES` contains a single module (`alevel`), and `getGradeForMarks()` returns `null` for anything else. Logging an AS, Further Maths or legacy Core paper records the marks correctly but shows no grade — 120 of the 142 supported papers. Adding `as`, `fmcp` and the legacy boundaries is the highest-value data job outstanding.
+- **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
+- **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
+- **Accessibility needs a pass.** Many controls fall below the 44 px touch target on a narrow phone, there is one `aria-live` region, and modals do not trap or restore focus.
+- **Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab; deferring it would speed up the Checklist's first paint.
+- **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
 
 ---
 

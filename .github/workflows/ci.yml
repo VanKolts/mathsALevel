@@ -1,0 +1,26 @@
+name: Validate
+
+# Deploying this site is a push to main, so the useful moment to catch a broken build is
+# right here. Runs on pushes and pull requests; zero dependencies, so it finishes in seconds.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Syntax-checks every inline <script>, sw.js and each data/*.js file, then asserts the
+      # invariants the app depends on: paper marks summing to their real Edexcel totals, every
+      # past-paper tag resolving to a canonical topic name, lvls/diff arrays matching their
+      # topic lists, and the chapter-rename map staying idempotent.
+      - name: Validate app and data
+        run: node scripts/validate.mjs
