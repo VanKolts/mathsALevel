@@ -481,7 +481,19 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
   - `CHAPTER_RENAMES` stays idempotent and all its targets still exist;
   - every local file referenced by `index.html` and precached by `sw.js` is actually present.
 - **Deploy = push.** Commits to `main` publish straight to GitHub Pages. The same validator runs in CI (`.github/workflows/ci.yml`) on every push and PR, so a broken commit is flagged within seconds. *Note:* with Pages set to "Deploy from a branch", CI reports a failure but cannot block the publish — switching the Pages source to GitHub Actions would make validation a true gate.
-- **Changing cached files?** Bump `CACHE_VERSION` in `sw.js`. Old caches are deleted on activate, so a bump is the clean way to push every device onto a new build.
+- **One-command deploy.** `npm run deploy` (→ [`scripts/deploy.sh`](scripts/deploy.sh)) does the whole publish in the right order: bumps `CACHE_VERSION` if a precached file changed → runs the validator → **aborts before committing if anything fails** → commits (your message, or one generated from what changed) → rebases on `origin/main` → pushes → prints the live URL. Because CI can't block a branch-source Pages publish, this local gate is the one that actually prevents a broken build reaching the live site.
+  ```
+  npm run deploy                        # auto-generated commit message
+  npm run deploy -- "Fix trig topics"   # your own message
+  npm run deploy -- --dry-run           # validate + show what would ship, commit nothing
+  ```
+  It refuses to run off `main`, makes no empty commits, and pushes any already-committed-but-unpushed work if the tree is clean.
+- **Changing cached files?** Bump `CACHE_VERSION` in `sw.js`. Old caches are deleted on activate, so a bump is the clean way to push every device onto a new build. `npm run deploy` does this automatically whenever `index.html`, `styles.css`, `exam-dates.json` or `data/` changed — and skips it if you've already bumped by hand (`--no-bump` overrides).
+- **Push auth.** The remote is written as SSH (`git@github.com:VanKolts/mathsALevel.git`), but no SSH key on this machine is registered with the account, so command-line pushes over SSH fail. A repo-local rewrite sends them over HTTPS instead, reusing the token GitHub Desktop already stored in the macOS keychain:
+  ```
+  git config --local url."https://github.com/".insteadOf "git@github.com:"
+  ```
+  This is already set. Undo with `git config --local --unset url."https://github.com/".insteadOf`; the alternative fix is to add `~/.ssh/id_ed25519.pub` to GitHub → Settings → SSH keys.
 - **Stack recap:** vanilla HTML/CSS/JS · CSS-variable theming (8 themes) · MathJax · service worker for offline · Firebase compat SDK (Auth + Firestore, offline persistence) · Google Gemini for AI · everything else in `localStorage`.
 
 ---
