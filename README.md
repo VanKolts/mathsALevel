@@ -148,7 +148,7 @@ When you rate a review 1–5, the FSRS update primitives fire:
 - `nextDifficulty(D,g)` nudges D and mean-reverts it toward the easy baseline.
 - The canonical **FSRS-4.5 weight vector** (`FSRS_W`, 17 values tuned on millions of real reviews) drives all of these.
 
-A topic with `S ≥ MASTERY_STABILITY (180 days)` is shown as **Mastered**.
+A topic with `S ≥ MASTERY_STABILITY (180 days)` is labelled **Mastered** — but mastery is a *label, not an exit*. Stability of 180 days means durable, not permanent: a topic last seen 200 days ago is already below 90% recall. Mastered topics stay on the schedule and resurface when they fall due, and `needsExamConfirmation()` guarantees one confirmation pass over everything inside `EXAM_RAMP_DAYS` — including topics whose stability is high enough that the ordinary interval would sail clean past the exam. (Previously `statusFor` short-circuited to `'done'` and `strengthInfo` reported a hardcoded 100%, so the closer the exam got, the more of the syllabus silently disappeared — the opposite of what the exam ramp is for.) Use `isMastered(name)` to count mastery; a mastered topic can now also be due.
 
 ### Mistakes actually change the schedule
 This is the app's signature mechanic. `mistakeLoad(name)` sums a topic's logged mistakes, each weighted by:
@@ -170,7 +170,10 @@ Guards throughout keep it robust: `validRec()` rejects corrupt state, `safeInter
 
 ## Data model & storage
 
-All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `mh_*`:
+All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `mh_*` — **except mistake photos**, which live in **IndexedDB** (`msh-images`). They used to fall back to a base64 data URL inside the mistakes array; a handful exhausted the ~5 MB quota, at which point `saveState()` failed and studying itself stopped persisting. Keeping them out also keeps them out of the sync payload, since `localStorage` is what gets mirrored to the cloud. `mhResolveImage(m)` is the single read path (legacy inline copy → IndexedDB → Firestore), and photos taken offline queue in `alevel-imgpending-v1` until they can be uploaded.
+
+`saveState()` is **all-or-nothing**: values are serialised up front and any failure rolls the whole batch back. Previously six sequential `setItem` calls shared one `try`, so a quota failure on the third left the first two written — `sr` saved but `mistakes` lost — and the hooked `setItem` had already queued that half-state for the cloud.
+
 
 | Key | Holds |
 |-----|-------|
@@ -191,6 +194,7 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-onboarded-v1` | onboarding-seen flag |
 | `msh-theme` | active theme |
 | `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
+| `alevel-imgpending-v1` | photo ids awaiting upload (device-local — deliberately not synced) |
 | `mh_stamp`, `mh_writer` | sync bookkeeping (last-write timestamp + which device wrote) |
 
 Older keys (`alevel-sr-v4`) are read for one-time migration.

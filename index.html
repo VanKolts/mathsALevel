@@ -1850,6 +1850,7 @@ function loadState(){
     if(old && typeof old==='object') migrateV4(old);
   }
   sanitizeAllSR();
+  invalidateMistakeLoad();   // the mistake list just changed under the cache
 }
 // Repair any malformed records (e.g. from a corrupted import) so the scheduler
 // math can never see NaN/undefined/bad dates.
@@ -1866,19 +1867,35 @@ function sanitizeAllSR(){
     if(!Array.isArray(r.log)) r.log=[];
   });
 }
+/* All-or-nothing. The previous version fired six setItem calls inside a single try, so a quota
+   failure on the third left the first two written — sr saved but mistakes lost — and because
+   setItem is hooked for sync, that half-state was already queued to push to every other device.
+   Now the values are serialised up front and any failure rolls the whole batch back: a
+   consistent older state is worth far more than a mixture of old and new. */
 function saveState(){
   const warning=document.getElementById('storage-warning');
+  invalidateMistakeLoad();
+  const batch=[
+    ['alevel-sr-v5',JSON.stringify(sr)],
+    ['alevel-mistakes-v2',JSON.stringify(mistakes)],
+    ['alevel-paperlog-v1',JSON.stringify(paperLog)],
+    ['alevel-favs-v1',JSON.stringify([...favourites])],
+    ['alevel-notes-v1',JSON.stringify(notes)],
+    ['alevel-fm-options-v1',JSON.stringify([...fmOptions])]
+  ];
+  const prev=batch.map(function(e){ try{ return localStorage.getItem(e[0]); }catch(_){ return null; } });
+  let wrote=0;
   try{
-    localStorage.setItem('alevel-sr-v5',JSON.stringify(sr));
-    localStorage.setItem('alevel-mistakes-v2',JSON.stringify(mistakes));
-    localStorage.setItem('alevel-paperlog-v1',JSON.stringify(paperLog));
-    localStorage.setItem('alevel-favs-v1',JSON.stringify([...favourites]));
-    localStorage.setItem('alevel-notes-v1',JSON.stringify(notes));
-    localStorage.setItem('alevel-fm-options-v1',JSON.stringify([...fmOptions]));
+    for(;wrote<batch.length;wrote++) localStorage.setItem(batch[wrote][0],batch[wrote][1]);
     if(warning)warning.classList.remove('show');
+    return true;
   }catch(e){
-    // Most likely a QuotaExceededError  storage is full (often from many mistake images)
+    for(let i=wrote-1;i>=0;i--){
+      try{ if(prev[i]==null) localStorage.removeItem(batch[i][0]); else localStorage.setItem(batch[i][0],prev[i]); }catch(_){}
+    }
     if(warning)warning.classList.add('show');
+    if(typeof toast==='function') toast('Storage is full — that change was not saved');
+    return false;
   }
 }
 loadState();
@@ -1891,7 +1908,7 @@ function _weekStart(dStr){
   const d=new Date(dStr+'T00:00:00');
   const dow=(d.getDay()+6)%7; // 0=Mon … 6=Sun
   d.setDate(d.getDate()-dow);
-  return d.toISOString().slice(0,10);
+  return ymd(d);   // was toISOString(): parsed at local midnight, so BST shifted it a day back
 }
 function loadStreak(){
   let raw; try{raw=JSON.parse(localStorage.getItem('alevel-streak-v1')||'null');}catch(e){raw=null;}
@@ -2288,8 +2305,13 @@ updateTutorKeyStatus();
 //                                                           
 // DATE UTILS
 //                                                           
-function today(){return new Date().toISOString().slice(0,10);}
-function addDays(d,n){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);}
+/* Local calendar date. toISOString() is UTC, so through BST it dates anything done between
+   midnight and 1am to the *previous* day — wrong `last`, wrong due date, a streak that skips.
+   It also disagreed with daysDiff/addDays, which parse at local noon precisely to stay clear
+   of DST. Every date the app stores is a local calendar day, so it is derived locally. */
+function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function today(){return ymd(new Date());}
+function addDays(d,n){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return ymd(x);}
 function daysDiff(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function fmtDate(d){return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 
@@ -2396,9 +2418,22 @@ function intervalForRetention(S,R){ return (S/FACTOR)*(Math.pow(R,1/DECAY)-1); }
 function safeInterval(x){ if(!isFinite(x)) return 1; return clamp(Math.round(x),1,MAX_INTERVAL); }
 function validRec(r){ return !!(r && isFinite(r.S) && r.S>0 && typeof r.last==='string' && !isNaN(new Date(r.last+'T12:00:00').getTime())); }
 
-// ---- recency-decayed, severity-weighted mistake load for a topic ----
+/* ---- recency-decayed, severity-weighted mistake load for a topic ----
+   Memoised per (topic, day). This is the hottest function in the app: targetRetention() calls
+   it directly *and* again through effectiveD(), dueDateFor() calls targetRetention(), and
+   statusFor() calls dueDateFor() — so a checklist render used to rescan the whole mistake list
+   roughly four times per topic. At 315 topics and 200 mistakes that was ~250k Date parses per
+   render, growing as the student logs more, i.e. as they use the app properly.
+   The cache is cleared whenever the mistake list changes (loadState/saveState) and whenever the
+   day rolls over, since the decay term depends on today's date. */
+var _mlCache=Object.create(null), _mlDay='';
+function invalidateMistakeLoad(){ _mlCache=Object.create(null); }
 function mistakeLoad(name){
-  const td=today(); let load=0;
+  const td=today();
+  if(td!==_mlDay){ _mlDay=td; _mlCache=Object.create(null); }
+  const hit=_mlCache[name];
+  if(hit!==undefined) return hit;
+  let load=0;
   for(const m of mistakes){
     if(m.topic!==name) continue;
     const catSev=(MISTAKE_SEVERITY[m.cat]!=null)?MISTAKE_SEVERITY[m.cat]:0.4;
@@ -2406,6 +2441,7 @@ function mistakeLoad(name){
     const age=Math.max(0,daysDiff(m.date,td));
     load += catSev*userSev*Math.exp(-age/MISTAKE_TAU);
   }
+  _mlCache[name]=load;
   return load;
 }
 // ---- effective difficulty = stored D lifted by recent mistakes ----
@@ -2439,23 +2475,42 @@ function dueDateFor(name){
   const ivl=safeInterval(intervalForRetention(rec.S,targetRetention(name)));
   return addDays(rec.last,ivl);
 }
+// Mastery is a label, not an exit. S >= 180 days means durable, not permanent: a topic last
+// seen 200 days ago is already below 90% recall. Mastered topics stay on the schedule and
+// resurface when they come due — otherwise the closer the exam gets, the more of the syllabus
+// silently disappears, which is the opposite of what the exam ramp is for.
+function isMastered(name){
+  const rec=sr[name];
+  return !!(validRec(rec) && rec.S>=MASTERY_STABILITY);
+}
+/* Inside the exam run-in, guarantee one confirmation pass over everything — including topics
+   whose stability is high enough that the ordinary interval would sail past the exam date. */
+function needsExamConfirmation(name){
+  const rec=sr[name]; if(!validRec(rec)) return false;
+  const ex=examDateForTopic(name); if(!ex) return false;
+  const dte=daysDiff(today(),ex);
+  if(dte<0 || dte>=EXAM_RAMP_DAYS) return false;
+  return rec.last < addDays(ex,-EXAM_RAMP_DAYS);   // not seen since the run-in began
+}
 function statusFor(name){
   const rec=sr[name]; if(!validRec(rec)) return null;
-  if(rec.S>=MASTERY_STABILITY) return 'done';
   const d=daysDiff(today(),dueDateFor(name));
   if(d<0) return 'overdue';
   if(d===0) return 'due';
-  return 'upcoming';
+  if(needsExamConfirmation(name)) return 'due';
+  return isMastered(name) ? 'done' : 'upcoming';
 }
 
 // ---- friendly "memory strength" summary for the UI ----
 function strengthInfo(name){
   const rec=sr[name];
   if(!validRec(rec)) return {pct:null,color:'var(--dim)',label:'Not started'};
-  if(rec.S>=MASTERY_STABILITY) return {pct:100,color:'#34d399',label:'Mastered'};
   const r=currentRetrievability(name); const pct=Math.round(r*100);
   let color='#34d399';
   if(r<0.70) color='#f87171'; else if(r<0.85) color='#fbbf24'; else if(r<0.93) color='#fb923c';
+  // Mastered topics used to report a hardcoded 100%, which stayed at 100% however long ago the
+  // topic was last seen. Show the real number and keep the label.
+  if(rec.S>=MASTERY_STABILITY) return {pct,color,label:'Mastered · '+pct+'% recall',mastered:true};
   return {pct,color,label:pct+'% predicted recall'};
 }
 
@@ -2799,7 +2854,7 @@ function computeStats(){
   const total=activeTopics().length;
   const retVals=topics.map(t=>currentRetrievability(t.name)).filter(r=>r!=null);
   const avgR=retVals.length?retVals.reduce((a,b)=>a+b,0)/retVals.length:0;
-  const mastered=topics.filter(t=>statusFor(t.name)==='done').length;
+  const mastered=topics.filter(t=>isMastered(t.name)).length;   // a mastered topic can now also be due
   const overdue=topics.filter(t=>statusFor(t.name)==='overdue').length;
   const due_=topics.filter(t=>statusFor(t.name)==='due').length;
   const totalReps=topics.reduce((a,t)=>a+(sr[t.name].reps||0),0);
@@ -2933,7 +2988,7 @@ function renderStats(){
   activeClusters().forEach(c=>{
     const studied=c.topics.filter(n=>sr[n]);
     if(!studied.length)return;
-    const mast=studied.filter(n=>statusFor(n)==='done').length;
+    const mast=studied.filter(n=>isMastered(n)).length;
     const sPct=Math.round(studied.length/c.topics.length*100);
     const mPct=Math.round(mast/c.topics.length*100);
     html+='<div class="stats-cluster">'+
@@ -2950,7 +3005,7 @@ function renderStats(){
     studied.forEach(name=>{
       const R=currentRetrievability(name);
       const Rpct=R!=null?Math.round(R*100):null;
-      const isMast=statusFor(name)==='done';
+      const isMast=isMastered(name);
       html+='<div class="stats-cl-topic">'+
         '<div class="stats-cl-tname">'+name+'</div>'+
         '<div class="stats-cl-tbadge" style="color:'+(isMast?'var(--y1)':'var(--muted)')+
@@ -3445,7 +3500,7 @@ function renderPlanner(){
     var pool=[]; p.comps.forEach(function(c){ (topicsByComp[c]||[]).forEach(function(n){ pool.push(n); }); }); pool=Array.from(new Set(pool));
     var scored=pool.map(function(n){return {n:n,s:_weakScore(n),st:statusFor(n),r:currentRetrievability(n)};}).sort(function(a,b){return b.s-a.s;});
     var focus=scored.filter(function(x){return x.s>0;});
-    var mastered=pool.filter(function(n){return statusFor(n)==='done';}).length;
+    var mastered=pool.filter(function(n){return isMastered(n);}).length;
     html+='<div class="plan-paper'+(passed?' plan-passed':'')+'"><div class="plan-paper-hd"><span class="plan-paper-name">'+p.name+'</span><span class="plan-paper-cd '+cdc+'">'+cd+'</span></div>'+
       '<div class="plan-paper-date">'+_planFmtDate(p.date)+'</div>'+
       '<div class="plan-paper-meta">'+pool.length+' topics · '+mastered+' mastered · '+focus.length+' need work</div>';
@@ -4256,8 +4311,93 @@ document.querySelectorAll('.mk-filter-btn[data-group]').forEach(b=>b.addEventLis
   renderMistakesTab();
 }));
 
+/* ---- Photo storage (IndexedDB) -----------------------------------------------------------
+   Photos used to fall back to `m.img` — a base64 data URL held inside the mistakes array, i.e.
+   inside localStorage. A handful of them exhausts the ~5 MB quota, and once that happens
+   saveState() fails and *studying itself stops persisting*. IndexedDB has no such ceiling, and
+   keeping photos out of localStorage also keeps them out of the sync payload, since
+   localStorage is what gets mirrored to the cloud.
+   Firestore (mImages) remains how photos reach your other devices; this is the local copy and
+   the landing spot when there's no connection. */
+const IMG_DB='msh-images', IMG_STORE='img', IMG_PENDING_KEY='alevel-imgpending-v1';
+let _imgDbP=null;
+function imgDb(){
+  if(_imgDbP)return _imgDbP;
+  _imgDbP=new Promise(function(res,rej){
+    let req; try{ req=indexedDB.open(IMG_DB,1); }catch(e){ return rej(e); }
+    req.onupgradeneeded=function(){ const db=req.result; if(!db.objectStoreNames.contains(IMG_STORE)) db.createObjectStore(IMG_STORE); };
+    req.onsuccess=function(){ res(req.result); };
+    req.onerror=function(){ rej(req.error); };
+  }).catch(function(e){ console.warn('[img] IndexedDB unavailable',e); return null; });
+  return _imgDbP;
+}
+function imgTx(mode,fn){
+  return imgDb().then(function(db){
+    if(!db)return null;
+    return new Promise(function(res,rej){
+      const tx=db.transaction(IMG_STORE,mode), r=fn(tx.objectStore(IMG_STORE));
+      tx.oncomplete=function(){ res(r&&r.result!==undefined?r.result:null); };
+      tx.onerror=function(){ rej(tx.error); };
+    });
+  }).catch(function(e){ console.warn('[img] transaction failed',e); return null; });
+}
+function imgPut(id,dataURL){ return imgTx('readwrite',function(st){ return st.put(dataURL,id); }); }
+function imgGet(id){ return imgTx('readonly',function(st){ return st.get(id); }); }
+function imgDel(id){ return imgTx('readwrite',function(st){ return st.delete(id); }); }
+
+// Photos taken offline, still to be uploaded. Device-local by design — deliberately not synced.
+function imgPending(){ try{ return JSON.parse(localStorage.getItem(IMG_PENDING_KEY)||'[]'); }catch(e){ return []; } }
+function imgPendingAdd(id){ const p=imgPending(); if(p.indexOf(id)<0){ p.push(id); try{ localStorage.setItem(IMG_PENDING_KEY,JSON.stringify(p)); }catch(e){} } }
+function imgPendingDrop(id){ try{ localStorage.setItem(IMG_PENDING_KEY,JSON.stringify(imgPending().filter(function(x){return x!==id;}))); }catch(e){} }
+
+// One resolver for every render path: legacy inline copy → local IndexedDB → cloud.
+function mhResolveImage(m){
+  if(!m) return Promise.resolve(null);
+  if(m.img) return Promise.resolve(m.img);                 // legacy record, not yet migrated
+  if(!m.qImgId) return Promise.resolve(null);
+  return imgGet(m.qImgId).then(function(local){
+    if(local) return local;
+    if(typeof window.mhGetImage==='function') return window.mhGetImage(m.qImgId);
+    return null;
+  }).catch(function(){ return null; });
+}
+// Always store locally; upload too when the cloud is reachable, otherwise queue it.
+function mhStoreImage(id,dataURL){
+  return imgPut(id,dataURL).then(function(){
+    if(typeof window.mhCloudReady==='function' && window.mhCloudReady() && typeof window.mhPutImage==='function'){
+      return window.mhPutImage(id,dataURL).catch(function(){ imgPendingAdd(id); });
+    }
+    imgPendingAdd(id);
+  });
+}
+function mhForgetImage(id){ if(!id)return; imgDel(id); imgPendingDrop(id); if(typeof window.mhDelImage==='function') window.mhDelImage(id); }
+function mhFlushPendingImages(){
+  if(!(typeof window.mhCloudReady==='function'&&window.mhCloudReady()&&typeof window.mhPutImage==='function'))return;
+  imgPending().forEach(function(id){
+    imgGet(id).then(function(data){
+      if(!data){ imgPendingDrop(id); return; }
+      window.mhPutImage(id,data).then(function(){ imgPendingDrop(id); }).catch(function(){});
+    });
+  });
+}
+/* Move legacy base64 out of localStorage — but only once the cloud is reachable, so the photo
+   survives for the user's other devices instead of quietly becoming local to this one. */
+function mhMigrateInlineImages(){
+  if(!(typeof window.mhCloudReady==='function'&&window.mhCloudReady()))return;
+  const withImg=mistakes.filter(function(m){return m.img;});
+  if(!withImg.length)return;
+  let done=0;
+  withImg.forEach(function(m){
+    const id=m.qImgId||('mq_'+m.id), data=m.img;
+    mhStoreImage(id,data).then(function(){
+      m.qImgId=id; delete m.img;
+      if(++done===withImg.length){ saveState(); if(typeof renderMistakesTab==='function')renderMistakesTab(); }
+    }).catch(function(){});
+  });
+}
+
 // Image upload with heavy compression
-let pendingImgData=null;          // readable question photo (data URL); uploaded to its own cloud record on save
+let pendingImgData=null;          // readable question photo (data URL); stored on save
 let mMode='quick';
 function setMistakeMode(mode){
   mMode=mode;
@@ -4314,19 +4454,17 @@ document.getElementById('add-mistake-btn').addEventListener('click',function(){
     if(!answer){ if(typeof toast==='function')toast('Add the answer so you can self-mark on re-attempt'); document.getElementById('m-answer').focus(); return; }
     m.question=question; m.answer=answer;
     if(pendingImgData){
-      const data=pendingImgData;
-      if(typeof window.mhCloudReady==='function' && window.mhCloudReady()){
-        const imgId='mq_'+m.id;
-        btn.disabled=true; btn.textContent='Saving photo...';
-        window.mhPutImage(imgId,data).then(function(){
-          m.qImgId=imgId; btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
-        }).catch(function(){
-          m.img=data; btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
-          if(typeof toast==='function')toast('Saved - photo kept on this device (publish the Firebase rules to sync it)');
-        });
-        return;
-      }
-      m.img=data;
+      // The photo never goes into the mistake record itself — it lands in IndexedDB, and
+      // uploads to the cloud now or on the next flush. Only the id travels with the record.
+      const imgId='mq_'+m.id;
+      btn.disabled=true; btn.textContent='Saving photo...';
+      mhStoreImage(imgId,pendingImgData).then(function(){
+        m.qImgId=imgId; btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
+      }).catch(function(){
+        btn.disabled=false; btn.textContent='Add mistake'; finishAddMistake(m);
+        if(typeof toast==='function')toast("Saved — but the photo couldn't be stored");
+      });
+      return;
     }
   }
   finishAddMistake(m);
@@ -4517,7 +4655,7 @@ function renderTrendChart(range){
   if(range==='month'){
     for(let i=29;i>=0;i--){
       const d=new Date(now);d.setDate(d.getDate()-i);
-      const key=d.toISOString().slice(0,10);
+      const key=ymd(d);   // must match m.date, which is a local calendar day
       buckets.push({key,label:d.getDate()+'',tooltip:DAYS[d.getDay()]+', '+d.getDate()+' '+MN[d.getMonth()],count:0});
     }
     mistakes.forEach(m=>{const b=buckets.find(x=>x.key===m.date);if(b)b.count++;});
@@ -4529,7 +4667,7 @@ function renderTrendChart(range){
       const rangeStr=s.getDate()+' '+MN[s.getMonth()]+' – '+e.getDate()+' '+MN[e.getMonth()];
       const sameMonth=s.getMonth()===e.getMonth();
       const wkLabel=sameMonth?s.getDate()+' – '+e.getDate()+' '+MN[e.getMonth()]:s.getDate()+' '+MN[s.getMonth()]+' – '+e.getDate()+' '+MN[e.getMonth()];
-      buckets.push({start:s.toISOString().slice(0,10),end:e.toISOString().slice(0,10),
+      buckets.push({start:ymd(s),end:ymd(e),
         label:i%3===0?wkLabel:'',tooltip:'Week of '+rangeStr,count:0});
     }
     mistakes.forEach(m=>{const b=buckets.find(x=>m.date>=x.start&&m.date<=x.end);if(b)b.count++;});
@@ -4604,8 +4742,7 @@ function renderReattempt(pick){
   document.getElementById('m-reattempt-topic').textContent=m.topic+(m.date?(' · logged '+fmtDate(m.date)):'');
   document.getElementById('m-reattempt-q').textContent=m.question||'(no question text — see the photo)';
   var imgEl=document.getElementById('m-reattempt-img'); imgEl.style.display='none'; imgEl.removeAttribute('src');
-  if(m.img){ imgEl.src=m.img; imgEl.style.display='block'; }
-  else if(m.qImgId&&typeof window.mhGetImage==='function'){ window.mhGetImage(m.qImgId).then(function(src){ if(src&&reattemptCurrent===m){ imgEl.src=src; imgEl.style.display='block'; } }); }
+  mhResolveImage(m).then(function(src){ if(src&&reattemptCurrent===m){ imgEl.src=src; imgEl.style.display='block'; } });
   document.getElementById('m-reattempt-answer').style.display='none';
   document.getElementById('m-reattempt-reveal').style.display='block';
   document.getElementById('m-reattempt-ans-text').textContent=m.answer||'';
@@ -4634,8 +4771,7 @@ async function reattemptExplainAI(btn){
     +'\n\nLast time they went wrong because: '+(m.text||'')+'\n\nGently focus on getting them past that specific mistake.';
   var parts=[{text:prompt}];
   try{
-    var imgSrc=m.img;
-    if(!imgSrc&&m.qImgId&&typeof window.mhGetImage==='function') imgSrc=await window.mhGetImage(m.qImgId);
+    var imgSrc=await mhResolveImage(m);
     if(imgSrc&&imgSrc.indexOf('data:')===0){ var b64=imgSrc.split(',')[1]; var mime=((imgSrc.split(';')[0]||'').split(':')[1])||'image/jpeg'; parts.push({inline_data:{mime_type:mime,data:b64}}); }
     var txt=await geminiCall(parts,{temperature:0.3});
     out.innerHTML=(typeof tutorMd==='function')?tutorMd(txt):txt;
@@ -4678,19 +4814,22 @@ function renderMistakesTab(){
     if(m.question){ const qd=document.createElement('div');qd.textContent='Q: '+m.question;qd.style.cssText='font-size:12px;color:var(--muted);margin-bottom:4px;font-style:italic;line-height:1.4;'; left.appendChild(qd); }
     left.appendChild(txt);
     if(m.answer){ const rb=document.createElement('span');rb.textContent='\u{1F501} re-attemptable';rb.style.cssText='display:inline-block;font-size:10px;color:var(--accent);font-weight:600;margin-bottom:4px;'; left.appendChild(rb); }
-    function showImg(src){ const img=document.createElement('img');img.className='m-img';img.src=src;img.alt='question image';
-      img.addEventListener('click',()=>{ document.getElementById('img-viewer-img').src=src; document.getElementById('img-viewer').classList.add('open'); });
-      left.appendChild(img); }
-    if(m.img){ showImg(m.img); left.appendChild(dt); }
-    else if(m.qImgId && typeof window.mhGetImage==='function'){ left.appendChild(dt); window.mhGetImage(m.qImgId).then(function(src){ if(src){ const im=document.createElement('img');im.className='m-img';im.src=src;im.alt='question image';im.addEventListener('click',()=>{document.getElementById('img-viewer-img').src=src;document.getElementById('img-viewer').classList.add('open');}); left.insertBefore(im,dt); } }); }
-    else { left.appendChild(dt); }
+    left.appendChild(dt);
+    if(m.img||m.qImgId){
+      mhResolveImage(m).then(function(src){
+        if(!src)return;
+        const im=document.createElement('img');im.className='m-img';im.src=src;im.alt='question image';
+        im.addEventListener('click',()=>{ document.getElementById('img-viewer-img').src=src; document.getElementById('img-viewer').classList.add('open'); });
+        left.insertBefore(im,dt);
+      });
+    }
     const actions=document.createElement('div');actions.className='m-card-actions';
     const edit=document.createElement('button');edit.className='m-edit';edit.innerHTML='&#9998;';edit.setAttribute('aria-label','Edit mistake entry');
     edit.addEventListener('click',()=>openEditMistake(m.id));
     const del=document.createElement('button');del.className='m-del';del.innerHTML='&times;';del.setAttribute('aria-label','Delete mistake entry');
     del.addEventListener('click',()=>{
       if(!confirm('Delete this mistake entry?'))return;
-      if(m.qImgId&&typeof window.mhDelImage==='function')window.mhDelImage(m.qImgId);
+      mhForgetImage(m.qImgId);   // local copy, queued upload and cloud record
       mhTombstone('mistakes',m.id);mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();renderReattempt();
       toast('Mistake entry deleted');
     });
@@ -4742,8 +4881,10 @@ function openEditMistake(id){
   document.getElementById('em-severity').value=sev;sevUpdateUI(sev,'em-sev-lbl','em-sev-pips');
   const prev=document.getElementById('em-img-preview');
   const clr=document.getElementById('em-img-clear');
-  if(m.img){prev.src=m.img;prev.style.display='block';clr.style.display='block';}
-  else{prev.style.display='none';clr.style.display='none';}
+  prev.style.display='none';clr.style.display='none';
+  // Resolved asynchronously now that photos live in IndexedDB; guard against the user having
+  // moved on to editing a different mistake before it arrives.
+  mhResolveImage(m).then(function(src){ if(src&&editMistakeId===m.id){ prev.src=src;prev.style.display='block';clr.style.display='block'; } });
   document.getElementById('edit-mistake-overlay').classList.add('open');
   setTimeout(syncSpringSliders,50);
 }
@@ -4791,15 +4932,18 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   const idx=mistakes.findIndex(x=>x.id===editMistakeId);
   if(idx<0)return;
   const existing=mistakes[idx];
-  let newImg=existing.img;
-  if(editPendingImg==='clear')newImg=null;
-  else if(editPendingImg)newImg=editPendingImg;
-  mistakes[idx]=Object.assign({},existing,{   // keep question/answer/qImgId (re-attempt data)
+  // Photos live in IndexedDB, so an edit changes the *id* the record points at, never the
+  // record's own size. `img` is only ever cleared here — legacy inline copies are migrated out.
+  let newImg=existing.img||null, newImgId=existing.qImgId||null;
+  if(editPendingImg==='clear'){ mhForgetImage(newImgId); newImg=null; newImgId=null; }
+  else if(editPendingImg){ newImgId=newImgId||('mq_'+existing.id); mhStoreImage(newImgId,editPendingImg); newImg=null; }
+  mistakes[idx]=Object.assign({},existing,{   // keep question/answer (re-attempt data)
     topic:document.getElementById('em-topic-sel').value,
     cat:document.getElementById('em-cat-sel').value,
     text,
     date:document.getElementById('em-date').value||today(),
     img:newImg,
+    qImgId:newImgId,
     severity:+document.getElementById('em-severity').value||3,
     modified:Date.now()          // lets the merge pick the newer of two concurrent edits
   });
@@ -5828,7 +5972,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       if(isDeleted(meta,'sr',n)){
         // "Remove all study data" propagates — but never over study logged afterwards on another
         // device, which an older build records without writing an add stamp.
-        var tombDay=new Date(stampOf(meta,'del','sr',n)).toISOString().slice(0,10);
+        var tombDay=ymd(new Date(stampOf(meta,'del','sr',n)));   // compared against rec.last, a local day
         if(!(recDate(rec)>tombDay))return;
       }
       out[n]=rec;
@@ -6069,7 +6213,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   window.addEventListener('pagehide',flushPush);
   window.addEventListener('beforeunload',flushPush);
   // When the connection comes back, send anything pending and pull the latest immediately.
-  window.addEventListener('online',function(){ flushPush(); syncPull(); if(currentUser)attachListener(currentUser.uid); });
+  window.addEventListener('online',function(){ flushPush(); syncPull(); if(currentUser)attachListener(currentUser.uid); try{ mhFlushPendingImages(); }catch(e){} });
   function schedulePush(){ if(pushTimer)clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,1000); }
 
   // Mirror every app save up to the cloud (debounced). localStorage stays the fast local cache.
@@ -6151,6 +6295,9 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     if(!user){ showForm(); return; }
     hide();
     attachListener(user.uid);   // realtime listener reconciles cloud↔local and keeps them in sync
+    // Photos taken offline can now reach the other devices, and any legacy base64 still sitting
+    // in localStorage can be moved out to IndexedDB without losing it for those devices.
+    try{ mhFlushPendingImages(); mhMigrateInlineImages(); }catch(e){ console.warn('[img] flush/migrate failed',e); }
   });
 
   // Sign out (exposed for a settings button / console use).
