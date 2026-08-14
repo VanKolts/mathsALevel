@@ -1779,6 +1779,62 @@ function applyChapterRenames(){
 }
 applyChapterRenames();
 let sr={}, mistakes=[], favourites=new Set(), notes={}, fmOptions=new Set(), paperLog=[];
+/* ---- Sync metadata: tombstones + modification stamps ------------------------------
+   Two devices are merged by unioning their records, and a union can never express a
+   deletion: anything you remove locally is simply re-added from the other device's copy.
+   So deletions are recorded here as tombstones (id -> when) and the merge drops whatever
+   a tombstone covers. Modification stamps do the same job for edits, giving last-write-wins
+   a real timestamp to compare instead of a guess.
+   Tombstones are pruned after TOMBSTONE_TTL_DAYS: long enough that every device has
+   certainly synced by then, short enough that this can never grow without bound. */
+const TOMBSTONE_TTL_DAYS = 120;
+// del/add are a per-item last-write-wins register: an item counts as deleted only while its
+// del stamp is newer than its add stamp. Simply erasing the tombstone on re-add would not
+// survive a merge — the other device's copy of the tombstone would come back and win.
+var syncMeta = {v:1, del:{}, add:{}, mod:{}};
+// Globally unique ids. The old Date.now() ids could collide across devices, which under a
+// union merge silently drops one record or fuses two different ones.
+function mhUid(){
+  try{ if(typeof crypto!=='undefined' && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+}
+function loadSyncMeta(){
+  try{ const raw=JSON.parse(localStorage.getItem('alevel-syncmeta-v1')||'null');
+       if(raw&&typeof raw==='object') syncMeta=raw; }catch(e){}
+  ['del','add','mod'].forEach(function(g){ if(!syncMeta[g]||typeof syncMeta[g]!=='object') syncMeta[g]={}; });
+  // Prune together: an add stamp only exists to out-rank a tombstone, so it can go when that
+  // tombstone does. Pruning them independently could let a stale add revive a fresh deletion.
+  const cutoff=Date.now()-TOMBSTONE_TTL_DAYS*86400000; let pruned=false;
+  ['del','add'].forEach(function(g){
+    Object.keys(syncMeta[g]).forEach(function(kind){
+      const m=syncMeta[g][kind];
+      if(!m||typeof m!=='object'){ delete syncMeta[g][kind]; pruned=true; return; }
+      Object.keys(m).forEach(function(id){ if(!(m[id]>cutoff)){ delete m[id]; pruned=true; } });
+    });
+  });
+  if(pruned) saveSyncMeta();
+}
+function saveSyncMeta(){ try{ localStorage.setItem('alevel-syncmeta-v1',JSON.stringify(syncMeta)); }catch(e){} }
+function mhTombstone(kind,id){
+  if(id==null)return;
+  (syncMeta.del[kind]=syncMeta.del[kind]||{})[String(id)]=Date.now();
+  saveSyncMeta();
+}
+// Re-adding something previously deleted must out-rank the tombstone, on this device and on
+// every other one — hence a newer add stamp rather than just dropping the local tombstone.
+function mhUntombstone(kind,id){
+  if(id==null)return;
+  (syncMeta.add[kind]=syncMeta.add[kind]||{})[String(id)]=Date.now();
+  if(syncMeta.del[kind]) delete syncMeta.del[kind][String(id)];
+  saveSyncMeta();
+}
+function mhTouch(kind,key){
+  if(key==null)return;
+  (syncMeta.mod[kind]=syncMeta.mod[kind]||{})[String(key)]=Date.now();
+  saveSyncMeta();
+}
+loadSyncMeta();
+
 function loadState(){
   try{mistakes=JSON.parse(localStorage.getItem('alevel-mistakes-v2')||'[]');}catch(e){mistakes=[];}
   try{paperLog=JSON.parse(localStorage.getItem('alevel-paperlog-v1')||'[]');}catch(e){paperLog=[];}
@@ -2328,9 +2384,11 @@ function practiceLinkFor(name){
 
 // ---- exam date drives the exam-proximity retention ramp ----
 function getExamDate(){ try{return localStorage.getItem('alevel-exam-date')||'';}catch(e){return '';} }
-function setExamDate(v){ try{ if(v) localStorage.setItem('alevel-exam-date',v); else localStorage.removeItem('alevel-exam-date'); }catch(e){} }
+// Clearing a key has to be recorded, not just done: an absent key is indistinguishable from one
+// that was never set, so without a tombstone the other device's copy merges straight back in.
+function setExamDate(v){ try{ if(v){ localStorage.setItem('alevel-exam-date',v); mhUntombstone('keys','alevel-exam-date'); } else { localStorage.removeItem('alevel-exam-date'); mhTombstone('keys','alevel-exam-date'); } }catch(e){} }
 function getExamOff(){ try{return localStorage.getItem('alevel-exam-off')==='1';}catch(e){return false;} }
-function setExamOff(v){ try{ if(v) localStorage.setItem('alevel-exam-off','1'); else localStorage.removeItem('alevel-exam-off'); }catch(e){} }
+function setExamOff(v){ try{ if(v){ localStorage.setItem('alevel-exam-off','1'); mhUntombstone('keys','alevel-exam-off'); } else { localStorage.removeItem('alevel-exam-off'); mhTombstone('keys','alevel-exam-off'); } }catch(e){} }
 
 // ---- forgetting curve & interval ----
 function forgetting(t,S){ return Math.pow(1 + FACTOR*t/Math.max(0.01,S), DECAY); }
@@ -2448,10 +2506,13 @@ function saveTopicStudied(name,dateVal,gradeKey){
   const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
   let rec=sr[name];
   const wasMastered = !!(rec && rec.S>=MASTERY_STABILITY);
+  mhUntombstone('sr',name);   // studying a previously-reset topic revives it
   if(!rec){
     rec={ D:initialDifficulty(g,tdiff), S:initialStability(g), last:dateVal,
           reps:(g===1?0:1), lapses:(g===1?1:0), log:[] };
-    rec.log.push({date:dateVal,grade:g,r:1,elapsed:0});
+    // Every review carries an id: two reviews of one topic on the same day are a real
+    // pair of events, and without ids the merge can't tell them from one duplicated event.
+    rec.log.push({id:mhUid(),date:dateVal,grade:g,r:1,elapsed:0});
   } else {
     const elapsed=Math.max(0,daysDiff(rec.last,dateVal));
     const R=forgetting(elapsed,rec.S);
@@ -2460,7 +2521,7 @@ function saveTopicStudied(name,dateVal,gradeKey){
     else     { rec.S=stabilityAfterRecall(Deff,rec.S,R,g); rec.reps=(rec.reps||0)+1; }
     rec.D=nextDifficulty(rec.D,g);
     rec.last=dateVal;
-    rec.log=rec.log||[]; rec.log.push({date:dateVal,grade:g,r:Math.round(R*100)/100,elapsed});
+    rec.log=rec.log||[]; rec.log.push({id:mhUid(),date:dateVal,grade:g,r:Math.round(R*100)/100,elapsed});
   }
   sr[name]=rec;
   saveState();
@@ -3808,7 +3869,8 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
   const dateVal=document.getElementById('modal-date').value;
   if(!dateVal||!modalTopic)return;
   const noteVal=document.getElementById('modal-notes').value.trim();
-  if(noteVal)notes[modalTopic]=noteVal;else delete notes[modalTopic];
+  if(noteVal){notes[modalTopic]=noteVal;mhUntombstone('notes',modalTopic);mhTouch('notes',modalTopic);}
+  else{delete notes[modalTopic];mhTombstone('notes',modalTopic);}
   const _tn=modalTopic;
   saveTopicStudied(_tn,dateVal,selectedRating||3);
   closeModal();renderReviewPanel();renderAll();
@@ -3826,7 +3888,7 @@ document.getElementById('modal-clear-btn').addEventListener('click',()=>{
   if(!modalTopic)return;
   if(!confirm('Remove all study data for "'+modalTopic+'"? This cannot be undone.'))return;
   const _tn=modalTopic;
-  delete sr[_tn];saveState();closeModal();renderReviewPanel();renderAll();
+  mhTombstone('sr',_tn);delete sr[_tn];saveState();closeModal();renderReviewPanel();renderAll();
   toast('Study record removed for: '+_tn);
 });
 document.getElementById('modal-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('modal-overlay'))closeModal();});
@@ -4112,7 +4174,7 @@ function renderResources(){
       else{nm.textContent=res.name;}
       const starBtn=document.createElement('button');starBtn.className='fav-star-btn';starBtn.innerHTML='♥';
       starBtn.title='Remove from favourites';starBtn.setAttribute('aria-label','Remove '+res.name+' from favourites');
-      starBtn.addEventListener('click',()=>{favourites.delete(rid);saveState();renderResources();});
+      starBtn.addEventListener('click',()=>{favourites.delete(rid);mhTombstone('favs',rid);saveState();renderResources();});
       card.append(nm,starBtn);favGrid.appendChild(card);
     });
   }
@@ -4143,8 +4205,8 @@ function renderResources(){
       starBtn.setAttribute('aria-label',(isFav?'Remove ':'Add ')+res.name+(isFav?' from favourites':' to favourites'));
       starBtn.addEventListener('click',()=>{
         const wasEmpty=favourites.size===0;
-        if(favourites.has(res.id)){favourites.delete(res.id);}
-        else{favourites.add(res.id);}
+        if(favourites.has(res.id)){favourites.delete(res.id);mhTombstone('favs',res.id);}
+        else{favourites.add(res.id);mhUntombstone('favs',res.id);}
         saveState();
         renderResources();
         // Only scroll the first time a favourite is added (strip going from empty to populated)
@@ -4245,7 +4307,7 @@ document.getElementById('add-mistake-btn').addEventListener('click',function(){
   const date=document.getElementById('m-date').value||today();
   const severity=+document.getElementById('m-severity').value||3;
   if(!text){document.getElementById('m-text').focus();return;}
-  const m={id:Date.now(),topic,cat,text,date,severity};
+  const m={id:mhUid(),topic,cat,text,date,severity,modified:Date.now()};
   if(mMode==='detailed'){
     const question=document.getElementById('m-question').value.trim();
     const answer=document.getElementById('m-answer').value.trim();
@@ -4629,7 +4691,7 @@ function renderMistakesTab(){
     del.addEventListener('click',()=>{
       if(!confirm('Delete this mistake entry?'))return;
       if(m.qImgId&&typeof window.mhDelImage==='function')window.mhDelImage(m.qImgId);
-      mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();renderReattempt();
+      mhTombstone('mistakes',m.id);mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();renderReattempt();
       toast('Mistake entry deleted');
     });
     actions.append(edit,del);
@@ -4738,7 +4800,8 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
     text,
     date:document.getElementById('em-date').value||today(),
     img:newImg,
-    severity:+document.getElementById('em-severity').value||3
+    severity:+document.getElementById('em-severity').value||3,
+    modified:Date.now()          // lets the merge pick the newer of two concurrent edits
   });
   saveState();
   renderMistakesTab();
@@ -4864,7 +4927,8 @@ function ppLogsFor(moduleId,n,year){return paperLog.filter(function(e){return e.
 function ppLatest(moduleId,n,year){
   var ls=ppLogsFor(moduleId,n,year);
   if(!ls.length)return null;
-  ls=ls.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'')||a.id-b.id;});
+  // Ids are now uuids, so the old numeric a.id-b.id would yield NaN and leave the order undefined.
+  ls=ls.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'')||String(a.id).localeCompare(String(b.id));});
   return ls[ls.length-1];
 }
 
@@ -5325,14 +5389,14 @@ function plogSave(){
   var timed=document.getElementById('plog-timed').checked;
   var date=document.getElementById('plog-date').value||today();
   var finalMarks=Math.min(marks,p.max);
-  var entry={id:Date.now(),moduleId:mid,paperN:n,year:year,date:date,
+  var entry={id:mhUid(),moduleId:mid,paperN:n,year:year,date:date,
     difficulty:+document.getElementById('plog-diff').value,
     timed:timed,timeTakenMin:timed?(parseInt(document.getElementById('plog-time').value,10)||p.mins):null,
     marks:finalMarks,max:p.max,grade:getGradeForMarks(finalMarks,mid,n,year),mistakeIds:[]};
   if(plogBreakdownActive()&&ppQuestionsFor(mid,n,year)){
     entry.qMarks={}; Object.keys(plogBdMarks).forEach(function(k){entry.qMarks[k]=plogBdMarks[k];});
   }
-  plogMistakes.forEach(function(mk,i){var id=Date.now()+1+i;entry.mistakeIds.push(id);mistakes.push({id:id,topic:mk.topic,cat:mk.cat,text:mk.text,date:date,img:null});});
+  plogMistakes.forEach(function(mk,i){var id=mhUid();entry.mistakeIds.push(id);mistakes.push({id:id,topic:mk.topic,cat:mk.cat,text:mk.text,date:date,img:null,modified:Date.now()});});
   paperLog.push(entry);
   saveState();
   refreshPaperTopicStats();
@@ -5647,7 +5711,231 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
     'alevel-favs-v1','alevel-notes-v1','alevel-fm-options-v1','alevel-streak-v1',
     'alevel-exam-date','alevel-onboarded-v1','alevel-plainlang-v1','alevel-pomo-presets-v1',
-    'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1'];
+    'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1',
+    // The tombstone/edit ledger has to travel with the data it describes, or deletions
+    // can't propagate. 'alevel-exam-off' was simply missing: turning exam ramping off on
+    // one device left every other device still ramping.
+    'alevel-syncmeta-v1','alevel-exam-off'];
+
+  /* ================= MERGE ENGINE ==========================================================
+     Sync used to be last-write-wins across the whole document: whichever device pushed second
+     replaced everything the other had done. mergeStores() reconciles the two copies record by
+     record instead, so a phone and a laptop used in the same evening both keep their work.
+
+     Three properties make it safe, and all three are load-bearing:
+       • commutative   — merge(a,b) equals merge(b,a), so arrival order can't change the result
+       • idempotent    — merging an already-merged store is a no-op, so the two devices settle
+                         rather than pushing revisions back at each other forever
+       • additive-safe — a device on an older build pushes a store with no tombstones, which
+                         reads as "nothing was deleted", never as "delete everything"
+
+     Every tie is broken deterministically (timestamps first, then a lexicographic compare of
+     the JSON). An arbitrary or order-dependent choice would let two devices reach different
+     merged results, and each would then push its own version at the other indefinitely. */
+
+  function pj(store,key,fb){ try{ var v=store&&store[key]; return v==null?fb:JSON.parse(v); }catch(e){ return fb; } }
+  function sj(v){ return JSON.stringify(v); }
+  function num(x){ return (typeof x==='number'&&isFinite(x))?x:0; }
+  function lexPick(a,b){ var sa=sj(a),sb=sj(b); return sa>sb?a:b; }
+
+  // ---- tombstone/edit ledger ----
+  function mergeMeta(ma,mb){
+    var out={v:1,del:{},add:{},mod:{}};
+    ['del','add','mod'].forEach(function(g){
+      var A=(ma&&ma[g])||{}, B=(mb&&mb[g])||{};
+      Object.keys(A).concat(Object.keys(B)).forEach(function(kind){
+        if(out[g][kind])return;
+        var a=A[kind]||{}, b=B[kind]||{}, m={};
+        Object.keys(a).concat(Object.keys(b)).forEach(function(id){ m[id]=Math.max(num(a[id]),num(b[id])); });
+        out[g][kind]=m;
+      });
+    });
+    return out;
+  }
+  function stampOf(meta,g,kind,id){ return num((((meta||{})[g]||{})[kind]||{})[String(id)]); }
+  // An item is deleted only while its tombstone is newer than its most recent re-add.
+  function isDeleted(meta,kind,id){
+    var d=stampOf(meta,'del',kind,id);
+    return d>0 && d>stampOf(meta,'add',kind,id);
+  }
+
+  // ---- topic memory: merge the review history, then recompute ----
+  // D and S aren't independent facts to reconcile — FSRS derives them from the review log. So
+  // two devices rating the same topic differently isn't a conflict needing a winner, it's two
+  // events, which is exactly what the scheduler consumes. Replay uses the record's own D
+  // rather than effectiveD(): mistake load differs between devices, and the merge has to land
+  // on the same answer on both.
+  function evKey(e){ return (e&&e.id!=null)?String(e.id):((e&&e.date)+'|'+(e&&e.grade)+'|'+(e&&e.elapsed)); }
+  function recDate(r){ return (r&&typeof r.last==='string')?r.last:''; }
+  function pickRec(a,b){
+    var da=recDate(a), db=recDate(b);
+    if(da!==db) return da>db?a:b;
+    var sa=num(a&&a.S), sb=num(b&&b.S);
+    if(sa!==sb) return sa>sb?a:b;
+    return lexPick(a,b);
+  }
+  function replayRecord(name,events){
+    if(typeof initialStability!=='function'||typeof stabilityAfterRecall!=='function'||typeof daysDiff!=='function')return null;
+    var topic=(typeof allTopics!=='undefined'&&allTopics&&allTopics.find)?allTopics.find(function(t){return t.name===name;}):null;
+    var tdiff=topic?topic.diff:2;
+    var D=null,S=null,last=null,reps=0,lapses=0;
+    for(var i=0;i<events.length;i++){
+      var e=events[i]||{}; var g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3;
+      if(typeof e.date!=='string'||isNaN(new Date(e.date+'T12:00:00').getTime()))continue;
+      if(S===null){ S=initialStability(g); D=initialDifficulty(g,tdiff); reps=(g===1?0:1); lapses=(g===1?1:0); }
+      else{
+        var elapsed=Math.max(0,daysDiff(last,e.date));
+        var R=forgetting(elapsed,S);
+        if(g===1){ S=stabilityAfterLapse(D,S,R); lapses++; } else { S=stabilityAfterRecall(D,S,R,g); reps++; }
+        D=nextDifficulty(D,g);
+      }
+      last=e.date;
+    }
+    if(!last||!(isFinite(S)&&S>0)||!isFinite(D))return null;
+    return {D:D,S:S,last:last,reps:reps,lapses:lapses,log:events};
+  }
+  function mergeRecord(name,ra,rb){
+    if(!ra)return rb; if(!rb)return ra;
+    var ea=Array.isArray(ra.log)?ra.log:[], eb=Array.isArray(rb.log)?rb.log:[], i;
+    var ka={},kb={};
+    for(i=0;i<ea.length;i++)ka[evKey(ea[i])]=ea[i];
+    for(i=0;i<eb.length;i++)kb[evKey(eb[i])]=eb[i];
+    var aExtra=Object.keys(ka).some(function(k){return !(k in kb);});
+    var bExtra=Object.keys(kb).some(function(k){return !(k in ka);});
+    if(!aExtra&&!bExtra)return pickRec(ra,rb);                    // same history on both sides
+    if(!aExtra||!bExtra){
+      // One history contains the other: keep the longer one, unless the shorter side reports a
+      // later review than it holds events for (an older build, or v4-migrated data with no log).
+      var sup=aExtra?ra:rb, other=aExtra?rb:ra;
+      if(recDate(other)<=recDate(sup))return sup;
+    }
+    var all={},keys=[];
+    [ka,kb].forEach(function(m){ Object.keys(m).forEach(function(k){ if(!(k in all)){ all[k]=m[k]; keys.push(k); } }); });
+    keys.sort(function(x,y){
+      var dx=(all[x].date||''), dy=(all[y].date||'');
+      if(dx!==dy)return dx>dy?1:-1;
+      return x>y?1:(x<y?-1:0);
+    });
+    return replayRecord(name,keys.map(function(k){return all[k];}))||pickRec(ra,rb);
+  }
+  function mergeSr(a,b,meta){
+    var out={},names={};
+    Object.keys(a||{}).forEach(function(n){names[n]=1;});
+    Object.keys(b||{}).forEach(function(n){names[n]=1;});
+    Object.keys(names).sort().forEach(function(n){
+      var rec=mergeRecord(n,(a||{})[n],(b||{})[n]);
+      if(!rec)return;
+      if(isDeleted(meta,'sr',n)){
+        // "Remove all study data" propagates — but never over study logged afterwards on another
+        // device, which an older build records without writing an add stamp.
+        var tombDay=new Date(stampOf(meta,'del','sr',n)).toISOString().slice(0,10);
+        if(!(recDate(rec)>tombDay))return;
+      }
+      out[n]=rec;
+    });
+    return out;
+  }
+
+  // ---- append-only lists (mistakes, papers) ----
+  function itemKey(it){ return (it&&it.id!=null)?String(it.id):'j:'+sj(it); }
+  function pickItem(x,y){
+    var mx=num(x.modified), my=num(y.modified);
+    if(mx!==my)return mx>my?x:y;
+    return lexPick(x,y);
+  }
+  function mergeList(a,b,meta,kind){
+    var by={},order=[];
+    [a,b].forEach(function(list){
+      (Array.isArray(list)?list:[]).forEach(function(it){
+        if(!it||typeof it!=='object')return;
+        if(it.id!=null&&isDeleted(meta,kind,it.id))return;
+        var k=itemKey(it);
+        if(!(k in by)){ by[k]=it; order.push(k); }
+        else by[k]=pickItem(by[k],it);
+      });
+    });
+    return order.map(function(k){return by[k];}).sort(function(x,y){
+      var dx=(x.date||''),dy=(y.date||'');
+      if(dx!==dy)return dx>dy?1:-1;
+      var kx=itemKey(x),ky=itemKey(y);
+      return kx>ky?1:(kx<ky?-1:0);
+    });
+  }
+  function mergeSet(a,b,meta,kind){
+    var seen={},out=[];
+    (Array.isArray(a)?a:[]).concat(Array.isArray(b)?b:[]).forEach(function(id){
+      var k=String(id);
+      if(seen[k]||isDeleted(meta,kind,k))return;
+      seen[k]=1; out.push(id);
+    });
+    return out.sort(function(x,y){ var sx=String(x),sy=String(y); return sx>sy?1:(sx<sy?-1:0); });
+  }
+  // Notes are free text, so there's no merging two versions — the newer edit wins, using the
+  // mod stamps rather than guessing. Needs each side's own ledger, not the merged one.
+  function mergeNotes(na,nb,metaA,metaB,meta){
+    var out={},keys={};
+    Object.keys(na||{}).forEach(function(k){keys[k]=1;});
+    Object.keys(nb||{}).forEach(function(k){keys[k]=1;});
+    Object.keys(keys).sort().forEach(function(t){
+      var va=(na||{})[t], vb=(nb||{})[t];
+      var ta=stampOf(metaA,'mod','notes',t), tb=stampOf(metaB,'mod','notes',t), val;
+      if(va==null)val=vb; else if(vb==null)val=va;
+      else if(va===vb)val=va;
+      else if(ta!==tb)val=(ta>tb)?va:vb;
+      else val=(va>vb?va:vb);
+      if(val==null)return;
+      if(stampOf(meta,'del','notes',t)>Math.max(ta,tb))return;    // cleared after the newest edit
+      out[t]=val;
+    });
+    return out;
+  }
+  function mergeStreak(a,b){
+    if(!a)return b; if(!b)return a;
+    var seen={},days=[];
+    (a.days||[]).concat(b.days||[]).forEach(function(d){ if(!seen[d]){ seen[d]=1; days.push(d); } });
+    days.sort();
+    return { days:days,
+             weekStart:((a.weekStart||'')>(b.weekStart||''))?a.weekStart:b.weekStart,
+             goal:Math.max(num(a.goal),num(b.goal))||(typeof WEEK_GOAL!=='undefined'?WEEK_GOAL:4),
+             weeksMet:Math.max(num(a.weeksMet),num(b.weeksMet)),
+             last:((a.last||'')>=(b.last||''))?(a.last||''):(b.last||'') };
+  }
+
+  var LIST_KINDS={'alevel-mistakes-v2':'mistakes','alevel-paperlog-v1':'papers'};
+  function mergeStores(local,remote,localMs,remoteMs){
+    local=local||{}; remote=remote||{};
+    var metaA=pj(local,'alevel-syncmeta-v1',{}), metaB=pj(remote,'alevel-syncmeta-v1',{});
+    var meta=mergeMeta(metaA,metaB);
+    var localNewer=num(localMs)>num(remoteMs);
+    var out={},keys={};
+    Object.keys(local).forEach(function(k){keys[k]=1;});
+    Object.keys(remote).forEach(function(k){keys[k]=1;});
+    Object.keys(keys).sort().forEach(function(k){
+      var la=local[k], rb=remote[k], v=null;
+      if(k==='alevel-syncmeta-v1')      v=meta;
+      else if(k==='alevel-sr-v5')       v=mergeSr(pj(local,k,{}),pj(remote,k,{}),meta);
+      else if(k in LIST_KINDS)          v=mergeList(pj(local,k,[]),pj(remote,k,[]),meta,LIST_KINDS[k]);
+      else if(k==='alevel-favs-v1')     v=mergeSet(pj(local,k,[]),pj(remote,k,[]),meta,'favs');
+      else if(k==='alevel-notes-v1')    v=mergeNotes(pj(local,k,{}),pj(remote,k,{}),metaA,metaB,meta);
+      else if(k==='alevel-streak-v1')   v=mergeStreak(pj(local,k,null),pj(remote,k,null));
+      else {
+        // Everything else is a genuine scalar or a wholesale settings blob (theme, track,
+        // per-paper dates, module choices): last write wins, and a clearing propagates via a
+        // 'keys' tombstone since an absent key on its own is indistinguishable from never-set.
+        if(isDeleted(meta,'keys',k)){
+          var holder=Math.max(la!=null?num(localMs):0, rb!=null?num(remoteMs):0);
+          if(stampOf(meta,'del','keys',k)>holder)return;
+        }
+        var s = (la==null)?rb : (rb==null)?la : (la===rb)?la
+              : (num(localMs)!==num(remoteMs) ? (localNewer?la:rb) : (la>rb?la:rb));
+        if(s!=null)out[k]=s;
+        return;
+      }
+      if(v!=null)out[k]=sj(v);
+    });
+    return out;
+  }
+  window.mhMergeStores=mergeStores;   // exposed so the merge can be exercised directly in tests
 
   var nativeSet=localStorage.setItem.bind(localStorage);
   var currentUser=null, pushTimer=null;
@@ -5674,25 +5962,75 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var lastPushedJson='', lastSyncAt=0, lastPullAt=0;
   function pushNow(){
     if(!currentUser)return;
+    // Never push before the first snapshot has been reconciled. On a device with empty storage
+    // — a fresh install, or a browser that cleared site data — the loading code writes defaults
+    // the moment the page opens, and pushing those would overwrite the cloud copy with almost
+    // nothing before the real data has even arrived.
+    if(!gotFirst)return;
     var store=collectLocal(), json=JSON.stringify(store);
     if(json===lastPushedJson)return;                          // nothing actually changed → skip redundant write
+    if(!Object.keys(store).length)return;                     // never publish an empty store
     lastPushedJson=json;
     var stamp=Date.now(); try{nativeSet('mh_stamp',myWriter+'|'+stamp);}catch(e){}
+    // Deliberately NOT {merge:true}. Firestore deep-merges nested maps, so a key removed here
+    // would survive in the cloud and be mirrored back down — the deletion could never land.
+    // Writing the whole store is safe now: what we push is the reconciled result of the merge,
+    // so it already contains everything both devices had. (Subcollections such as mImages are
+    // untouched by a document write.)
     db.collection('users').doc(currentUser.uid).set(
-      { store:store, updatedAt:stamp, writer:myWriter },
-      { merge:true }
+      { store:store, updatedAt:stamp, writer:myWriter }
     ).then(function(){ lastPushError=''; lastSyncAt=Date.now(); })
      .catch(function(e){ console.warn('[cloud] save failed',e); lastPushError=(e&&e.message)||String(e); });
   }
-  // Apply another device's cloud data to this device (last-write-wins on the whole store).
+  // Reconcile another device's cloud data with this one, record by record.
   function applyRemote(d){
     if(!d||!d.store)return;
     var remote=docStamp(d), mine=localStorage.getItem('mh_stamp')||'';
     if(remote===mine)return;                                          // nothing new
     if(d.writer===myWriter){ nativeSet('mh_stamp',remote); return; }  // our own write echoed back
-    applyToLocal(d.store); nativeSet('mh_stamp',remote);
-    location.reload();                                                // re-read everything cleanly
+    var localMs=parseInt((mine.split('|')[1]||'0'),10)||0;
+    var ru=d.updatedAt; if(ru&&ru.seconds!=null)ru=ru.seconds*1000;
+    var merged;
+    try{ merged=mergeStores(collectLocal(),d.store,localMs,num(ru)); }
+    catch(e){ console.warn('[cloud] merge failed — keeping both copies is impossible here, taking remote',e); merged=d.store; }
+    applyToLocal(merged);
+    nativeSet('mh_stamp',remote);
+    // Anything the merge added that the cloud doesn't have goes straight back, so the other
+    // device converges too. Idempotence is what keeps this from becoming a push loop: once
+    // both sides hold the merged store, the next merge changes nothing and no push follows.
+    if(sj(merged)!==sj(d.store)) schedulePush();
+    refreshFromStorage();
   }
+  /* Re-read state in place instead of reloading the page. The old location.reload() could fire
+     while a mistake was half-typed and take the text with it — and with a merge there's no
+     longer anything to reload *for*, since local state is already the reconciled result.
+     In-memory globals must be refreshed immediately either way: leaving them stale would let
+     the next saveState() write the pre-merge copy straight back over the merged one. */
+  var pendingRefresh=false;
+  function refreshFromStorage(){
+    try{
+      if(typeof loadSyncMeta==='function')loadSyncMeta();
+      if(typeof loadState==='function')loadState();
+      if(typeof loadStreak==='function')loadStreak();
+      if(typeof applyChapterRenames==='function')applyChapterRenames();
+    }catch(e){ console.warn('[cloud] state reload failed — falling back to a page reload',e); location.reload(); return; }
+    var el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)){
+      pendingRefresh=true;   // mid-edit: state is already current, just don't redraw under them
+      return;
+    }
+    pendingRefresh=false;
+    var th=null; try{ th=localStorage.getItem('msh-theme'); }catch(e){}
+    if(th&&typeof applyTheme==='function'){ try{ applyTheme(th); }catch(e){} }
+    ['renderAll','renderReviewPanel','renderMistakesTab','renderProgressTab','renderResources',
+     'renderStreak','renderSettings','updateDueBadge','syncExamInputs','applyPlainLang'
+    ].forEach(function(fn){
+      if(typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ console.warn('[cloud] '+fn+' failed',e); } }
+    });
+  }
+  document.addEventListener('focusout',function(){
+    if(pendingRefresh) setTimeout(refreshFromStorage,0);
+  });
   // REALTIME pull: a Firestore listener delivers another device's changes within ~1s while the
   // app is open, and re-fires automatically when the phone wakes from sleep and reconnects —
   // so sync is near-instant instead of waiting on a focus/poll cycle.
@@ -5704,6 +6042,11 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       lastPullAt=Date.now();
       if(snap.metadata&&snap.metadata.hasPendingWrites)return;        // ignore our own optimistic write
       if(!snap.exists||!snap.data()||!snap.data().store){
+        // Only trust "there is no cloud copy" when it came from the server. Offline, the SDK
+        // answers from its IndexedDB cache, where a doc it has never fetched simply looks
+        // absent — treating that as a new account would push this device's store over a
+        // perfectly good cloud copy the moment the connection returned.
+        if(snap.metadata&&snap.metadata.fromCache)return;
         if(!gotFirst){ gotFirst=true; pushNow(); }                    // brand-new account → migrate local up
         return;
       }
@@ -5843,7 +6186,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     if(!currentUser)return Promise.resolve({error:'Not signed in'});
     var store=collectLocal(), bytes=JSON.stringify(store).length, stamp=Date.now();
     nativeSet('mh_stamp',myWriter+'|'+stamp);
-    return db.collection('users').doc(currentUser.uid).set({store:store,updatedAt:stamp,writer:myWriter},{merge:true})
+    return db.collection('users').doc(currentUser.uid).set({store:store,updatedAt:stamp,writer:myWriter})
       .then(function(){ lastPushError=''; return {ok:true,bytes:bytes}; })
       .catch(function(e){ lastPushError=(e&&e.message)||String(e); return {error:lastPushError,bytes:bytes}; });
   };

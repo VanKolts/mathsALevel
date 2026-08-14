@@ -7,7 +7,7 @@
  * Bump CACHE_VERSION whenever index.html, styles.css or data/ changes shape. Old caches are
  * deleted on activate, so a bump is the clean way to force every device onto a new build.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE   = 'msh-shell-' + CACHE_VERSION;
 const VENDOR_CACHE  = 'msh-vendor-' + CACHE_VERSION;
 
@@ -31,7 +31,14 @@ const SHELL = [
 const VENDOR_HOSTS = [
   'cdn.jsdelivr.net',
   'fonts.googleapis.com',
-  'fonts.gstatic.com'
+  'fonts.gstatic.com',
+  /* The Firebase SDK. Without it cached, going offline meant the three <script> tags failed,
+     `firebase` was undefined, and the whole sync block bailed out early — taking the
+     localStorage hook with it. Offline edits were then never queued for the cloud at all, and
+     could be overwritten wholesale by another device on reconnect. Caching it is what makes
+     Firestore's offline write queue — the thing that actually makes revision on a train safe
+     — reachable in the first place. */
+  'www.gstatic.com'
 ];
 
 /* Never intercept these. Firestore holds its own long-lived streams and does its own offline

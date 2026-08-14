@@ -190,6 +190,7 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-shortcuts-v1` | UI shortcuts config |
 | `alevel-onboarded-v1` | onboarding-seen flag |
 | `msh-theme` | active theme |
+| `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
 | `mh_stamp`, `mh_writer` | sync bookkeeping (last-write timestamp + which device wrote) |
 
 Older keys (`alevel-sr-v4`) are read for one-time migration.
@@ -215,9 +216,42 @@ Sign-in is optional. When you do, the app mirrors your state to **Firebase** (pr
 
 - **Realtime:** an `onSnapshot` listener on `users/{uid}` pushes remote changes to every device live — a change on your laptop reaches your phone in seconds.
 - **Offline-durable:** `db.enablePersistence({synchronizeTabs:true})` caches writes in IndexedDB, so edits made offline queue up and flush when you reconnect (and multiple tabs stay consistent).
-- **True mirror:** `applyToLocal(store)` makes the device converge on *exactly* the remote state, **including removing keys that are absent upstream**. (This was a real bug once: an earlier version only *added* keys, so a stale exam date could linger on one device → different `dueDateFor` results → "both accounts synced but showing different topics." The mirror fix removed that class of divergence.)
-- **Conflict handling:** `mh_stamp` / `mh_writer` record the last write and its origin so the newest state wins rather than clobbering blindly.
+- **Record-level merge, not last-write-wins.** `mergeStores(local, remote, localMs, remoteMs)` reconciles the two copies *record by record*, so a phone and a laptop used in the same evening both keep their work. This replaced whole-document LWW, under which the device that pushed second silently replaced everything the other had done.
 - **Diagnostics:** Settings → Sync shows live status.
+
+### How the merge works
+
+Each kind of data gets the rule that actually fits it:
+
+| Data | Rule |
+|---|---|
+| `alevel-sr-v5` | union the review **logs**, sort by date, and replay FSRS over the result |
+| `mistakes`, `paperLog` | union by id; tombstones for deletes; newer `modified` wins an edit |
+| `alevel-favs-v1` | set union, minus anything tombstoned |
+| `alevel-notes-v1` | newer edit wins, compared on the `mod` stamps in the ledger |
+| `alevel-streak-v1` | union the `days`, take the max of the counters |
+| theme, track, exam dates, module choices | genuine last-write-wins on the store timestamp |
+
+The topic rule is the important one. `D` and `S` are not independent facts needing a winner — **FSRS derives them from the review history**, so two devices rating the same topic differently is not a conflict at all, it's two review events, which is exactly what the scheduler consumes. Both ratings count. (Replay uses the record's own `D` rather than `effectiveD()`, because mistake load differs per device and the merge has to reach the same answer on both.) The replay only runs when the two histories genuinely diverge; when one contains the other, the longer one is taken as-is.
+
+Three properties are load-bearing, and all three are covered by tests:
+
+- **Commutative** — `merge(a,b) === merge(b,a)`, so the order updates arrive in cannot change the result.
+- **Idempotent** — merging an already-merged store is a no-op. This is what makes the devices *settle*: without it, each merge would produce a new value to push and the two devices would trade revisions forever.
+- **Additive-safe** — a device on an older build pushes a store with no ledger, which reads as "nothing was deleted", never as "delete everything". You cannot force every phone onto a new build at once, so this one is not optional.
+
+Every tie is broken deterministically — timestamps first, then a lexicographic comparison of the JSON. An arbitrary or random choice would let two devices reach *different* merged results and push them at each other indefinitely.
+
+### Deletions: the ledger
+
+A union can never express a deletion — whatever you remove locally is simply re-added from the other device's copy. So `alevel-syncmeta-v1` carries a ledger of `del` / `add` / `mod` stamps, and an item counts as deleted only while its `del` stamp is newer than its `add` stamp. (Erasing the tombstone on re-add is not enough: the other device's copy of the tombstone would merge straight back in and win.) Tombstones are pruned after `TOMBSTONE_TTL_DAYS = 120` — long after every device has synced.
+
+Two consequences worth knowing:
+
+- **Pushes are `set()` without `merge:true`.** Firestore deep-merges nested maps, so under the old `{merge:true}` a key removed on a device survived in the cloud and was mirrored back down — the deletion could never land. Writing the whole store is safe *because* what gets pushed is the merged result, which already contains both devices' data. Subcollections (`mImages`) are untouched by a document write.
+- **A device never pushes before its first snapshot has been reconciled** (`gotFirst`), and never pushes an empty store. On a fresh install the loading code writes defaults the instant the page opens, and without that guard those defaults would overwrite the cloud copy before the real data arrived.
+
+`applyRemote` no longer calls `location.reload()`. It re-reads state in place and re-renders — and defers the redraw while an input is focused, so an incoming sync can't swallow a half-typed note. The in-memory globals are always refreshed immediately regardless, since leaving them stale would let the next `saveState()` write the pre-merge copy back over the merged one.
 
 Your marks and progress are the source of truth; nothing is silently discarded.
 
@@ -465,7 +499,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **MathJax** — LaTeX typesetting (CDN).
 - **Firebase compat SDK v10.14.1** — `firebase-app`, `firebase-auth`, `firebase-firestore` (CDN `gstatic.com`). Project **`maths-hub-3aa8c`** (`authDomain: maths-hub-3aa8c.firebaseapp.com`). Firestore doc per user at `users/{uid}`; profile-image writes to a sibling doc with a `serverTimestamp()`.
 - **Google Gemini** — `gemini-2.5-flash` via the student's own key in `localStorage['alevel-gemini-key-v1']`.
-- **Service worker** (`sw.js`) — precaches the shell and `data/*.js`; cache-first with background refresh for MathJax and Google Fonts; network-first for own files so a push reaches you immediately; explicitly *bypasses* Firestore, Identity Toolkit and Gemini so realtime sync and AI calls are never served stale.
+- **Service worker** (`sw.js`) — precaches the shell and `data/*.js`; cache-first with background refresh for MathJax, Google Fonts **and the Firebase SDK on `www.gstatic.com`**; network-first for own files so a push reaches you immediately; explicitly *bypasses* Firestore, Identity Toolkit and Gemini so realtime sync and AI calls are never served stale. Caching the SDK is what makes offline durability real: without it the three `<script>` tags failed offline, `firebase` was undefined, and the sync block bailed out early — taking the `localStorage` hook with it, so offline edits were never queued for the cloud at all.
 - No runtime dependencies beyond those CDNs; the only tooling is `scripts/validate.mjs`, which uses nothing but Node's standard library.
 
 ---
