@@ -1,6 +1,6 @@
 # The evidence model — making FSRS use everything the app knows
 
-**Status:** phases 1 and 2 implemented; phase 3 (past-paper marks) outstanding.
+**Status:** phases 1–3 implemented. Phase 4 (confidence indicator, forgetting-curve view) outstanding.
 **Scope:** how topic memory is estimated. Replaces the current mistake-weighting mechanic, adds past-paper marks as a first-class input, and unifies all three signals into one replayable timeline.
 
 ---
@@ -43,7 +43,7 @@ Three event types:
 | Event | Source | Kind | Resets the clock? |
 |---|---|---|---|
 | `review` | study modal, rating 1–5 | rehearsal | **yes** |
-| `paper` | a logged past-paper question tagged with this topic | rehearsal | **yes** |
+| `paper` | a logged past-paper question tagged with this topic | rehearsal *(only when unambiguous — see §4.2)* | **only when `c = 1`** |
 | `mistake` | a logged mistake, by category | **observation** | **no** |
 
 ### 2.1 The rehearsal / observation distinction
@@ -165,8 +165,16 @@ The key asymmetry: **a high mark confirms every topic on the question** (you can
 
 ```js
 c = r + (1 - r) / k        // r = marks ratio, k = number of topics tagged
-S_new = S + c * (S_fsrs(rating) - S)
+
+if (c === 1) {             // unambiguous: single-topic question, or full marks
+  → full rehearsal: reset the clock, take the whole FSRS update
+} else {                   // ambiguous: k topics shared one question
+  S_new = S + c * (S_fsrs(rating) - S)
+  last  = unchanged        // this topic was not necessarily rehearsed
+}
 ```
+
+**The `last = unchanged` branch is not cosmetic.** Blending stability by `c` while *also* resetting the clock lets a zero on a 3-topic question raise predicted recall (91% → 94%) and push the next review later: the "you just looked at it" credit outweighs the weakened penalty. Ambiguous evidence revises the estimate; it does not count as having rehearsed the topic.
 
 | marks | ratio | rating | c (k=1) | c (k=2) | c (k=3) |
 |---|---:|---:|---:|---:|---:|
@@ -347,7 +355,7 @@ EXAM_RAMP_DAYS, MASTERY_STABILITY, MAX_INTERVAL, DIFF_D_SEED
 |---|---|---|
 | **1 ✅ done** | One shared FSRS step (`applyReview`) behind `saveTopicStudied`, `simulateGrade` and `replayRecord`; stored state is now a pure function of the review log. Invariants locked by `scripts/fsrs-replay-test.mjs`. | one behavioural change — see below |
 | **2 ✅ done** | `mistake` events on the timeline (§3), plus the evidence trail (§9.1) and memory-delta toast (§9.2). Invariants in `scripts/fsrs-mistake-test.mjs`. | medium |
-| 3 | Add `paper` events (§4) behind the migration summary (§8). | highest value, highest shock |
+| **3 ✅ done** | `paper` events (§4), a settings toggle, and a summary of what logging a paper changed. Invariants in `scripts/fsrs-paper-test.mjs`. | highest value, highest shock |
 | 4 | Confidence indicator (§9.4) and the forgetting-curve view (§9.3). | low, visual only |
 
 Phase 1 is the one that de-risks everything else: if the replay reproduces current behaviour bit-for-bit from the review log alone, then every later phase is just adding events to a mechanism already known to be correct.
@@ -370,6 +378,36 @@ Measured on a topic with two spaced reviews (S ≈ 24.5d, 91% recall, next revie
 `MISTAKE_D_WEIGHT` is now 0 and `MISTAKE_RET_WEIGHT` drops to 0.015 as designed, since the real penalty now lands on stability.
 
 **Scale dependence worth knowing:** the §3.3 table assumes a mature topic. On a freshly-seeded one (a single review leaves S ≈ 4d) every category bites proportionally harder. That is correct — a topic you have seen once really is that fragile — but it means "five silly mistakes are negligible" holds for established topics, not brand-new ones. The test suite pins both cases.
+
+### Phase 3, as built
+
+**The dilution rule needed correcting.** §4.2 said to blend stability by `c` and otherwise treat a paper question as a rehearsal. Implemented literally, that let a zero on a 3-topic question *raise* predicted recall from 91% to 94% and push the next review a week later — because resetting the clock credits the topic with "you just looked at it", and that outweighed the weakened penalty.
+
+The fix draws the line at what the evidence actually establishes:
+
+- **`c === 1`** — a single-topic question, or full marks on any question — is unambiguously about this topic. It is a true rehearsal: reset the clock, take the whole update.
+- **`c < 1`** — several topics shared one question and we cannot say which cost the marks. Revise stability by `c` but **leave the clock alone**. This topic was not necessarily rehearsed.
+
+Measured on real 2019–2024 paper data, two topics with identical history at 91%, due 18 Aug:
+
+| | memory | next review |
+|---|---:|---|
+| before | 91% | 18 Aug (upcoming) |
+| zero on a **1-topic** question | 80% | 9 Aug (**overdue**) |
+| zero on a **3-topic** question | 88% | 11 Aug (**overdue**) |
+| full marks on a 1-topic question | 99% | 13 Nov |
+
+Both zeroes pull the topic forward; the ambiguous one bites less. Full marks pushes it three months out. The suite pins "a bad result never raises recall and never delays the review, at every k from 1 to 5" as a regression test.
+
+**Scope of the dilution rule:** 531 of the 2,106 tagged questions carry 2–5 topics, so this affects about a quarter of the dataset.
+
+**Papers refine, they do not seed** (§12.2). A paper dated before the topic's first review is dropped, and papers alone never start a topic. This keeps "not started" meaning what it says everywhere else in the UI, at the cost of ignoring paper evidence for never-reviewed topics — revisit if that proves too conservative.
+
+**Double counting** (§5.1) is implemented as designed: a mistake logged within ±1 day of a paper event for the same topic still informs difficulty — its category is diagnostic information the marks do not carry — but does not charge stability twice. The evidence trail labels it *"already counted in the paper"*.
+
+**A settings toggle** (`alevel-paperfsrs-v1`, synced, default on) can turn the whole channel off. This is the largest change to how the app chooses what to revise, so it should not be a fait accompli. The key is stored inverted so its absence reads as "on" — existing installs get the new behaviour with no migration.
+
+**Logging a paper now reports what it did:** *"31 topics examined · 14 rescheduled sooner · 2 pushed back"*, and a paper logged as a single total says so, since without per-question marks nothing reaches the scheduler.
 
 ### Phase 1, as built
 

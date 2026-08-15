@@ -788,6 +788,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .ev-date{font-family:'JetBrains Mono',monospace;color:var(--dim);flex:none;min-width:52px;}
 .ev-label{color:var(--text);flex:1;min-width:0;}
 .ev-detail{font-family:'JetBrains Mono',monospace;color:var(--muted);flex:none;}
+.ev-row.ev-paper .ev-label{color:var(--accent2);}
+.ev-row.ev-paper .ev-detail{color:var(--accent2);}
 .ev-row.ev-mistake .ev-label{color:var(--overdue);}
 .ev-row.ev-mistake .ev-detail{color:var(--overdue);}
 .ev-more{font-size:var(--fs-3xs);color:var(--dim);font-style:italic;padding-top:4px;}

@@ -23,4 +23,4 @@ jobs:
       # past-paper tag resolving to a canonical topic name, lvls/diff arrays matching their
       # topic lists, and the chapter-rename map staying idempotent.
       - name: Validate app and data
-        run: node scripts/validate.mjs && node scripts/fsrs-replay-test.mjs && node scripts/fsrs-mistake-test.mjs
+        run: node scripts/validate.mjs && node scripts/fsrs-replay-test.mjs && node scripts/fsrs-mistake-test.mjs && node scripts/fsrs-paper-test.mjs

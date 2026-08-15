@@ -29,10 +29,12 @@ const grabBlock = n => {
 const source = [
   grabConst('FSRS_W'), grabConst('DECAY'), grabConst('FACTOR'), grabConst('DIFF_D_SEED'),
   grabConst('MAX_INTERVAL'), grabBlock('MISTAKE_EVIDENCE'), grabConst('MISTAKE_EVIDENCE_DEFAULT'),
+  grabConst('EV_PAPER'),
   grabFn('clamp'), grabFn('daysDiff'), grabFn('forgetting'), grabFn('ratingEase'),
   grabFn('initialStability'), grabFn('initialDifficulty'), grabFn('nextDifficulty'),
   grabFn('stabilityAfterRecall'), grabFn('stabilityAfterLapse'),
-  grabFn('applyReview'), grabFn('applyMistake'), grabFn('buildTimeline'), grabFn('replayTimeline'),
+  grabFn('applyReview'), grabFn('applyMistake'), grabFn('paperRating'), grabFn('applyPaper'),
+  grabFn('buildTimeline'), grabFn('replayTimeline'),
   // replayTimeline resolves topic difficulty through allTopics
   'var allTopics=[{name:"T",diff:2}];',
 ].join('\n');

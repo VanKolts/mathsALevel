@@ -686,6 +686,15 @@
       <div class="settings-card">
         <div class="settings-row">
           <div class="settings-row-info">
+            <div class="settings-row-title">Use past-paper marks in scheduling</div>
+            <div class="settings-row-sub">Treat every question you log mark-by-mark as a real test of the topics it examines — the strongest evidence the app has. Turn this off to schedule from your own ratings alone.</div>
+          </div>
+          <label class="tgl"><input type="checkbox" id="paperfsrs-toggle" checked><span class="tgl-track"></span></label>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-info">
             <div class="settings-row-title">Colour scheme</div>
             <div class="settings-row-sub">Choose a theme and brightness. Your preference is saved automatically.</div>
           </div>
@@ -2018,6 +2027,32 @@ loadPlainLang();
   });
 })();
 
+/* ---- Past-paper marks -> scheduling (phase 3) ----
+   Stored inverted ('0' means off) so the absence of the key reads as on: existing
+   installs get the new behaviour without a migration, and the key only exists once
+   the student has deliberately opted out. */
+function applyPaperFsrsToggle(){
+  var t=document.getElementById('paperfsrs-toggle'); if(t)t.checked=paperMarksFeedScheduler();
+}
+applyPaperFsrsToggle();
+(function(){var t=document.getElementById('paperfsrs-toggle'); if(!t)return;
+  t.addEventListener('change',function(){
+    var on=this.checked;
+    try{
+      if(on){ localStorage.removeItem('alevel-paperfsrs-v1'); mhTombstone('keys','alevel-paperfsrs-v1'); }
+      else  { localStorage.setItem('alevel-paperfsrs-v1','0'); mhUntombstone('keys','alevel-paperfsrs-v1'); }
+    }catch(e){}
+    invalidateMemory();
+    saveState();
+    if(typeof renderReviewPanel==='function')renderReviewPanel();
+    if(typeof updateDueBadge==='function')updateDueBadge();
+    if(typeof renderAll==='function')renderAll();
+    if(typeof modalTopic!=='undefined'&&modalTopic)renderMemDetails();
+    if(typeof toast==='function')
+      toast(on?'Past-paper marks now count toward your schedule':'Scheduling from your own ratings only');
+  });
+})();
+
 // ---- Study Pomodoro (separate from the exam timer; keeps running if overlay closed) ----
 const POMO_DEFAULT_PRESETS=[
   {id:'classic',label:'Classic',focus:25,brk:5},
@@ -2619,13 +2654,50 @@ function applyReview(rec,g,dateVal,tdiff){
 
    Moves stability a fraction E of the way toward what a genuine failed review would
    have produced, so n mistakes of one type compound to 1-(1-E)^n of a full lapse. */
-function applyMistake(rec,E,dateVal){
+function applyMistake(rec,E,dateVal,dOnly){
   if(!rec||!(E>0)) return rec;            // no estimate yet — nothing to revise
   const t=Math.max(0,daysDiff(rec.last,dateVal));
   const R=forgetting(t,rec.S);
   const Slapse=stabilityAfterLapse(rec.D,rec.S,R);
+  /* dOnly: a mistake logged off the same paper describes a failure the marks already
+     measured. Its category is still useful diagnostic information for difficulty, but
+     charging the stability penalty as well would count one failure twice. */
   return { D:clamp(rec.D+E*(nextDifficulty(rec.D,1)-rec.D),1,10),
-           S:clamp(rec.S-E*(rec.S-Slapse),0.1,MAX_INTERVAL),
+           S:dOnly?rec.S:clamp(rec.S-E*(rec.S-Slapse),0.1,MAX_INTERVAL),
+           last:rec.last, reps:rec.reps, lapses:rec.lapses };
+}
+
+/* ---- a past-paper question is a REHEARSAL ----
+   An externally graded retrieval attempt under exam conditions: the best evidence the
+   app has, and strictly better than "I felt OK about it". So it resets the clock and
+   updates stability exactly like a review.
+
+   The wrinkle is attribution. A question tagged with k topics that scored badly does
+   not say *which* topic cost the marks. But a question that scored well confirms every
+   topic on it — you cannot get full marks with a weak topic in the chain. So confidence
+   depends on the direction of the result: c = r + (1-r)/k, which is 1 at full marks
+   whatever k is, and 1/k at zero. The update is blended toward "no change" by c. */
+function paperRating(ratio){
+  if(!(ratio>0)) return 1;
+  if(ratio<0.4) return 2;
+  if(ratio<0.7) return 3;
+  if(ratio<0.95) return 4;
+  return 5;
+}
+function applyPaper(rec,rating,c,dateVal,tdiff){
+  const full=applyReview(rec,rating,dateVal,tdiff);
+  // c === 1 means the evidence is unambiguously about this topic: a single-topic
+  // question, or full marks (which confirm every topic on the question). Then it is a
+  // true rehearsal — reset the clock and take the whole update.
+  if(!rec||!(c<1)) return full;
+  /* Otherwise several topics shared one question and we cannot say which cost the
+     marks. Revise the stability estimate by c, but leave the clock alone: this topic
+     was not necessarily rehearsed. Resetting it as well is what made an early version
+     of this wrong — a diluted penalty plus a full clock reset let a zero-mark answer
+     *raise* predicted recall (91% → 94%) and push the next review later, because the
+     "you just looked at it" credit outweighed the weakened penalty. */
+  return { D:clamp(rec.D+c*(full.D-rec.D),1,10),
+           S:clamp(rec.S+c*(full.S-rec.S),0.1,MAX_INTERVAL),
            last:rec.last, reps:rec.reps, lapses:rec.lapses };
 }
 
@@ -2635,29 +2707,50 @@ function applyMistake(rec,E,dateVal){
    evidence is layered on top here instead, so two devices derive the same answer
    from their own already-merged inputs, with no new stored key and no migration.
    Every user-facing read — memory %, due date, status, mastery — goes through this. */
-function buildTimeline(reviewLog,mistakeEvents){
+/* Event kinds, in same-day precedence order: an externally marked paper outranks a
+   self-rating, and both are applied before a mistake, so the mistake observes the
+   post-rehearsal state rather than the other way round. */
+const EV_PAPER=0, EV_REVIEW=1, EV_MISTAKE=2;
+function buildTimeline(reviewLog,mistakeEvents,paperEvents){
   const evs=[];
   for(const e of (reviewLog||[])){
-    if(e&&typeof e.date==='string') evs.push({date:e.date,kind:0,id:String(e.id||''),grade:e.grade});
+    if(e&&typeof e.date==='string') evs.push({date:e.date,kind:EV_REVIEW,id:String(e.id||''),grade:e.grade});
   }
-  for(const m of (mistakeEvents||[])) evs.push({date:m.date,kind:1,id:m.id,E:m.E,cat:m.cat});
-  /* Total, deterministic order — the same rule the sync merge uses. A review is
-     applied before a mistake dated the same day, so the mistake observes the
-     post-review state rather than the other way round. Ties break on id so the
-     order can never depend on which device happened to load which list first. */
+  for(const m of (mistakeEvents||[])) evs.push({date:m.date,kind:EV_MISTAKE,id:m.id,E:m.E,cat:m.cat});
+  for(const p of (paperEvents||[])) evs.push({date:p.date,kind:EV_PAPER,id:p.id,rating:p.rating,c:p.c,label:p.label,got:p.got,max:p.max});
+  /* Total, deterministic order — the same rule the sync merge uses. Ties break on id
+     so the order can never depend on which device happened to load which list first. */
   evs.sort(function(a,b){
     if(a.date!==b.date) return a.date>b.date?1:-1;
     if(a.kind!==b.kind) return a.kind-b.kind;
     return a.id>b.id?1:(a.id<b.id?-1:0);
   });
-  return evs;
+  /* Reviews are what start a topic; papers refine it. A paper sat before the topic was
+     ever studied has no estimate to update, and seeding memory from an exam the student
+     may well have sat cold would be worse than ignoring it. Mistakes before the first
+     review are already no-ops (applyMistake has nothing to revise). */
+  let first=null;
+  for(const e of evs){ if(e.kind===EV_REVIEW){ first=e.date; break; } }
+  if(first===null) return [];
+  const kept=[];
+  for(const e of evs){ if(e.kind!==EV_PAPER || e.date>=first) kept.push(e); }
+  /* A mistake logged off the same paper describes a failure the marks already measured.
+     Keep it for its diagnostic value on difficulty, but do not charge stability twice. */
+  for(const e of kept){
+    if(e.kind!==EV_MISTAKE) continue;
+    for(const p of kept){
+      if(p.kind===EV_PAPER && Math.abs(daysDiff(p.date,e.date))<=1){ e.dOnly=true; break; }
+    }
+  }
+  return kept;
 }
-function replayTimeline(name,reviewLog,mistakeEvents){
+function replayTimeline(name,reviewLog,mistakeEvents,paperEvents){
   const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
   let rec=null;
-  for(const e of buildTimeline(reviewLog,mistakeEvents)){
-    if(e.kind===0){ let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3; rec=applyReview(rec,g,e.date,tdiff); }
-    else rec=applyMistake(rec,e.E,e.date);
+  for(const e of buildTimeline(reviewLog,mistakeEvents,paperEvents)){
+    if(e.kind===EV_REVIEW){ let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3; rec=applyReview(rec,g,e.date,tdiff); }
+    else if(e.kind===EV_PAPER) rec=applyPaper(rec,e.rating,e.c,e.date,tdiff);
+    else rec=applyMistake(rec,e.E,e.date,e.dOnly);
   }
   return (rec&&isFinite(rec.S)&&rec.S>0&&isFinite(rec.D))?rec:null;
 }
@@ -2668,30 +2761,64 @@ function replayTimeline(name,reviewLog,mistakeEvents){
 function evidenceTrail(name){
   const base=sr[name]; if(!validRec(base)) return [];
   const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
-  const evs=buildTimeline(base.log,mistakeEventsByTopic()[name]);
+  const evs=buildTimeline(base.log,mistakeEventsByTopic()[name],paperEventsByTopic()[name]);
   const out=[]; let rec=null;
   for(const e of evs){
     const before=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
-    if(e.kind===0){
+    if(e.kind===EV_REVIEW){
       let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3;
       rec=applyReview(rec,g,e.date,tdiff);
       out.push({date:e.date,kind:'review',
                 label:'rated '+(RATING_SHORT[g]||g),
                 detail:'next in '+safeInterval(intervalForRetention(rec.S,BASE_RETENTION))+'d'});
+    } else if(e.kind===EV_PAPER){
+      rec=applyPaper(rec,e.rating,e.c,e.date,tdiff);
+      out.push({date:e.date,kind:'paper',
+                label:e.label,
+                detail:e.got+' of '+e.max+' marks'});
     } else {
-      rec=applyMistake(rec,e.E,e.date);
+      rec=applyMistake(rec,e.E,e.date,e.dOnly);
       const after=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
       out.push({date:e.date,kind:'mistake',
                 label:(e.cat||'mistake').toLowerCase(),
-                detail:(before!=null&&after!=null)
-                  ? Math.round(before*100)+'% → '+Math.round(after*100)+'%'
-                  : 'no effect yet — logged before this topic was studied'});
+                detail:e.dOnly ? 'already counted in the paper'
+                  : (before!=null&&after!=null)
+                    ? Math.round(before*100)+'% → '+Math.round(after*100)+'%'
+                    : 'no effect yet — logged before this topic was studied'});
     }
   }
   return out;
 }
-var _memCache=Object.create(null), _memDay='', _mistIdx=null;
-function invalidateMemory(){ _memCache=Object.create(null); _mistIdx=null; }
+var _memCache=Object.create(null), _memDay='', _mistIdx=null, _paperIdx=null;
+function invalidateMemory(){ _memCache=Object.create(null); _mistIdx=null; _paperIdx=null; }
+/* Feeding exam marks into the schedule is the single biggest change to how the app
+   decides what to revise, so it is a setting rather than a fait accompli. Default on. */
+function paperMarksFeedScheduler(){ return localStorage.getItem('alevel-paperfsrs-v1')!=='0'; }
+/* Paper events per topic, derived from the per-question mark log. Papers logged as a
+   single total carry no per-topic information and produce nothing — which is the real
+   argument for using the question-by-question logger. */
+function paperEventsByTopic(){
+  if(_paperIdx) return _paperIdx;
+  const idx=Object.create(null);
+  if(paperMarksFeedScheduler() && typeof ppQuestionsFor==='function'){
+    for(const e of paperLog){
+      if(!e||!e.qMarks||typeof e.date!=='string') continue;
+      const qs=ppQuestionsFor(e.moduleId,e.paperN,e.year); if(!qs) continue;
+      for(const q of qs){
+        if(e.qMarks[q.q]==null) continue;
+        const max=+q.marks; if(!(max>0)) continue;
+        const tops=q.topics||[]; const k=tops.length; if(!k) continue;
+        const got=Math.max(0,Math.min(max,+e.qMarks[q.q]||0));
+        const ratio=got/max;
+        const ev={date:e.date,id:String(e.id||'')+'|'+q.q,rating:paperRating(ratio),
+                  c:ratio+(1-ratio)/k,got:got,max:max,
+                  label:(e.year||'')+' P'+e.paperN+' Q'+q.q};
+        for(const tp of tops) (idx[tp]||(idx[tp]=[])).push(ev);
+      }
+    }
+  }
+  _paperIdx=idx; return idx;
+}
 function mistakeEventsByTopic(){
   if(_mistIdx) return _mistIdx;
   const idx=Object.create(null);
@@ -2709,8 +2836,8 @@ function memoryFor(name){
   const base=sr[name];
   let out=validRec(base)?base:null;
   if(out){
-    const ms=mistakeEventsByTopic()[name];
-    if(ms&&ms.length) out=replayTimeline(name,base.log,ms)||out;
+    const ms=mistakeEventsByTopic()[name], ps=paperEventsByTopic()[name];
+    if((ms&&ms.length)||(ps&&ps.length)) out=replayTimeline(name,base.log,ms,ps)||out;
   }
   _memCache[name]=out; return out;
 }
@@ -3877,7 +4004,7 @@ function renderEvidenceTrail(body){
   // newest first: the thing that just moved them is the thing they want to see
   trail.slice().reverse().slice(0,8).forEach(function(e){
     const row=document.createElement('div');
-    row.className='ev-row'+(e.kind==='mistake'?' ev-mistake':'');
+    row.className='ev-row'+(e.kind==='mistake'?' ev-mistake':e.kind==='paper'?' ev-paper':'');
     const d=document.createElement('span');d.className='ev-date';d.textContent=fmtDate(e.date);
     const l=document.createElement('span');l.className='ev-label';l.textContent=e.label;
     const v=document.createElement('span');v.className='ev-detail';v.textContent=e.detail;
@@ -5755,6 +5882,20 @@ function plogSave(){
     entry.qMarks={}; Object.keys(plogBdMarks).forEach(function(k){entry.qMarks[k]=plogBdMarks[k];});
   }
   plogMistakes.forEach(function(mk,i){var id=mhUid();entry.mistakeIds.push(id);mistakes.push({id:id,topic:mk.topic,cat:mk.cat,text:mk.text,date:date,img:null,modified:Date.now()});});
+  /* Snapshot the schedule for every topic this paper examines, so we can tell the
+     student what logging it actually did. A paper that reschedules 14 topics is the
+     single most consequential action in the app; it should not just say "saved". */
+  var touched=[], beforeDue={};
+  (function(){
+    var qs=ppQuestionsFor(mid,n,year);
+    if(!qs||!entry.qMarks) return;
+    qs.forEach(function(q){
+      if(entry.qMarks[q.q]==null) return;
+      (q.topics||[]).forEach(function(tp){
+        if(beforeDue[tp]===undefined){ beforeDue[tp]=dueDateFor(tp); touched.push(tp); }
+      });
+    });
+  })();
   paperLog.push(entry);
   saveState();
   refreshPaperTopicStats();
@@ -5764,7 +5905,25 @@ function plogSave(){
   if(activeTab==='checklist'&&typeof renderAll==='function')renderAll();
   var nMk=plogMistakes.length;
   closePaperLog();
-  if(typeof toast==='function')toast('Paper logged'+(nMk?(' · '+nMk+' mistake'+(nMk>1?'s':'')+' added to tracker'):''));
+  if(typeof toast==='function'){
+    var sooner=0,later=0;
+    touched.forEach(function(tp){
+      var a=beforeDue[tp], b=dueDateFor(tp);
+      if(!a||!b) return;
+      if(b<a) sooner++; else if(b>a) later++;
+    });
+    var msg;
+    if(touched.length){
+      msg=touched.length+' topic'+(touched.length>1?'s':'')+' examined';
+      if(sooner) msg+=' · '+sooner+' rescheduled sooner';
+      if(later)  msg+=' · '+later+' pushed back';
+      if(!sooner&&!later) msg+=' · schedule unchanged';
+    } else {
+      // logged as a single total: no per-question data, so nothing reaches the scheduler
+      msg='Paper logged · log question-by-question to feed your revision schedule';
+    }
+    toast(msg+(nMk?(' · '+nMk+' mistake'+(nMk>1?'s':'')+' tracked'):''));
+  }
 }
 
 // ---- performance charts ----
@@ -6081,7 +6240,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     // The tombstone/edit ledger has to travel with the data it describes, or deletions
     // can't propagate. 'alevel-exam-off' was simply missing: turning exam ramping off on
     // one device left every other device still ramping.
-    'alevel-syncmeta-v1','alevel-exam-off'];
+    'alevel-syncmeta-v1','alevel-exam-off','alevel-paperfsrs-v1'];
 
   /* ================= MERGE ENGINE ==========================================================
      Sync used to be last-write-wins across the whole document: whichever device pushed second
