@@ -2444,7 +2444,14 @@ function mistakeLoad(name){
   _mlCache[name]=load;
   return load;
 }
-// ---- effective difficulty = stored D lifted by recent mistakes ----
+/* ---- effective difficulty = stored D lifted by recent mistakes ----
+   Scheduling-only. As of phase 1 this no longer reaches stability: applyReview()
+   uses the record's own D, so stored memory state stays a pure function of the
+   review log. What remains here is the soft channel — a recency-decayed nudge to
+   targetRetention(), i.e. "you got this wrong lately, look sooner".
+   Phase 2 replaces this with properly-dated mistake events and drops
+   MISTAKE_D_WEIGHT to 0; it is deliberately left at 1.30 until then, so mistakes
+   do not silently stop mattering in between. */
 function effectiveD(name){
   const rec=sr[name]; const baseD=rec?rec.D:5;
   return clamp(baseD + MISTAKE_D_WEIGHT*mistakeLoad(name), 1, 10);
@@ -2543,20 +2550,42 @@ function stabilityAfterLapse(D,S,R){
   return clamp(post, 0.1, S);                // a lapse never increases stability
 }
 
+/* ---- the single place a review is applied to a memory record ----
+   Phase 1 of docs/fsrs-evidence-model.md. The live path (saveTopicStudied), the
+   modal's forecast (simulateGrade) and the sync replay (replayRecord) all step
+   through this one function, so a stored record is always *exactly* what replaying
+   its own log would produce.
+
+   Note it uses rec.D, not effectiveD(). The live path used to apply effectiveD —
+   difficulty inflated by the current mistake load — while the replay deliberately
+   used the record's own D, because mistake load differs per device and the merge has
+   to reach the same answer on both. That meant stored S depended on a device-local,
+   time-varying term, so two devices with identical review histories could hold
+   different S, and no replay could ever reproduce what the live path had written.
+   Memory state is now a pure function of the review log. Mistakes get their own,
+   properly-dated channel in phase 2 rather than leaking in through D.
+
+   Returns the next record plus the elapsed/R pair the caller needs for the log entry.
+   `rec` may be null, meaning this is the topic's first review. */
+function applyReview(rec,g,dateVal,tdiff){
+  if(!rec){
+    return { D:initialDifficulty(g,tdiff), S:initialStability(g), last:dateVal,
+             reps:(g===1?0:1), lapses:(g===1?1:0), elapsed:0, R:1 };
+  }
+  const elapsed=Math.max(0,daysDiff(rec.last,dateVal));
+  const R=forgetting(elapsed,rec.S);
+  const S=(g===1)?stabilityAfterLapse(rec.D,rec.S,R):stabilityAfterRecall(rec.D,rec.S,R,g);
+  return { D:nextDifficulty(rec.D,g), S:S, last:dateVal,
+           reps:(rec.reps||0)+(g===1?0:1), lapses:(rec.lapses||0)+(g===1?1:0),
+           elapsed:elapsed, R:R };
+}
+
 // ---- simulate the result of a grade (for the modal's per-grade forecast) ----
 function simulateGrade(name,dateVal,g){
   const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
-  const rec=sr[name]; let newS,newD;
-  if(!rec){ newS=initialStability(g); newD=initialDifficulty(g,tdiff); }
-  else {
-    const elapsed=Math.max(0,daysDiff(rec.last,dateVal));
-    const R=forgetting(elapsed,rec.S);
-    const Deff=effectiveD(name);
-    newS=(g===1)?stabilityAfterLapse(Deff,rec.S,R):stabilityAfterRecall(Deff,rec.S,R,g);
-    newD=nextDifficulty(rec.D,g);
-  }
-  const ivl=safeInterval(intervalForRetention(newS,targetRetention(name)));
-  return {S:newS,D:newD,ivl,date:addDays(dateVal,ivl)};
+  const next=applyReview(sr[name],g,dateVal,tdiff);
+  const ivl=safeInterval(intervalForRetention(next.S,targetRetention(name)));
+  return {S:next.S,D:next.D,ivl,date:addDays(dateVal,ivl)};
 }
 
 // ---- commit a study / self-test event ----
@@ -2566,22 +2595,12 @@ function saveTopicStudied(name,dateVal,gradeKey){
   let rec=sr[name];
   const wasMastered = !!(rec && rec.S>=MASTERY_STABILITY);
   mhUntombstone('sr',name);   // studying a previously-reset topic revives it
-  if(!rec){
-    rec={ D:initialDifficulty(g,tdiff), S:initialStability(g), last:dateVal,
-          reps:(g===1?0:1), lapses:(g===1?1:0), log:[] };
-    // Every review carries an id: two reviews of one topic on the same day are a real
-    // pair of events, and without ids the merge can't tell them from one duplicated event.
-    rec.log.push({id:mhUid(),date:dateVal,grade:g,r:1,elapsed:0});
-  } else {
-    const elapsed=Math.max(0,daysDiff(rec.last,dateVal));
-    const R=forgetting(elapsed,rec.S);
-    const Deff=effectiveD(name);
-    if(g===1){ rec.S=stabilityAfterLapse(Deff,rec.S,R); rec.lapses=(rec.lapses||0)+1; }
-    else     { rec.S=stabilityAfterRecall(Deff,rec.S,R,g); rec.reps=(rec.reps||0)+1; }
-    rec.D=nextDifficulty(rec.D,g);
-    rec.last=dateVal;
-    rec.log=rec.log||[]; rec.log.push({id:mhUid(),date:dateVal,grade:g,r:Math.round(R*100)/100,elapsed});
-  }
+  const log=(rec&&Array.isArray(rec.log))?rec.log:[];
+  const next=applyReview(rec,g,dateVal,tdiff);
+  rec={ D:next.D, S:next.S, last:next.last, reps:next.reps, lapses:next.lapses, log:log };
+  // Every review carries an id: two reviews of one topic on the same day are a real
+  // pair of events, and without ids the merge can't tell them from one duplicated event.
+  rec.log.push({id:mhUid(),date:dateVal,grade:g,r:Math.round(next.R*100)/100,elapsed:next.elapsed});
   sr[name]=rec;
   saveState();
   bumpStreak();
@@ -5936,24 +5955,19 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     return lexPick(a,b);
   }
   function replayRecord(name,events){
-    if(typeof initialStability!=='function'||typeof stabilityAfterRecall!=='function'||typeof daysDiff!=='function')return null;
+    if(typeof applyReview!=='function'||typeof daysDiff!=='function')return null;
     var topic=(typeof allTopics!=='undefined'&&allTopics&&allTopics.find)?allTopics.find(function(t){return t.name===name;}):null;
     var tdiff=topic?topic.diff:2;
-    var D=null,S=null,last=null,reps=0,lapses=0;
+    // Steps through the same applyReview() the live path uses, so replay and live
+    // agree by construction rather than by two implementations happening to match.
+    var rec=null;
     for(var i=0;i<events.length;i++){
       var e=events[i]||{}; var g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3;
       if(typeof e.date!=='string'||isNaN(new Date(e.date+'T12:00:00').getTime()))continue;
-      if(S===null){ S=initialStability(g); D=initialDifficulty(g,tdiff); reps=(g===1?0:1); lapses=(g===1?1:0); }
-      else{
-        var elapsed=Math.max(0,daysDiff(last,e.date));
-        var R=forgetting(elapsed,S);
-        if(g===1){ S=stabilityAfterLapse(D,S,R); lapses++; } else { S=stabilityAfterRecall(D,S,R,g); reps++; }
-        D=nextDifficulty(D,g);
-      }
-      last=e.date;
+      rec=applyReview(rec,g,e.date,tdiff);
     }
-    if(!last||!(isFinite(S)&&S>0)||!isFinite(D))return null;
-    return {D:D,S:S,last:last,reps:reps,lapses:lapses,log:events};
+    if(!rec||!rec.last||!(isFinite(rec.S)&&rec.S>0)||!isFinite(rec.D))return null;
+    return {D:rec.D,S:rec.S,last:rec.last,reps:rec.reps,lapses:rec.lapses,log:events};
   }
   function mergeRecord(name,ra,rb){
     if(!ra)return rb; if(!rb)return ra;

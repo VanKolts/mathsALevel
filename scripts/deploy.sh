@@ -94,6 +94,7 @@ fi
 
 say "Validating…"
 node scripts/validate.mjs || fail "validation failed — nothing committed, nothing pushed"
+node scripts/fsrs-replay-test.mjs || fail "FSRS replay invariants failed — nothing committed, nothing pushed"
 
 # ------------------------------------------------------- 3. commit message ----
 

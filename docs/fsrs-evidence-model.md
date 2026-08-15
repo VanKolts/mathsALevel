@@ -203,7 +203,7 @@ Three signals can describe the same underlying failure. Rules, applied at replay
 
 The existing decaying `mistakeLoad` is not deleted wholesale — it still expresses something the stability channel does not: *"you got this wrong recently, so look at it sooner than the model alone says."*
 
-- `MISTAKE_D_WEIGHT` → **0** (retired). Difficulty now moves directly at the event, so lifting it again per-render double-counts.
+- `MISTAKE_D_WEIGHT` → **0** (retired) — **in phase 2, not phase 1.** Difficulty will move directly at the event, so lifting it again per-render would double-count. But phase 1 removes `effectiveD` from the *stability* path without yet adding the mistake events that replace it, so zeroing this in phase 1 would leave a release where mistakes quietly matter less than before. It stays at 1.30 until the mistake channel exists. (It contributes roughly 13% of the current mistake effect: `1.30 × 0.004 = 0.0052` of retention lift per unit load, against `MISTAKE_RET_WEIGHT`'s 0.04.)
 - `MISTAKE_RET_WEIGHT` → **0.04 → 0.015**. Keeps a mild recency tightening without re-applying the full penalty.
 - `MISTAKE_TAU` → retained at 30 days **for this channel only**.
 
@@ -345,12 +345,22 @@ EXAM_RAMP_DAYS, MASTERY_STABILITY, MAX_INTERVAL, DIFF_D_SEED
 
 | Phase | Change | Risk |
 |---|---|---|
-| 1 | Build the replay engine over the **existing** review log only. Verify it reproduces today's `S`/`D` exactly. | none — pure refactor with an exact oracle |
+| **1 ✅ done** | One shared FSRS step (`applyReview`) behind `saveTopicStudied`, `simulateGrade` and `replayRecord`; stored state is now a pure function of the review log. Invariants locked by `scripts/fsrs-replay-test.mjs`. | one behavioural change — see below |
 | 2 | Add `mistake` events (§3). Ship the evidence trail (§9.1) at the same time so the change is legible. | medium |
 | 3 | Add `paper` events (§4) behind the migration summary (§8). | highest value, highest shock |
 | 4 | Confidence indicator (§9.4) and the forgetting-curve view (§9.3). | low, visual only |
 
 Phase 1 is the one that de-risks everything else: if the replay reproduces current behaviour bit-for-bit from the review log alone, then every later phase is just adding events to a mechanism already known to be correct.
+
+### Phase 1, as built
+
+It turned out not to be a *pure* refactor. `replayRecord()` already existed for the sync merge, but the live path and the replay path were two separate implementations that disagreed on one term: `saveTopicStudied` and `simulateGrade` computed stability from `effectiveD(name)` — difficulty inflated by the current, recency-decayed mistake load — while `replayRecord` used the record's own `D`.
+
+That made stored `S` a function of device-local, time-varying state that the log does not record. Two devices with identical review histories but different mistake-sync timing could hold different `S`, and no replay could ever reproduce what the live path had written. Fixing it means **`S` now grows very slightly faster after a review on a topic with recent mistakes than it used to** — the mistake penalty moves to its own properly-dated channel in phase 2 instead of leaking in through difficulty.
+
+Verified: the modal's per-grade forecast is now bit-identical to what Save writes for all five grades (it previously shared the same contaminated term, so it agreed by luck rather than construction), and a six-review history including a lapse replays to the stored record exactly.
+
+`scripts/fsrs-replay-test.mjs` runs 500 randomised histories and is wired into `npm test`, `scripts/deploy.sh` and CI. It asserts order-independence under the `(date,id)` sort that sync depends on, purity of `applyReview`, and — structurally — that all three call sites delegate rather than keeping a second copy of the model. It was mutation-tested against three regressions (a re-inlined step in `saveTopicStudied`, a reintroduced `effectiveD`, and a hidden accumulator); all three are caught.
 
 ---
 
