@@ -11,7 +11,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 **The other two documents:**
 
-- [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) — the design doc for the memory engine's direction: how all three evidence signals (reviews, mistakes, past-paper marks) become one replayable timeline. Phases 1 and 2 are built; phase 3 is the biggest outstanding piece of work in the project.
+- [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) — the design doc for the memory engine's direction: how all three evidence signals (reviews, mistakes, past-paper marks) become one replayable timeline. All four phases are built: memory is a pure function of the review log, mistakes and past-paper marks are dated events on that timeline, and the study modal shows the resulting curve and evidence trail.
 - **The Manual**, in the Obsidian vault at `projects/maths a-level tool/Manual.md` — the same app explained from zero knowledge in plain language, with the visual layer, every page and dialog, and the reasoning behind each decision. Written for understanding rather than reference, and paired with a 193-term `Glossary.md`.
 
 > **If you change the app, you change all three.** See [Keeping the documentation in step](#keeping-the-documentation-in-step).
@@ -46,7 +46,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 ```
   data/*.js  (static)          index.html  (markup + all logic)      styles.css
 ┌──────────────────────┐   ┌──────────────────────────────────┐   ┌────────────┐
-│ clusters.js          │   │  UI LAYER          LOGIC LAYER   │   │ 8 themes   │
+│ clusters.js          │   │  UI LAYER          LOGIC LAYER   │   │ 3 themes   │
 │   → allTopics        │──▶│  5 pages/tab-bar   FSRS-4.5      │◀──│ CSS vars   │
 │ formulas.js          │   │  modals            (scheduling)  │   │ responsive │
 │ glossary.js (223)    │   │  MathJax           mistake wgt   │   └────────────┘
@@ -77,7 +77,9 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 > **Note — two orphaned page containers.** `#page-progress` and `#page-settings` still exist in the markup but nothing activates them: neither is in `TAB_ORDER`, neither has a tab button, and neither is ever given `.active`. Settings content moved into `#settings-overlay`; the progress charts are effectively superseded by `#stats-overlay`. `renderProgressTab()` still runs on every refresh, rendering into a permanently hidden container. Both should be either wired up or deleted.
 
-**Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **8 built-in themes** — Rose, Ocean and Violet each in dark + light, plus Pure Black (OLED) and Pure White. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
+**Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **3 built-in themes** — **Dark** (the default), **Light** and **Light rose**. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
+
+Ocean, Violet and Pure Black were retired once the spectrum became a memory scale rather than decoration: a palette that retints the whole app fights a colour ramp that has to mean the same thing everywhere. `THEME_MIGRATE` in `index.html` maps the retired keys onto the survivors, and — like `applyChapterRenames` — it runs on **every** load rather than once behind a flag, because sync can push a retired value back down from a device still on an older build at any moment. A copy of the map lives in the boot `<script>` in `<head>` so the migration lands before first paint.
 
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
@@ -582,7 +584,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
   git config --local url."https://github.com/".insteadOf "git@github.com:"
   ```
   This is already set. Undo with `git config --local --unset url."https://github.com/".insteadOf`; the alternative fix is to add `~/.ssh/id_ed25519.pub` to GitHub → Settings → SSH keys.
-- **Stack recap:** vanilla HTML/CSS/JS · CSS-variable theming (8 themes) · MathJax · service worker for offline · Firebase compat SDK (Auth + Firestore, offline persistence) · Google Gemini for AI · everything else in `localStorage`.
+- **Stack recap:** vanilla HTML/CSS/JS · CSS-variable theming (3 themes) · MathJax · service worker for offline · Firebase compat SDK (Auth + Firestore, offline persistence) · Google Gemini for AI · everything else in `localStorage`.
 
 ---
 

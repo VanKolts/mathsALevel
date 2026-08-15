@@ -22,7 +22,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<script>(function(){var t=localStorage.getItem('msh-theme');if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})();</script>
+<!-- Applies the saved theme before first paint, so there is no flash of the default.
+     Also migrates the five retired themes: this runs before the stylesheet, so a device
+     that still has 'ocean-light' saved lands on the light theme rather than falling
+     through to dark. Sync can push a retired value back from an older build at any
+     time, so the map is applied on every load, not once. -->
+<script>(function(){var M={'ocean-dark':'rose-dark','violet-dark':'rose-dark','pure-black':'rose-dark','ocean-light':'pure-white','violet-light':'pure-white'};
+var t=localStorage.getItem('msh-theme');
+if(t&&M[t]){t=M[t];try{localStorage.setItem('msh-theme',t);}catch(e){}}
+if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})();</script>
 <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},svg:{fontCache:'global'},startup:{typeset:false}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
@@ -697,7 +705,7 @@
         <div class="settings-row">
           <div class="settings-row-info">
             <div class="settings-row-title">Colour scheme</div>
-            <div class="settings-row-sub">Choose a theme and brightness. Your preference is saved automatically.</div>
+            <div class="settings-row-sub">Pick how the app looks. Your preference is saved automatically and follows you across devices.</div>
           </div>
         </div>
         <div id="theme-picker-wrap"></div>
@@ -3669,17 +3677,21 @@ document.getElementById('stats-overlay').addEventListener('click',function(e){
 
 // ---- Theme system ----
 const THEME_META={
-  'rose-dark':   {name:'Rose',   swatches:['#160b10','#24101a','#f43f5e']},
-  'rose-light':  {name:'Rose',   swatches:['#fef2f4','#ffffff','#e11d48']},
-  'ocean-dark':  {name:'Ocean',  swatches:['#112030','#183050','#38bdf8']},
-  'ocean-light': {name:'Ocean',  swatches:['#f0f9ff','#ffffff','#0284c7']},
-  'violet-dark': {name:'Violet', swatches:['#170f2e','#221440','#a78bfa']},
-  'violet-light':{name:'Violet', swatches:['#faf8ff','#ffffff','#7c3aed']},
-  'pure-black':  {name:'Black',  swatches:['#000000','#1a1a1a','#f87171']},
-  'pure-white':  {name:'White',  swatches:['#ffffff','#f2f2f2','#e11d48']},
+  'rose-dark':   {name:'Dark',       sub:'The default',      swatches:['#160b10','#24101a','#f43f5e']},
+  'pure-white':  {name:'Light',      sub:'Clean white',      swatches:['#ffffff','#f2f2f2','#e11d48']},
+  'rose-light':  {name:'Light rose', sub:'Warm white',       swatches:['#fef2f4','#ffffff','#e11d48']},
 };
-let activeTheme=localStorage.getItem('msh-theme')||'rose-dark';
+/* Ocean, Violet and Pure Black were retired. A device on an older build can push one
+   of those back through sync at any moment, so the map is applied every time a theme
+   is read or set rather than once behind a flag — the same reasoning as
+   applyChapterRenames(). The boot script in <head> carries a copy so the migration
+   lands before first paint. */
+const THEME_MIGRATE={'ocean-dark':'rose-dark','violet-dark':'rose-dark','pure-black':'rose-dark',
+                     'ocean-light':'pure-white','violet-light':'pure-white'};
+function normaliseTheme(k){ return (k&&THEME_MIGRATE[k])?THEME_MIGRATE[k]:k; }
+let activeTheme=normaliseTheme(localStorage.getItem('msh-theme'))||'rose-dark';
 function applyTheme(key){
+  key=normaliseTheme(key);
   if(!THEME_META[key])return;
   activeTheme=key;
   localStorage.setItem('msh-theme',key);
@@ -3689,30 +3701,22 @@ function applyTheme(key){
 }
 function renderThemePicker(){
   const wrap=document.getElementById('theme-picker-wrap');if(!wrap)return;
-  const schemes=['rose','ocean','violet'];
-  const modes=[['dark','Dark'],['light','Light']];
-  let html='<div class="theme-picker">';
-  modes.forEach(([mode,lbl])=>{
-    html+='<div><div class="theme-col-lbl">'+lbl+'</div>';
-    schemes.forEach(sc=>{
-      const key=sc+'-'+mode;const m=THEME_META[key];
-      html+='<div class="theme-opt'+(activeTheme===key?' active-theme':'')+'" data-tkey="'+key+'">';
-      html+='<div class="theme-swatches">'+m.swatches.map(c=>'<div class="theme-swatch" style="background:'+c+'"></div>').join('')+'</div>';
-      html+='<span class="theme-name">'+m.name+'</span><span class="theme-check">&#10003;</span></div>';
-    });
-    html+='</div>';
-  });
-  html+='</div>';
-  html+='<div class="theme-col-lbl" style="margin-top:12px">Minimal</div><div class="theme-picker">';
-  ['pure-black','pure-white'].forEach(key=>{
+  // Three themes now, so a flat list beats the old dark/light column split.
+  let html='<div class="theme-picker theme-picker-flat">';
+  Object.keys(THEME_META).forEach(key=>{
     const m=THEME_META[key];
-    html+='<div class="theme-opt'+(activeTheme===key?' active-theme':'')+'" data-tkey="'+key+'">';
-    html+='<div class="theme-swatches">'+m.swatches.map(c=>'<div class="theme-swatch" style="background:'+c+(c==='#ffffff'?';outline:1px solid #ddd;outline-offset:-1px':'')+';border-radius:3px"></div>').join('')+'</div>';
-    html+='<span class="theme-name">'+m.name+'</span><span class="theme-check">&#10003;</span></div>';
+    html+='<div class="theme-opt'+(activeTheme===key?' active-theme':'')+'" data-tkey="'+key+'" role="button" tabindex="0">';
+    html+='<div class="theme-swatches">'+m.swatches.map(c=>'<div class="theme-swatch" style="background:'+c+
+      (c.toLowerCase()==='#ffffff'?';outline:1px solid rgba(0,0,0,.18);outline-offset:-1px':'')+'"></div>').join('')+'</div>';
+    html+='<span class="theme-name">'+m.name+'<small>'+m.sub+'</small></span><span class="theme-check">&#10003;</span></div>';
   });
   html+='</div>';
   wrap.innerHTML=html;
-  wrap.querySelectorAll('.theme-opt').forEach(el=>el.addEventListener('click',()=>applyTheme(el.getAttribute('data-tkey'))));
+  wrap.querySelectorAll('.theme-opt').forEach(el=>{
+    const pick=()=>applyTheme(el.getAttribute('data-tkey'));
+    el.addEventListener('click',pick);
+    el.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();} });
+  });
 }
 
 // ---- Settings tab + Further Maths options ----
@@ -4085,28 +4089,29 @@ function renderMemoryCurve(){
   const px=x=>(x*W).toFixed(2);
   const py=y=>(PT+(1-Math.max(0,Math.min(1,(y-LO)/(1-LO))))*(H-PT-PB)).toFixed(2);
   let d=''; c.pts.forEach((p,i)=>{ d+=(i?'L':'M')+px(p.x)+' '+py(p.y); });
-  const last=c.pts[c.pts.length-1];
-  const area=d+'L'+px(last.x)+' '+py(LO)+'L'+px(c.pts[0].x)+' '+py(LO)+'Z';
   // nearest sampled point to today, for the "you are here" dot
   let now=c.pts[0];
   for(const p of c.pts) if(Math.abs(p.x-c.todayX)<Math.abs(now.x-c.todayX)) now=p;
-  const marks=c.marks.map(m=>'<circle class="mc-mark mc-'+m.kind+'" cx="'+px(m.x)+'" cy="'+py(m.y)+'" r="2.4"><title>'+
+  const marks=c.marks.map(m=>'<circle class="mc-mark" cx="'+px(m.x)+'" cy="'+py(m.y)+'" r="3"><title>'+
       (m.kind==='paper'?'past paper':m.kind)+'</title></circle>').join('');
   const dueLine=(c.dueX!=null)?'<line class="mc-due" x1="'+px(c.dueX)+'" y1="'+PT+'" x2="'+px(c.dueX)+'" y2="'+(H-PB)+'"/>':'';
+  /* userSpaceOnUse, not the default objectBoundingBox: the gradient then maps onto the
+     plot's own coordinates, so the line AND every dot take the spectrum colour at their
+     actual height. A dot sitting at 60% recall is orange; one at 95% is green. With the
+     default units each circle would instead contain a whole squashed rainbow. */
   wrap.innerHTML=
     '<div class="mc-hd">'+(plainLang?'How your memory of this has moved':'Predicted recall over time')+'</div>'+
     '<svg class="mc-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+
-      '<defs><linearGradient id="mc-grad" x1="0" y1="1" x2="0" y2="0">'+
+      '<defs><linearGradient id="mc-grad" gradientUnits="userSpaceOnUse" x1="0" y1="'+(H-PB)+'" x2="0" y2="'+PT+'">'+
         '<stop offset="0" stop-color="var(--spec-1)"/><stop offset=".28" stop-color="var(--spec-2)"/>'+
         '<stop offset=".5" stop-color="var(--spec-3)"/><stop offset=".72" stop-color="var(--spec-4)"/>'+
         '<stop offset="1" stop-color="var(--spec-5)"/>'+
       '</linearGradient></defs>'+
       '<line class="mc-target" x1="0" y1="'+py(c.target)+'" x2="'+W+'" y2="'+py(c.target)+'"/>'+
       dueLine+
-      '<path class="mc-area" d="'+area+'"/>'+
       '<path class="mc-line" d="'+d+'"/>'+
       marks+
-      '<circle class="mc-now" cx="'+px(now.x)+'" cy="'+py(now.y)+'" r="3.6"/>'+
+      '<circle class="mc-now" cx="'+px(now.x)+'" cy="'+py(now.y)+'" r="4.2"/>'+
     '</svg>'+
     '<div class="mc-axis"><span>100%</span><span>'+Math.round(LO*100)+'%</span></div>'+
     '<div class="mc-legend"><span>'+fmtDate(c.start)+'</span>'+

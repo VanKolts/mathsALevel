@@ -792,15 +792,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .mc-axis{position:absolute;right:12px;top:24px;bottom:26px;display:flex;flex-direction:column;
   justify-content:space-between;align-items:flex-end;pointer-events:none;
   font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;color:var(--dim);opacity:.6;}
-.mc-area{fill:url(#mc-grad);opacity:.07;stroke:none;}
-.mc-line{fill:none;stroke:url(#mc-grad);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
+/* No fill under the curve — just the line. An area fill at this size reads as a solid
+   block rather than a shaded region, and buries the shape it is meant to support. */
+.mc-line{fill:none;stroke:url(#mc-grad);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;
   vector-effect:non-scaling-stroke;}
 .mc-target{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke;}
 .mc-due{stroke:var(--accent2);stroke-width:1;stroke-dasharray:2 3;opacity:.7;vector-effect:non-scaling-stroke;}
-.mc-mark{stroke:var(--surface2);stroke-width:1.5;vector-effect:non-scaling-stroke;}
-.mc-mark.mc-review{fill:var(--muted);}
-.mc-mark.mc-paper{fill:var(--accent2);}
-.mc-mark.mc-mistake{fill:var(--overdue);}
+/* Each event dot samples the same gradient at its own height, so its colour states the
+   recall it landed on. The dark ring lifts it off the line it sits on. */
+.mc-mark{fill:url(#mc-grad);stroke:rgba(0,0,0,.72);stroke-width:1.2;vector-effect:non-scaling-stroke;}
 .mc-now{fill:var(--text);stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;}
 .mc-legend{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
   font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;color:var(--dim);margin-top:2px;}
@@ -955,65 +955,6 @@ html{scroll-behavior:smooth;}
   --accent-rgb:225,29,72;--accent2-rgb:234,88,12;
   --surface-glass:rgba(255,255,255,.92);--bg-top:#ffffff;--tab-active:#e11d48;
 }
-[data-theme="ocean-dark"]{
-  --bg:#112030;--surface:#183050;--surface2:#1e3a60;--surface3:#244470;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
-  --text:#e0f2ff;--muted:#6090b8;--dim:#3a6080;
-  --accent:#38bdf8;--accent2:#34d399;--accent-h:#7dd3fc;
-  --upcoming:#34d399;
-  --grad:linear-gradient(135deg,#38bdf8,#34d399);
-  --glow:0 0 20px rgba(56,189,248,.22);
-  --accent-rgb:56,189,248;--accent2-rgb:52,211,153;
-  --surface-glass:rgba(17,32,48,.88);--bg-top:#0d1a28;--tab-active:#bae6fd;
-}
-[data-theme="ocean-light"]{
-  --bg:#f0f9ff;--surface:#ffffff;--surface2:#e8f4fe;--surface3:#d6ecfa;
-  --border:rgba(0,0,0,0.07);--border2:rgba(0,0,0,0.12);
-  --text:#0c1e30;--muted:#4a7a9a;--dim:#90b8c8;
-  --accent:#0284c7;--accent2:#059669;--accent-h:#0ea5e9;
-  --upcoming:#059669;
-  --grad:linear-gradient(135deg,#0284c7,#059669);
-  --glow:0 0 20px rgba(2,132,199,.12);
-  --accent-rgb:2,132,199;--accent2-rgb:5,150,105;
-  --surface-glass:rgba(240,249,255,.92);--bg-top:#ffffff;--tab-active:#0284c7;
-}
-[data-theme="violet-dark"]{
-  --bg:#170f2e;--surface:#221440;--surface2:#2b1952;--surface3:#341e65;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
-  --text:#f0ecff;--muted:#8870b0;--dim:#503880;
-  --accent:#a78bfa;--accent2:#f472b6;--accent-h:#c4b5fd;
-  --upcoming:#f472b6;
-  --grad:linear-gradient(135deg,#a78bfa,#f472b6);
-  --glow:0 0 20px rgba(167,139,250,.22);
-  --accent-rgb:167,139,250;--accent2-rgb:244,114,182;
-  --surface-glass:rgba(23,15,46,.88);--bg-top:#120c26;--tab-active:#ddd6fe;
-}
-[data-theme="violet-light"]{
-  --bg:#faf8ff;--surface:#ffffff;--surface2:#f2eeff;--surface3:#e8e0ff;
-  --border:rgba(0,0,0,0.07);--border2:rgba(0,0,0,0.12);
-  --text:#1a0f30;--muted:#6040a0;--dim:#b0a0d0;
-  --accent:#7c3aed;--accent2:#db2777;--accent-h:#8b5cf6;
-  --upcoming:#db2777;
-  --grad:linear-gradient(135deg,#7c3aed,#db2777);
-  --glow:0 0 20px rgba(124,58,237,.12);
-  --accent-rgb:124,58,237;--accent2-rgb:219,39,119;
-  --surface-glass:rgba(250,248,255,.92);--bg-top:#ffffff;--tab-active:#7c3aed;
-}
-[data-theme="pure-black"]{
-  --bg:#000000;--surface:#0d0d0d;--surface2:#1a1a1a;--surface3:#242424;
-  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.18);
-  --text:#ffffff;--muted:#888888;--dim:#444444;
-  --accent:#f87171;--accent2:#60a5fa;--accent-h:#fca5a5;
-  --y1:#34d399;--y2:#3B82F6;--fm:#f472b6;
-  --y1-bg:rgba(52,211,153,0.1);--y2-bg:rgba(59,130,246,0.1);--fm-bg:rgba(244,114,182,0.1);
-  --y1-bd:rgba(52,211,153,0.28);--y2-bd:rgba(59,130,246,0.28);--fm-bd:rgba(244,114,182,0.28);
-  --overdue:#f87171;--due:#fbbf24;--upcoming:#fb923c;
-  --d1:#34d399;--d2:#fbbf24;--d3:#f87171;
-  --grad:linear-gradient(135deg,var(--spectrum));
-  --glow:0 0 20px rgba(248,113,113,.25);
-  --accent-rgb:248,113,113;--accent2-rgb:96,165,250;
-  --surface-glass:rgba(0,0,0,.90);--bg-top:#000000;--tab-active:#ffffff;
-}
 [data-theme="pure-white"]{
   --bg:#ffffff;--surface:#f2f2f2;--surface2:#e8e8e8;--surface3:#dddddd;
   --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.16);
@@ -1032,13 +973,16 @@ html{scroll-behavior:smooth;}
 
 /* ── THEME PICKER UI ────────────────────────────────────────── */
 .theme-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+/* Three themes sit better as one column of full-width rows than a 2x2 grid. */
+.theme-picker-flat{grid-template-columns:1fr;gap:6px;}
 .theme-col-lbl{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-bottom:6px;}
 .theme-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;transition:border-color var(--t-fast),background var(--t-fast);background:var(--surface);}
 .theme-opt:hover{background:var(--surface2);}
 .theme-opt.active-theme{border-color:var(--accent);background:var(--surface2);}
 .theme-swatches{display:flex;gap:2px;flex-shrink:0;}
 .theme-swatch{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
-.theme-name{font-size:var(--fs-sm);color:var(--text);font-weight:500;line-height:1.2;}
+.theme-name{font-size:var(--fs-sm);color:var(--text);font-weight:500;line-height:1.2;display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;}
+.theme-name small{font-size:var(--fs-3xs);color:var(--muted);font-weight:400;}
 .theme-check{margin-left:auto;color:var(--accent);font-size:var(--fs-md);opacity:0;flex-shrink:0;}
 .theme-opt.active-theme .theme-check{opacity:1;}
 /* ── TAB SLIDE TRANSITION ───────────────────────────────── */

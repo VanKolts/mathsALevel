@@ -417,6 +417,8 @@ Both zeroes pull the topic forward; the ambiguous one bites less. Full marks pus
 
 One thing needed fixing during the build: a fixed 0–100% y-axis squashed every real curve into the top sliver, because recall rarely drops far. The axis is now floored just below the lowest point in the series — but never zooms past 50%, so a shallow dip cannot be dramatised into a collapse, and both bounds are labelled so a floored axis can't be mistaken for a full one.
 
+Two further corrections after seeing it on real data. The area fill under the curve read as a solid block at this size rather than a shaded region, burying the shape it was meant to support — so there is no fill, just the line. And the gradient now uses `gradientUnits="userSpaceOnUse"` rather than the default `objectBoundingBox`, which means it maps onto the plot's own coordinates: the line **and every event dot** take the spectrum colour at their actual height, so a dot sitting at 60% recall is orange and one at 95% is green. Under the default units each circle would have contained its own squashed rainbow instead. Dots carry a dark ring to lift them off the line.
+
 **The evidence-quality indicator** (§9.4) distinguishes a measurement from a guess. A strength bar backed by exam marks renders solid; one resting on self-ratings alone renders as a hollow outline with a faded fill, and its tooltip says which. The memory-details panel spells it out: *"Measured against real exam marks — 3 reviews, 1 exam question, 1 mistake."*
 
 That quietly teaches the thing worth teaching: logging papers question-by-question makes the app's advice better, and the UI now shows the difference rather than presenting a guess and a measurement with identical authority.
