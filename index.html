@@ -968,9 +968,9 @@
 <!-- ===== Mobile app-shell chrome (phones + tablets only; hidden on desktop) ===== -->
 <svg class="m-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
   <linearGradient id="m-rainbow" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="24" y2="24">
-    <stop offset="0" stop-color="#f87171"/><stop offset=".28" stop-color="#fb923c"/>
-    <stop offset=".5" stop-color="#fbbf24"/><stop offset=".72" stop-color="#34d399"/>
-    <stop offset="1" stop-color="#60a5fa"/>
+    <stop offset="0" stop-color="var(--spec-1)"/><stop offset=".28" stop-color="var(--spec-2)"/>
+    <stop offset=".5" stop-color="var(--spec-3)"/><stop offset=".72" stop-color="var(--spec-4)"/>
+    <stop offset="1" stop-color="var(--spec-5)"/>
   </linearGradient>
 </defs></svg>
 
@@ -2507,7 +2507,11 @@ function strengthInfo(name){
   if(!validRec(rec)) return {pct:null,color:'var(--dim)',label:'Not started'};
   const r=currentRetrievability(name); const pct=Math.round(r*100);
   let color='#34d399';
-  if(r<0.70) color='#f87171'; else if(r<0.85) color='#fbbf24'; else if(r<0.93) color='#fb923c';
+  // The bands must climb monotonically in hue as recall improves:
+  // red 0° -> orange 27° -> amber 43° -> green 158°. Amber and orange were the wrong
+  // way round, so improving from 84% to 86% recall moved the badge *backwards* towards
+  // red. This order also matches retColors, the 10-step ramp used by the skill tree.
+  if(r<0.70) color='#f87171'; else if(r<0.85) color='#fb923c'; else if(r<0.93) color='#fbbf24';
   // Mastered topics used to report a hardcoded 100%, which stayed at 100% however long ago the
   // topic was last seen. Show the real number and keep the label.
   if(rec.S>=MASTERY_STABILITY) return {pct,color,label:'Mastered · '+pct+'% recall',mastered:true};
@@ -5772,14 +5776,22 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     var ov=document.createElement('div');ov.className='sspring-thumb';
     if(isPP)ov.style.cssText='width:20px;height:20px;border-width:3px;box-shadow:0 1px 4px rgba(0,0,0,.3)';
     wrap.appendChild(ov);
-    var SEV_COLORS=['#f87171','#fb923c','#fbbf24','#34d399','#60a5fa'];
-    var needsNums=(input.id==='m-severity'||input.id==='em-severity'||input.classList.contains('plog-slider'));
+    // Two 1-5 sliders share this code but run in opposite directions, so they cannot
+    // share one ramp. Severity 5 is the *worst* outcome; paper-log 5 is the best.
+    // (This local array used to be called SEV_COLORS, shadowing the global one of that
+    // name, which is why the severity numbers ran red->blue while their own pips
+    // beside them ran green->red.)
+    var RAMP_UP=['#f87171','#fb923c','#fbbf24','#34d399','#60a5fa'];  // 1..5 poor -> strong
+    var RAMP_DOWN=SEV_COLORS.slice(1);                                // 1..5 mild -> critical
+    var isSeverity=(input.id==='m-severity'||input.id==='em-severity');
+    var ramp=isSeverity?RAMP_DOWN:RAMP_UP;
+    var needsNums=(isSeverity||input.classList.contains('plog-slider'));
     if(needsNums){
       var numWrap=document.createElement('div');numWrap.className='sspring-nums';
       numWrap.style.padding='0 '+THUMB_R+'px';
       for(var i=1;i<=5;i++){
         var nd=document.createElement('div');nd.className='sspring-num';
-        var sp=document.createElement('span');sp.textContent=i;sp.style.color=SEV_COLORS[i-1];
+        var sp=document.createElement('span');sp.textContent=i;sp.style.color=ramp[i-1];
         nd.appendChild(sp);numWrap.appendChild(nd);
       }
       wrap.appendChild(numWrap);
@@ -6232,13 +6244,13 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     st.textContent=
       '#mh-login{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg,#160b10);padding:20px;font-family:inherit;}'
       +'#mh-login .card{width:100%;max-width:360px;background:var(--card,#241319);border-radius:18px;padding:30px 26px;box-shadow:0 24px 70px rgba(0,0,0,.55);}'
-      +'#mh-login .brand{font-size:1.7rem;font-weight:800;margin-bottom:14px;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}'
+      +'#mh-login .brand{font-size:1.7rem;font-weight:800;margin-bottom:14px;background:linear-gradient(90deg,var(--spectrum));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}'
       +'#mh-login h2{margin:0 0 4px;font-size:1.35rem;color:var(--text,#fff);}'
       +'#mh-login p.sub{margin:0 0 16px;font-size:.84rem;color:var(--muted,#b89aa6);}'
       +'#mh-login label{display:block;font-size:.76rem;color:var(--muted,#b89aa6);margin:12px 0 5px;}'
       +'#mh-login input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:var(--text,#fff);font-size:.95rem;}'
       +'#mh-login input:focus{outline:none;border-color:#fb923c;}'
-      +'#mh-login button.go{width:100%;margin-top:20px;padding:12px;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:.95rem;color:#160b10;background:linear-gradient(90deg,#f87171,#fb923c,#fbbf24,#34d399,#60a5fa);}'
+      +'#mh-login button.go{width:100%;margin-top:20px;padding:12px;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:.95rem;color:#160b10;background:linear-gradient(90deg,var(--spectrum));}'
       +'#mh-login button.go:disabled{opacity:.6;cursor:default;}'
       +'#mh-login .toggle{margin-top:15px;text-align:center;font-size:.82rem;color:var(--muted,#b89aa6);}'
       +'#mh-login .toggle a{color:#fb923c;cursor:pointer;text-decoration:underline;}'

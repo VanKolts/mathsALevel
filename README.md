@@ -161,7 +161,7 @@ That load feeds `effectiveD()` (raises difficulty) and `targetRetention()` (rais
 
 ### Live UI signals
 - `currentRetrievability(name)` → the % on each Checklist card.
-- `strengthInfo(name)` → the colour band (red < 70% < amber < 85% < orange < 93% < green) and label.
+- `strengthInfo(name)` → the colour band (red < 70% < orange < 85% < amber < 93% < green) and label. The bands climb monotonically in hue (0° → 27° → 43° → 158°); amber and orange were previously the wrong way round, so improving from 84% to 86% recall moved the badge backwards towards red.
 - `simulateGrade(name, date, g)` → the modal's "what happens if I rate this…" forecast, run for each grade without committing.
 
 Guards throughout keep it robust: `validRec()` rejects corrupt state, `safeInterval()` clamps intervals to `[1, 3650]` days to prevent `Date` overflow at extreme stability.
