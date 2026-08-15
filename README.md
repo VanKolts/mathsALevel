@@ -3,18 +3,25 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (~5,900 lines); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (~6,570 lines); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
 
 This document describes the app on **three levels**: the **visual/UX layer** (what a student sees), the **feature layer** (what each part does), and the **technical layer** (how it actually works — data model, the spaced-repetition maths, sync, and the AI subsystem).
+
+**The other two documents:**
+
+- [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) — the design doc for the memory engine's direction: how all three evidence signals (reviews, mistakes, past-paper marks) become one replayable timeline. Phases 1 and 2 are built; phase 3 is the biggest outstanding piece of work in the project.
+- **The Manual**, in the Obsidian vault at `projects/maths a-level tool/Manual.md` — the same app explained from zero knowledge in plain language, with the visual layer, every page and dialog, and the reasoning behind each decision. Written for understanding rather than reference, and paired with a 193-term `Glossary.md`.
+
+> **If you change the app, you change all three.** See [Keeping the documentation in step](#keeping-the-documentation-in-step).
 
 ---
 
 ## Table of contents
 1. [Architecture in one picture](#architecture-in-one-picture)
 2. [The visual layer](#the-visual-layer)
-3. [The five pages, feature by feature](#the-five-pages-feature-by-feature)
+3. [The surfaces, feature by feature](#the-surfaces-feature-by-feature)
 4. [The spaced-repetition engine (deep dive)](#the-spaced-repetition-engine-deep-dive)
 5. [Data model & storage](#data-model--storage)
    - [Topic renames & the remap](#topic-renames--the-remap)
@@ -29,7 +36,8 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
 10. [Editing, building & deploying](#editing-building--deploying)
-11. [Known gaps & roadmap](#known-gaps--roadmap)
+11. [Keeping the documentation in step](#keeping-the-documentation-in-step)
+12. [Known gaps & roadmap](#known-gaps--roadmap)
 
 ---
 
@@ -49,7 +57,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
                    ┌──────────── STATE ─────▼──────┐    ┌──────────────────┐
                    │  localStorage  (per device)   │    │ sw.js            │
                    └───────────────┬───────────────┘    │ precaches shell  │
-                                   │ (optional, signed in)│ + data → works  │
+                                   │ (once signed in)     │ + data → works  │
                          ┌─────────▼──────────┐          │ fully offline    │
                          │  Firebase          │ realtime └──────────────────┘
                          │  Auth + Firestore  │ onSnapshot + offline persistence
@@ -57,13 +65,17 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
                          └────────────────────┘
 ```
 
-**Key idea:** the app has *no backend of its own*. All content ships with the app; all student state lives in `localStorage`; Firebase is an *optional* mirror for multi-device sync. The three AI tools call Google Gemini directly with the student's own key.
+**Key idea:** the app has *no backend of its own*. All content ships with the app; all student state lives in `localStorage`; Firebase mirrors it for multi-device sync. The three AI tools call Google Gemini directly with the student's own key.
+
+**Sign-in is required in practice.** The cloud script raises a full-screen login gate the moment the page opens and the app is unusable until Firebase Auth resolves — there is no "skip" path. The one local-only fallback is the SDK failing to load at all (offline on a first visit, or a blocked CDN), in which case the cloud block returns early, no gate is ever built, and the app runs entirely on `localStorage`. So: **signed-in by default; local-only only when the cloud machinery is absent.**
 
 ---
 
 ## The visual layer
 
-**Shell.** A fixed **tab-bar** navigates five pages. Each page is a `<section id="page-…">`; switching pages toggles which section is visible and slides a `.tab-indicator` under the active button. A **due-count badge** (`.tab-due-badge`) on the Checklist tab shows how many topics need review today.
+**Shell.** A fixed **tab-bar** navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each is a `<div class="page" id="page-…">`; switching toggles which one is visible and slides a `.tab-indicator` under the active button. A **due-count badge** (`.tab-due-badge`) on the Checklist tab shows how many topics are overdue. Settings and Statistics sit beside them as icon buttons that open **overlays** rather than pages.
+
+> **Note — two orphaned page containers.** `#page-progress` and `#page-settings` still exist in the markup but nothing activates them: neither is in `TAB_ORDER`, neither has a tab button, and neither is ever given `.active`. Settings content moved into `#settings-overlay`; the progress charts are effectively superseded by `#stats-overlay`. `renderProgressTab()` still runs on every refresh, rendering into a permanently hidden container. Both should be either wired up or deleted.
 
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **8 built-in themes** — Rose, Ocean and Violet each in dark + light, plus Pure Black (OLED) and Pure White. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
 
@@ -73,7 +85,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 ---
 
-## The five pages, feature by feature
+## The surfaces, feature by feature
 
 ### 1. 📋 Checklist — `#page-checklist`
 **Visual:** the home screen. Every spec topic as a card, grouped by area (Pure / Statistics / Mechanics, or the Further modules), each showing a **memory-strength indicator** (predicted % recall, colour-graded red→amber→green) and a **status** (due / overdue / upcoming / mastered / not started). Due and overdue topics float to the top.
@@ -88,15 +100,17 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 ### 3. ❌ Mistakes — `#page-mistakes`
 **Visual:** a log of questions you got wrong, each tagged with a **category** (Concept gap, Method error, Silly mistake, …) and a 1–5 **severity**. A **re-attempt loop** brings a mistake back later so you can try it again and rate the retry; an **"Explain with AI"** button gives a focused walkthrough.
 
-**Technical:** mistakes live in `localStorage['alevel-mistakes-v2']`. Crucially, they **feed back into scheduling** — see `mistakeLoad()` in the engine section: a recent, high-severity concept-gap mistake raises the topic's effective difficulty and pulls its next review earlier, and the effect decays with age. So logging a mistake genuinely changes what the app tells you to revise.
+**Technical:** mistakes live in `localStorage['alevel-mistakes-v2']`. Crucially, they **feed back into scheduling** — since phase 2 of the [evidence model](docs/fsrs-evidence-model.md), each mistake is a dated *observation* replayed on the same timeline as reviews, and it moves the topic's stability directly. The **category**, not the severity, sets how far: one concept gap drops a well-learned topic from 96% to 82% and makes it overdue immediately; a method error takes about three; silly slips barely register. So logging a mistake genuinely changes what the app tells you to revise — see [the engine section](#mistakes-are-evidence-not-just-a-nudge).
 
 ### 4. 📉 "Where I lost marks" (Leaks report) — inside Progress/Mistakes
 **Visual:** turns all your logged papers into a ranked report — **marks lost per topic**, a **grade-impact headline** ("these leaks cost you ~1 grade"), and a **"revise first" ordering** by how often each topic bleeds marks.
 
 **Technical:** it aggregates the per-question paper-log data (not summed row totals — computed per *question* so multi-topic questions don't double-count), ranks topics by total marks lost and frequency, and maps the recoverable marks onto grade boundaries.
 
-### 5. 📊 Progress — `#page-progress`
-**Visual:** charts and stats — memory strength across the syllabus, review history, streaks, and paper performance over time.
+### 5. 📊 Statistics — `#stats-overlay`
+**Visual:** the honest audit, opened from the chart icon in the tab bar (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
+
+**Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due. The older `#page-progress` charts (`renderProgressTab`) are the orphaned container noted above.
 
 ### Cross-cutting features (reachable from the header / quick-row)
 - **📖 Glossary** — 223 searchable Pure terms (`GLOSSARY`), plus **inline glossary popovers**: terms elsewhere in the app are tappable for an in-place definition.
@@ -104,7 +118,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 - **🗂 Resources overlay** — reference links/material, opened from the header on desktop and a `.cl-quick` row on mobile.
 - **🧮 Formula sheet** — the `FORMULAS` data rendered as an interactive, searchable sheet styled like the real formulae booklet.
 - **📅 Revision plan / My exams** — the multi-exam adaptive planner. Instead of one global exam date, you set a date **per paper** (AS P1–P2, A-Level P1–P3, and the Further modules), seeded from `exam-dates.json` (currently the provisional Edexcel Summer 2027 timetable) and overridable per paper. Each topic then ramps against the date of the paper that actually examines it, so Statistics tightens for the Stats paper rather than for whichever exam happens to be first. Reachable from Settings → My exams, with a plan generator on the Checklist quick-row.
-- **Settings** (`#page-settings`) — theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Gemini API key, a JSON backup export, and a **Sync diagnostics** panel.
+- **Settings** (`#settings-overlay`, opened from the ⚙ tab button) — account, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, and a **Sync diagnostics** panel with manual push/pull.
 
 ---
 
@@ -140,7 +154,7 @@ R(t, S) = (1 + FACTOR · t/S) ^ DECAY        DECAY = −0.5,  FACTOR = 19/81
 Because the target rises, `dueDateFor` naturally pulls everything closer together as the exam approaches — no separate "cram mode" needed.
 
 ### Updating after a review
-When you rate a review 1–5, the FSRS update primitives fire:
+When you rate a review 1–5, the FSRS update primitives fire — all of them behind **one shared step, `applyReview()`**, which `saveTopicStudied()`, `simulateGrade()` and the sync `replayRecord()` all delegate to. That is [phase 1 of the evidence model](docs/fsrs-evidence-model.md): stored memory state is now a *pure function of the review log*, so replay reproduces the live path exactly and the modal's forecast is bit-identical to what Save writes. (It previously was not: the live path used `effectiveD()` — difficulty inflated by the current, time-decayed mistake load — while replay used the record's own `D`, so two devices with identical histories could hold different `S`.)
 
 - `initialStability(r)` / `initialDifficulty(g, topicDiff)` seed a brand-new topic, **blending** FSRS's defaults with the topic's intrinsic maths difficulty (`DIFF_D_SEED = {1:3.5, 2:5.0, 3:6.8}`).
 - On success, `stabilityAfterRecall(D,S,R,r)` grows S (bigger jump when the memory was already weak but you still recalled it — the desirable-difficulty effect).
@@ -150,14 +164,39 @@ When you rate a review 1–5, the FSRS update primitives fire:
 
 A topic with `S ≥ MASTERY_STABILITY (180 days)` is labelled **Mastered** — but mastery is a *label, not an exit*. Stability of 180 days means durable, not permanent: a topic last seen 200 days ago is already below 90% recall. Mastered topics stay on the schedule and resurface when they fall due, and `needsExamConfirmation()` guarantees one confirmation pass over everything inside `EXAM_RAMP_DAYS` — including topics whose stability is high enough that the ordinary interval would sail clean past the exam. (Previously `statusFor` short-circuited to `'done'` and `strengthInfo` reported a hardcoded 100%, so the closer the exam got, the more of the syllabus silently disappeared — the opposite of what the exam ramp is for.) Use `isMastered(name)` to count mastery; a mastered topic can now also be due.
 
-### Mistakes actually change the schedule
-This is the app's signature mechanic. `mistakeLoad(name)` sums a topic's logged mistakes, each weighted by:
+### Mistakes are evidence, not just a nudge
+This is the app's signature mechanic, and [phase 2 of the evidence model](docs/fsrs-evidence-model.md) rebuilt it.
 
-- **Category severity** (`MISTAKE_SEVERITY`): Concept gap = 1.00 … Silly mistake = 0.30.
-- **User-set severity** (1–5, scaled ~0.33×–1.67×).
-- **Recency decay** (`exp(−age/τ)`): old mistakes fade out.
+**A mistake is an *observation*, not a rehearsal.** Logging "concept gap on integration by parts" does not restudy the topic — it says the model's estimate was too high. So `applyMistake()` revises `S` and `D` but **leaves `last` alone**. That distinction is load-bearing: if a mistake reset the clock, `currentRetrievability()` would be `forgetting(0, S)` ≈ 100% and logging a mistake would make the memory percentage jump *up*.
 
-That load feeds `effectiveD()` (raises difficulty) and `targetRetention()` (raises the review target), so a fresh conceptual error visibly moves that topic up your revision queue — and the effect gently fades if you stop getting it wrong.
+**Category, not severity, sets the size.** `MISTAKE_EVIDENCE` grades the eight categories by [Newman error-analysis](https://files.eric.ed.gov/fulltext/EJ1488529.pdf) stage — "what fraction of a full lapse is one of these?" A mistake moves `S` that fraction of the way toward `stabilityAfterLapse()`, so repeats compound as `1 − (1−E)ⁿ`:
+
+| Category | `E` | ≈ n to full effect | | Category | `E` | ≈ n |
+|---|---:|---:|---|---|---:|---:|
+| Concept gap | 1.00 | 1 | | Misread question | 0.15 | 6 |
+| Missed the clever step | 0.60 | 2 | | Calculation error | 0.12 | 8 |
+| Method error | 0.33 | 3 | | Transcription slip | 0.08 | 12 |
+| Ran out of time | 0.25 | 4 | | Silly mistake | 0.08 | 12 |
+
+On a mature topic (S≈30d, 96% recall) one concept gap gives **96% → 82%, overdue immediately**; a method error needs ~3; five silly slips move it ~1 point. On a freshly-seeded topic (S≈4d) every category bites proportionally harder — correct, and pinned by the test suite. Retune with `node scripts/fsrs-sim.mjs`.
+
+**Built as a derived layer, not a migration.** `sr[]` stays exactly what phase 1 made it — reviews only, which is what sync merges. `memoryFor(name)` replays reviews *and* mistakes together on one date-sorted timeline (`buildTimeline` → `replayTimeline`), and every user-facing read goes through it: memory %, due date, status, mastery, the forecast. **No new storage key, no migration, no change to the sync contract** — both devices already merge reviews and mistakes by their own rules, so both derive the same answer. Order is total and deterministic: `(date, kind, id)` with reviews before mistakes on the same day.
+
+**What's left of the soft channel.** `mistakeLoad()` — severity- and recency-weighted (`MISTAKE_SEVERITY`, `exp(−age/τ)`) — survives only as a small lift to `targetRetention()` ("you got this wrong lately, look sooner"). `MISTAKE_D_WEIGHT` is now **0** and `MISTAKE_RET_WEIGHT` dropped 0.04 → 0.015, because the real penalty lands on stability. `effectiveD()` therefore collapses to `rec.D`. The decay term must never enter the replay: it is a function of `today()`, and replay has to be pure ([sync](#cloud-sync-architecture) depends on it).
+
+**Phase 3 — past-paper marks — is still outstanding.** 2,106 tagged questions with real marks are the best evidence in the app and the scheduler still ignores them. Design in [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) §4.
+
+### The evidence trail
+Because the timeline is walked event by event, recording what each one *did* is nearly free. `evidenceTrail(name)` produces the list under the memory details in the study modal:
+
+```
+Memory 82%  ·  overdue by 5 days
+  12 Jul   rated OK                    next in 15d
+  28 Jul   rated Confident             next in 34d
+   4 Aug   concept gap                 91% → 82%
+```
+
+Newest first, capped at 8. It is the honest answer to "why is this suddenly at the top of my list?", and nothing else in the A-level market can point at a specific logged error and say *that is why*.
 
 ### Live UI signals
 - `currentRetrievability(name)` → the % on each Checklist card.
@@ -192,6 +231,8 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-pomo-presets-v1` | study-timer presets |
 | `alevel-shortcuts-v1` | UI shortcuts config |
 | `alevel-onboarded-v1` | onboarding-seen flag |
+| `alevel-exam-off` | exam ramping switched off (cleared via a `keys` tombstone, so the choice propagates) |
+| `alevel-practiceq-v1` | cached AI-generated practice questions, last 8 per topic (device-local) |
 | `msh-theme` | active theme |
 | `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
 | `alevel-imgpending-v1` | photo ids awaiting upload (device-local — deliberately not synced) |
@@ -216,7 +257,7 @@ If topics are ever renamed again, add the entries to `CHAPTER_RENAMES` (never re
 
 ## Cloud sync architecture
 
-Sign-in is optional. When you do, the app mirrors your state to **Firebase** (project `maths-hub-3aa8c`) using the compat SDK (v10.14.1, Auth + Firestore).
+The app gates on sign-in (see [the key idea](#architecture-in-one-picture)) and mirrors your state to **Firebase** (project `maths-hub-3aa8c`) using the compat SDK (v10.14.1, Auth + Firestore). If the SDK never loads, the whole block returns early and the app stays local-only.
 
 - **Realtime:** an `onSnapshot` listener on `users/{uid}` pushes remote changes to every device live — a change on your laptop reaches your phone in seconds.
 - **Offline-durable:** `db.enablePersistence({synchronizeTabs:true})` caches writes in IndexedDB, so edits made offline queue up and flush when you reconnect (and multiple tabs stay consistent).
@@ -473,24 +514,32 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 | `DIFF_LABELS` | `{1:'Standard', 2:'Challenging', 3:'Hard'}` |
 | `DIFF_COLORS` | `{1:'#34d399', 2:'#fbbf24', 3:'#f87171'}` |
 
-**Mistake-weighting** (mistakes feed back into scheduling):
+**Mistake evidence** (the stability channel — phase 2):
 | Constant | Value / meaning |
 |---|---|
-| `MISTAKE_SEVERITY` | category weights: `Concept gap`1.00 · `Missed the clever step`0.85 · `Method error`0.70 · `Misread question`0.50 · `Calculation error`0.45 · `Transcription slip`0.40 · `Ran out of time`0.40 · `Silly mistake`0.30 |
-| `SEV_LABELS` | `['','Minor','Low','Moderate','High','Critical']` (user severity 1–5) |
-| `MISTAKE_TAU` | recency-decay time constant in `exp(−age/τ)` |
-| `MISTAKE_D_WEIGHT` | how strongly mistake-load lifts effective difficulty |
-| `MISTAKE_RET_WEIGHT` | how strongly mistake-load lifts target retention |
+| `MISTAKE_EVIDENCE` | fraction of a full lapse per category: `Concept gap`1.00 · `Missed the clever step`0.60 · `Method error`0.33 · `Ran out of time`0.25 · `Misread question`0.15 · `Calculation error`0.12 · `Transcription slip`0.08 · `Silly mistake`0.08 |
+| `MISTAKE_EVIDENCE_DEFAULT` | `0.15` — for an unrecognised category |
+
+**Mistake soft channel** (residual recency nudge to target retention only):
+| Constant | Value / meaning |
+|---|---|
+| `MISTAKE_SEVERITY` | legacy category weights: `Concept gap`1.00 · `Missed the clever step`0.85 · `Method error`0.70 · `Misread question`0.50 · `Calculation error`0.45 · `Transcription slip`0.40 · `Ran out of time`0.40 · `Silly mistake`0.30 |
+| `SEV_LABELS` | `['','Minor','Low','Moderate','High','Critical']` (user severity 1–5; **not** used in the stability maths) |
+| `MISTAKE_TAU` | `30` days — recency decay in `exp(−age/τ)`. Soft channel only; never inside the replay |
+| `MISTAKE_D_WEIGHT` | **`0`** — retired in phase 2; `D` now moves at the mistake event itself |
+| `MISTAKE_RET_WEIGHT` | `0.015` — down from 0.04, since the real penalty now lands on stability |
 
 **AI:** `TUTOR_MODEL` = Gemini model id (`gemini-2.5-flash`); shared call timeout 60 s; 1 retry; `pqGenerate` temperature 0.9 / `pqVerify` temperature 0.
 
 ### 9.5 Function inventory by subsystem
 
-~322 functions total. The load-bearing ones, grouped:
+~369 named functions total. The load-bearing ones, grouped:
 
-- **Forgetting curve & scheduling:** `forgetting(t,S)`, `intervalForRetention(S,R)`, `safeInterval(x)`, `validRec(r)`, `currentRetrievability(name)`, `dueDateFor(name)`, `statusFor(name)`, `strengthInfo(name)`.
-- **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`.
-- **Mistake feedback:** `mistakeLoad(name)`, `effectiveD(name)`, `targetRetention(name)`, `examDateForTopic(name)`, `sevPips`, `sevUpdateUI`.
+- **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate` (which parse at local *noon*, deliberately, to stay clear of DST).
+- **Forgetting curve & scheduling:** `forgetting(t,S)`, `intervalForRetention(S,R)`, `safeInterval(x)`, `validRec(r)`, `currentRetrievability(name)`, `dueDateFor(name)`, `statusFor(name)`, `strengthInfo(name)`, `isMastered(name)`, `needsExamConfirmation(name)`.
+- **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`.
+- **The one shared step (phase 1 & 2):** `applyReview(rec,g,date,tdiff)` and `applyMistake(rec,E,date)` — the only two places state is advanced; `buildTimeline`, `replayTimeline`, `mistakeEventsByTopic`, `memoryFor(name)` (the derived read every UI number goes through, memoised per topic/day), `invalidateMemory`, `evidenceTrail(name)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`, `sanitizeAllSR`, `migrateV4`.
+- **Mistake feedback (soft channel):** `mistakeLoad(name)` (memoised per topic/day), `invalidateMistakeLoad`, `effectiveD(name)`, `targetRetention(name)`, `examDateForTopic(name)`, `examDateForComponent(comp)`, `sevPips`, `sevUpdateUI`.
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
@@ -512,6 +561,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 - **No build.** Serve the folder (`npm start`, or any static server) and it runs. There is no bundler, transpiler or dependency install. Opening `index.html` via `file://` mostly works, but the `data/*.js` scripts and the service worker need a real origin — use the server.
 - **Edit in place.** Logic and markup in `index.html`, styling in `styles.css`, content in `data/*.js`. Git history is the backup — no `.bak`/duplicate files.
+- **Update the docs in the same change.** See [Keeping the documentation in step](#keeping-the-documentation-in-step) below — this is not optional housekeeping, it is part of the change.
 - **Validate before pushing.** `npm test` (→ `node scripts/validate.mjs`) syntax-checks every inline `<script>`, `sw.js` and each `data/*.js`, then asserts the invariants the app quietly relies on:
   - every paper's marks sum to its real Edexcel total (100 for A-Level and AS paper 1, 60 for AS paper 2, 75 for legacy Core and Further modules);
   - every past-paper `topics:[…]` string resolves to a canonical topic name;
@@ -536,6 +586,41 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 ---
 
+## Keeping the documentation in step
+
+**Every change to this app updates its documentation in the same commit.** Not afterwards, not "when there's time" — in the same change, before `npm run deploy` runs.
+
+This is a rule with a history. A single review found *three* things this README asserted that the code did not do, including "works fully offline", which one missing hostname in the service worker had quietly defeated. Documentation that lags is worse than none: it is confidently wrong, and it gets believed. The standing rule is **read the implementation, not the docs** — and the only way to make that rule unnecessary is to never let them diverge.
+
+### The three documents, and who owns what
+
+| Document | Where | Holds | Update when |
+|---|---|---|---|
+| **This README** | `README.md` | *How the code works* — architecture, data model, the FSRS maths, sync, AI, the full data reference. The source of truth for code detail | Any behaviour, constant, dataset, function or invariant changes |
+| **The Manual** | `projects/maths a-level tool/Manual.md` in the Obsidian vault | *The whole app explained from zero* — same ground plus the visual layer, every page and dialog, and the reasoning behind each design decision. Plain language, no source code | The same triggers, **plus** anything a user would see or feel |
+| **The Glossary** | `projects/maths a-level tool/Glossary.md` in the vault | Every project term, defined once. The Manual leans on it instead of re-explaining | A new term, acronym, data object or concept appears anywhere |
+
+Design *rationale* — the why, the alternatives rejected, the bug that forced a shape — lives in the vault (`Log.md`, `Discussions/`, `History.md`). The repo holds the mechanism; the vault holds the reasoning. When the two disagree about code, **the repo wins** and the vault gets corrected.
+
+### The checklist
+
+Before `npm run deploy`, for the change you just made:
+
+- [ ] **README** — is any statement now false? Check the section you touched *and* [§9 Complete data & code reference](#complete-data--code-reference): tuning constants, function inventory, storage keys, coverage tables, counts.
+- [ ] **Counts** — re-run `npm test` and copy the real numbers (clusters, topics, papers, questions, glossary terms, untagged topics). Never hand-edit a count.
+- [ ] **Manual** — update the section covering what changed. If it changed what a student sees, update the relevant page section in Part III as well as the mechanism in Part IV.
+- [ ] **Glossary** — did the change introduce a term? Define it, and link it from the Manual.
+- [ ] **Known gaps** — did this close an item below, or open a new one?
+- [ ] **Vault** — append to `Log.md` (newest on top), add a `Discussions/YYYY-MM-DD — <topic>` note for a substantive session, a line in `History.md` for a milestone, and rewrite `Status.md` if what's next changed.
+- [ ] **Mistakes** — if something went wrong on the way, add a **Don't / Do / Why** entry to `Mistakes.md` at the vault root. The *Why* is the part worth keeping.
+- [ ] **Design docs** — if the change advances [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md), update its phase table and add an "as built" note recording where reality diverged from the plan.
+
+### What the tooling can and cannot check
+
+`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+
+---
+
 ## Known gaps & roadmap
 
 Honest list of what doesn't work yet, so nothing here looks like a bug you have to rediscover.
@@ -546,6 +631,10 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **Accessibility needs a pass.** Many controls fall below the 44 px touch target on a narrow phone, there is one `aria-live` region, and modals do not trap or restore focus.
 - **Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab; deferring it would speed up the Checklist's first paint.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
+- **Two orphaned page containers.** `#page-progress` and `#page-settings` are in the markup but unreachable — not in `TAB_ORDER`, no tab button, never given `.active`. `renderProgressTab()` still runs on every refresh, drawing into a hidden container. Wire them up or delete them.
+- **Past-paper marks still don't reach the scheduler** — phase 3 of [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md). The best evidence in the app, 2,106 tagged questions, is analytics-only. Highest-value engine work outstanding.
+- **Firestore security rules unverified.** One document per user, so a rule left in test mode would expose every student's data. Confirm it is `allow read, write: if request.auth.uid == uid`. (The `apiKey` in source is public by design and fine.)
+- **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites.
 
 ---
 
