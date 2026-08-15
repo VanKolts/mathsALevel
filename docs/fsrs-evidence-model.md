@@ -1,6 +1,6 @@
 # The evidence model — making FSRS use everything the app knows
 
-**Status:** design proposal, not yet implemented.
+**Status:** phases 1 and 2 implemented; phase 3 (past-paper marks) outstanding.
 **Scope:** how topic memory is estimated. Replaces the current mistake-weighting mechanic, adds past-paper marks as a first-class input, and unifies all three signals into one replayable timeline.
 
 ---
@@ -346,11 +346,30 @@ EXAM_RAMP_DAYS, MASTERY_STABILITY, MAX_INTERVAL, DIFF_D_SEED
 | Phase | Change | Risk |
 |---|---|---|
 | **1 ✅ done** | One shared FSRS step (`applyReview`) behind `saveTopicStudied`, `simulateGrade` and `replayRecord`; stored state is now a pure function of the review log. Invariants locked by `scripts/fsrs-replay-test.mjs`. | one behavioural change — see below |
-| 2 | Add `mistake` events (§3). Ship the evidence trail (§9.1) at the same time so the change is legible. | medium |
+| **2 ✅ done** | `mistake` events on the timeline (§3), plus the evidence trail (§9.1) and memory-delta toast (§9.2). Invariants in `scripts/fsrs-mistake-test.mjs`. | medium |
 | 3 | Add `paper` events (§4) behind the migration summary (§8). | highest value, highest shock |
 | 4 | Confidence indicator (§9.4) and the forgetting-curve view (§9.3). | low, visual only |
 
 Phase 1 is the one that de-risks everything else: if the replay reproduces current behaviour bit-for-bit from the review log alone, then every later phase is just adding events to a mechanism already known to be correct.
+
+### Phase 2, as built
+
+Built as a **derived layer** rather than the rebuild-and-migrate in §8, which turned out to be unnecessary. `sr[]` stays exactly what phase 1 made it — a pure function of the review log, which is what sync merges and replays. Mistake evidence is layered on top in `memoryFor()`, which replays reviews and mistakes together on one timeline and is what every user-facing read now goes through (memory %, due date, status, mastery, the forecast).
+
+That means **no new storage key, no migration, and no change to the sync contract**. Both devices already merge reviews and mistakes by their own existing rules, so both derive the same answer from the same merged inputs. The §8 migration plan and the `alevel-sr-v6` key are not needed.
+
+Measured on a topic with two spaced reviews (S ≈ 24.5d, 91% recall, next review 21 Aug):
+
+| | memory | stability | next review | status |
+|---|---:|---:|---|---|
+| clean | 91% | 24.5d | 21 Aug | upcoming |
+| + one concept gap | **69%** | **4.4d** | 29 Jul | **overdue** |
+
+`sr[].S` stayed at 24.5 throughout — the phase 1 invariant is intact and its suite still passes unchanged.
+
+`MISTAKE_D_WEIGHT` is now 0 and `MISTAKE_RET_WEIGHT` drops to 0.015 as designed, since the real penalty now lands on stability.
+
+**Scale dependence worth knowing:** the §3.3 table assumes a mature topic. On a freshly-seeded one (a single review leaves S ≈ 4d) every category bites proportionally harder. That is correct — a topic you have seen once really is that fragile — but it means "five silly mistakes are negligible" holds for established topics, not brand-new ones. The test suite pins both cases.
 
 ### Phase 1, as built
 

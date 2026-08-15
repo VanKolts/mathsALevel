@@ -4,7 +4,7 @@
   "private": true,
   "description": "Spaced-repetition study app for Edexcel A-Level Maths. No build step — package.json exists only so `npm test` runs the pre-deploy validator and `npm run deploy` publishes.",
   "scripts": {
-    "test": "node scripts/validate.mjs && node scripts/fsrs-replay-test.mjs",
+    "test": "node scripts/validate.mjs && node scripts/fsrs-replay-test.mjs && node scripts/fsrs-mistake-test.mjs",
     "start": "python3 -m http.server 8000",
     "deploy": "bash scripts/deploy.sh"
   },

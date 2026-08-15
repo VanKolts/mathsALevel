@@ -1078,9 +1078,35 @@ function sevUpdateUI(val,lblId,pipsId){
   const el=document.getElementById(lblId);if(el)el.textContent=n+' — '+SEV_LABELS[n];
   sevPips(n,pipsId);
 }
+/* Evidence weight per mistake category — "what fraction of a full lapse does one
+   mistake of this type represent". Phase 2 of docs/fsrs-evidence-model.md.
+
+   Graded by Newman error-analysis stage, which is hierarchical: a failure early in
+   the chain (transformation — you had no method to select) is a real memory failure,
+   while a failure late in the chain (process skills, encoding — you had the method
+   and fumbled the arithmetic) is execution noise. Only the early stages say anything
+   about whether you know the topic.
+
+   Because each mistake moves stability a fraction E of the way toward a genuine
+   lapse, repeats compound as 1-(1-E)^n. So E is really "1 / how many of these before
+   it counts as properly forgotten": a concept gap lands in one, a method error takes
+   about three, and silly slips barely register however many you log.
+   Retune with `node scripts/fsrs-sim.mjs`. */
+const MISTAKE_EVIDENCE = {
+  'Concept gap':            1.00,  // transformation — no method to select
+  'Missed the clever step': 0.60,  // transformation — had the tools, missed the choice
+  'Method error':           0.33,  // process skills — right plan, wrong procedure
+  'Ran out of time':        0.25,  // fluency: known, but not automatic
+  'Misread question':       0.15,  // reading/comprehension — not topic memory
+  'Calculation error':      0.12,  // process skills (arithmetic)
+  'Transcription slip':     0.08,  // encoding
+  'Silly mistake':          0.08   // encoding / noise
+};
+const MISTAKE_EVIDENCE_DEFAULT = 0.15;
+
 const MISTAKE_TAU        = 30;   // days; recency decay constant
-const MISTAKE_D_WEIGHT   = 1.30; // mistake load -> effective difficulty
-const MISTAKE_RET_WEIGHT = 0.04; // mistake load -> retention target
+const MISTAKE_D_WEIGHT   = 0;    // retired in phase 2: D now moves at the mistake event itself
+const MISTAKE_RET_WEIGHT = 0.015;// residual recency nudge only; the real penalty is now on S
 
 // Self-test grades (chosen AFTER attempting a real exam question).
 // 1-5 self-rating (Anki-style quality scale, reworked for maths). The rating
@@ -2427,7 +2453,10 @@ function validRec(r){ return !!(r && isFinite(r.S) && r.S>0 && typeof r.last==='
    The cache is cleared whenever the mistake list changes (loadState/saveState) and whenever the
    day rolls over, since the decay term depends on today's date. */
 var _mlCache=Object.create(null), _mlDay='';
-function invalidateMistakeLoad(){ _mlCache=Object.create(null); }
+/* Both caches key off the same inputs (the mistake list, the review logs and the
+   current day), so they are always dropped together. invalidateMemory() is declared
+   further down; function declarations hoist, and every caller runs after load. */
+function invalidateMistakeLoad(){ _mlCache=Object.create(null); invalidateMemory(); }
 function mistakeLoad(name){
   const td=today();
   if(td!==_mlDay){ _mlDay=td; _mlCache=Object.create(null); }
@@ -2453,7 +2482,7 @@ function mistakeLoad(name){
    MISTAKE_D_WEIGHT to 0; it is deliberately left at 1.30 until then, so mistakes
    do not silently stop mattering in between. */
 function effectiveD(name){
-  const rec=sr[name]; const baseD=rec?rec.D:5;
+  const rec=memoryFor(name); const baseD=rec?rec.D:5;
   return clamp(baseD + MISTAKE_D_WEIGHT*mistakeLoad(name), 1, 10);
 }
 // ---- desired retention: base, ramped by exam proximity, lifted by
@@ -2473,12 +2502,12 @@ function targetRetention(name){
 
 // ---- live schedule queries ----
 function currentRetrievability(name){
-  const rec=sr[name]; if(!validRec(rec)) return null;
+  const rec=memoryFor(name); if(!validRec(rec)) return null;
   const t=Math.max(0,daysDiff(rec.last,today()));
   return forgetting(t,rec.S);
 }
 function dueDateFor(name){
-  const rec=sr[name]; if(!validRec(rec)) return null;
+  const rec=memoryFor(name); if(!validRec(rec)) return null;
   const ivl=safeInterval(intervalForRetention(rec.S,targetRetention(name)));
   return addDays(rec.last,ivl);
 }
@@ -2487,20 +2516,20 @@ function dueDateFor(name){
 // resurface when they come due — otherwise the closer the exam gets, the more of the syllabus
 // silently disappears, which is the opposite of what the exam ramp is for.
 function isMastered(name){
-  const rec=sr[name];
+  const rec=memoryFor(name);
   return !!(validRec(rec) && rec.S>=MASTERY_STABILITY);
 }
 /* Inside the exam run-in, guarantee one confirmation pass over everything — including topics
    whose stability is high enough that the ordinary interval would sail past the exam date. */
 function needsExamConfirmation(name){
-  const rec=sr[name]; if(!validRec(rec)) return false;
+  const rec=memoryFor(name); if(!validRec(rec)) return false;
   const ex=examDateForTopic(name); if(!ex) return false;
   const dte=daysDiff(today(),ex);
   if(dte<0 || dte>=EXAM_RAMP_DAYS) return false;
   return rec.last < addDays(ex,-EXAM_RAMP_DAYS);   // not seen since the run-in began
 }
 function statusFor(name){
-  const rec=sr[name]; if(!validRec(rec)) return null;
+  const rec=memoryFor(name); if(!validRec(rec)) return null;
   const d=daysDiff(today(),dueDateFor(name));
   if(d<0) return 'overdue';
   if(d===0) return 'due';
@@ -2510,7 +2539,7 @@ function statusFor(name){
 
 // ---- friendly "memory strength" summary for the UI ----
 function strengthInfo(name){
-  const rec=sr[name];
+  const rec=memoryFor(name);
   if(!validRec(rec)) return {pct:null,color:'var(--dim)',label:'Not started'};
   const r=currentRetrievability(name); const pct=Math.round(r*100);
   let color='#34d399';
@@ -2580,10 +2609,116 @@ function applyReview(rec,g,dateVal,tdiff){
            elapsed:elapsed, R:R };
 }
 
+/* ---- a mistake is an OBSERVATION, not a rehearsal ----
+   Logging "I had a concept gap on integration by parts" does not restudy the topic.
+   It says the model's estimate was too high. So it revises S and D but leaves `last`
+   alone. That distinction is load-bearing: if a mistake reset the clock then
+   currentRetrievability() would be forgetting(0, S) ≈ 100%, and logging a mistake
+   would make the memory percentage jump *up*. Leaving `last` untouched means the
+   reduced S drags the percentage down straight away, which is the whole point.
+
+   Moves stability a fraction E of the way toward what a genuine failed review would
+   have produced, so n mistakes of one type compound to 1-(1-E)^n of a full lapse. */
+function applyMistake(rec,E,dateVal){
+  if(!rec||!(E>0)) return rec;            // no estimate yet — nothing to revise
+  const t=Math.max(0,daysDiff(rec.last,dateVal));
+  const R=forgetting(t,rec.S);
+  const Slapse=stabilityAfterLapse(rec.D,rec.S,R);
+  return { D:clamp(rec.D+E*(nextDifficulty(rec.D,1)-rec.D),1,10),
+           S:clamp(rec.S-E*(rec.S-Slapse),0.1,MAX_INTERVAL),
+           last:rec.last, reps:rec.reps, lapses:rec.lapses };
+}
+
+/* ---- derived memory: reviews and mistakes replayed on one timeline ----
+   sr[name] deliberately stays a pure function of the review log (phase 1) — that is
+   what sync merges and replays, and it must not depend on anything else. Mistake
+   evidence is layered on top here instead, so two devices derive the same answer
+   from their own already-merged inputs, with no new stored key and no migration.
+   Every user-facing read — memory %, due date, status, mastery — goes through this. */
+function buildTimeline(reviewLog,mistakeEvents){
+  const evs=[];
+  for(const e of (reviewLog||[])){
+    if(e&&typeof e.date==='string') evs.push({date:e.date,kind:0,id:String(e.id||''),grade:e.grade});
+  }
+  for(const m of (mistakeEvents||[])) evs.push({date:m.date,kind:1,id:m.id,E:m.E,cat:m.cat});
+  /* Total, deterministic order — the same rule the sync merge uses. A review is
+     applied before a mistake dated the same day, so the mistake observes the
+     post-review state rather than the other way round. Ties break on id so the
+     order can never depend on which device happened to load which list first. */
+  evs.sort(function(a,b){
+    if(a.date!==b.date) return a.date>b.date?1:-1;
+    if(a.kind!==b.kind) return a.kind-b.kind;
+    return a.id>b.id?1:(a.id<b.id?-1:0);
+  });
+  return evs;
+}
+function replayTimeline(name,reviewLog,mistakeEvents){
+  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  let rec=null;
+  for(const e of buildTimeline(reviewLog,mistakeEvents)){
+    if(e.kind===0){ let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3; rec=applyReview(rec,g,e.date,tdiff); }
+    else rec=applyMistake(rec,e.E,e.date);
+  }
+  return (rec&&isFinite(rec.S)&&rec.S>0&&isFinite(rec.D))?rec:null;
+}
+/* ---- the evidence trail: why this topic sits where it does ----
+   Walks the same timeline one event at a time, recording what each one did, so the
+   student can see which review or which logged mistake moved them. Nothing else in
+   the A-level market can point at a specific error and say "that is why this is due". */
+function evidenceTrail(name){
+  const base=sr[name]; if(!validRec(base)) return [];
+  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const evs=buildTimeline(base.log,mistakeEventsByTopic()[name]);
+  const out=[]; let rec=null;
+  for(const e of evs){
+    const before=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
+    if(e.kind===0){
+      let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3;
+      rec=applyReview(rec,g,e.date,tdiff);
+      out.push({date:e.date,kind:'review',
+                label:'rated '+(RATING_SHORT[g]||g),
+                detail:'next in '+safeInterval(intervalForRetention(rec.S,BASE_RETENTION))+'d'});
+    } else {
+      rec=applyMistake(rec,e.E,e.date);
+      const after=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
+      out.push({date:e.date,kind:'mistake',
+                label:(e.cat||'mistake').toLowerCase(),
+                detail:(before!=null&&after!=null)
+                  ? Math.round(before*100)+'% → '+Math.round(after*100)+'%'
+                  : 'no effect yet — logged before this topic was studied'});
+    }
+  }
+  return out;
+}
+var _memCache=Object.create(null), _memDay='', _mistIdx=null;
+function invalidateMemory(){ _memCache=Object.create(null); _mistIdx=null; }
+function mistakeEventsByTopic(){
+  if(_mistIdx) return _mistIdx;
+  const idx=Object.create(null);
+  for(const m of mistakes){
+    if(!m||!m.topic||typeof m.date!=='string') continue;
+    const E=(MISTAKE_EVIDENCE[m.cat]!=null)?MISTAKE_EVIDENCE[m.cat]:MISTAKE_EVIDENCE_DEFAULT;
+    (idx[m.topic]||(idx[m.topic]=[])).push({date:m.date,id:String(m.id||''),E:E,cat:m.cat});
+  }
+  _mistIdx=idx; return idx;
+}
+function memoryFor(name){
+  const td=today();
+  if(td!==_memDay){ _memDay=td; invalidateMemory(); }
+  const hit=_memCache[name]; if(hit!==undefined) return hit;
+  const base=sr[name];
+  let out=validRec(base)?base:null;
+  if(out){
+    const ms=mistakeEventsByTopic()[name];
+    if(ms&&ms.length) out=replayTimeline(name,base.log,ms)||out;
+  }
+  _memCache[name]=out; return out;
+}
+
 // ---- simulate the result of a grade (for the modal's per-grade forecast) ----
 function simulateGrade(name,dateVal,g){
   const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
-  const next=applyReview(sr[name],g,dateVal,tdiff);
+  const next=applyReview(memoryFor(name),g,dateVal,tdiff);
   const ivl=safeInterval(intervalForRetention(next.S,targetRetention(name)));
   return {S:next.S,D:next.D,ivl,date:addDays(dateVal,ivl)};
 }
@@ -3696,7 +3831,9 @@ function openModal(topicName,fromReviewPanel){
 function renderMemDetails(){
   const body=document.getElementById('mem-details-body'); if(!body||!modalTopic) return;
   body.innerHTML='';
-  const rec=sr[modalTopic]; const rows=[];
+  // Report the *derived* record — the one that includes mistake evidence and that
+  // every other number on screen is computed from. sr[] alone is reviews-only.
+  const rec=memoryFor(modalTopic); const raw=sr[modalTopic]; const rows=[];
   if(!rec){
     const t=allTopics.find(x=>x.name===modalTopic);
     rows.push(['Status','Not started']);
@@ -3704,19 +3841,20 @@ function renderMemDetails(){
     if(!plainLang) rows.push(['First study', 'Initialises this topic’s memory model']);
   } else {
     const r=currentRetrievability(modalTopic);
-    const ml=mistakeLoad(modalTopic);
+    const mistakeCt=(mistakeEventsByTopic()[modalTopic]||[]).length;
     if(plainLang){
       rows.push(['How well you’d remember it now', Math.round(r*100)+'%']);
       rows.push(['Next review', fmtDate(dueDateFor(modalTopic))]);
       rows.push(['Times reviewed', String(rec.reps||0)]);
     } else {
       rows.push(['Predicted recall now', Math.round(r*100)+'%']);
-      rows.push(['Stability (S)', rec.S.toFixed(1)+' days']);
-      rows.push(['Difficulty (D)', rec.D.toFixed(2)+' / 10'+(ml>0?' (eff '+effectiveD(modalTopic).toFixed(2)+')':'')]);
+      rows.push(['Stability (S)', rec.S.toFixed(1)+' days'
+        +(raw&&Math.abs(raw.S-rec.S)>0.05?' (reviews alone: '+raw.S.toFixed(1)+')':'')]);
+      rows.push(['Difficulty (D)', rec.D.toFixed(2)+' / 10']);
       rows.push(['Target retention', Math.round(targetRetention(modalTopic)*100)+'%']);
       rows.push(['Next review', fmtDate(dueDateFor(modalTopic))]);
       rows.push(['Reviews / lapses', (rec.reps||0)+' / '+(rec.lapses||0)]);
-      rows.push(['Mistake load', ml.toFixed(2)+(ml>0?' (reviews pulled earlier)':'')]);
+      rows.push(['Mistakes logged', String(mistakeCt)+(mistakeCt?' (applied below)':'')]);
     }
   }
   rows.forEach(pair=>{
@@ -3725,6 +3863,32 @@ function renderMemDetails(){
     const b=document.createElement('span');b.className='mem-v';b.textContent=pair[1];
     row.append(a,b);body.appendChild(row);
   });
+  renderEvidenceTrail(body);
+}
+
+/* ---- "why is this due?" — the evidence behind the number ---- */
+function renderEvidenceTrail(body){
+  const trail=evidenceTrail(modalTopic);
+  if(!trail.length) return;
+  const hd=document.createElement('div');
+  hd.className='ev-trail-hd';
+  hd.textContent=plainLang?'What changed this':'Evidence trail';
+  body.appendChild(hd);
+  // newest first: the thing that just moved them is the thing they want to see
+  trail.slice().reverse().slice(0,8).forEach(function(e){
+    const row=document.createElement('div');
+    row.className='ev-row'+(e.kind==='mistake'?' ev-mistake':'');
+    const d=document.createElement('span');d.className='ev-date';d.textContent=fmtDate(e.date);
+    const l=document.createElement('span');l.className='ev-label';l.textContent=e.label;
+    const v=document.createElement('span');v.className='ev-detail';v.textContent=e.detail;
+    row.append(d,l,v);body.appendChild(row);
+  });
+  if(trail.length>8){
+    const more=document.createElement('div');
+    more.className='ev-more';
+    more.textContent='+ '+(trail.length-8)+' earlier';
+    body.appendChild(more);
+  }
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');modalTopic=null;}
 
@@ -4497,10 +4661,26 @@ document.getElementById('add-mistake-btn').addEventListener('click',function(){
   }
   finishAddMistake(m);
 });
-// A logged mistake raises the topic's effective difficulty and pulls its next review earlier (mistakeLoad).
+/* A logged mistake is an observation about memory: it revises the topic's stability
+   and difficulty at its own date (applyMistake), which pulls the next review earlier.
+   How far depends on the *category* — a concept gap lands in one, a method error takes
+   about three, a silly slip barely registers. Report the movement, because a change to
+   someone's revision schedule should never be silent. */
 function finishAddMistake(m){
+  const before=(m&&m.topic)?currentRetrievability(m.topic):null;
   mistakes.push(m);
   saveState();
+  let movedMsg=null;
+  if(m&&m.topic&&before!=null){
+    const after=currentRetrievability(m.topic);
+    if(after!=null){
+      const b=Math.round(before*100), a=Math.round(after*100);
+      if(b>a){
+        const st=statusFor(m.topic);
+        movedMsg=m.topic+': memory '+b+'% → '+a+'%'+(st==='overdue'||st==='due'?', now due':'');
+      }
+    }
+  }
   renderReviewPanel();
   if(activeTab==='checklist')renderAll();
   document.getElementById('m-text').value='';
@@ -4513,7 +4693,13 @@ function finishAddMistake(m){
   document.getElementById('img-upload-area').textContent='\u{1F4F7}  Add a photo of the question';
   renderMistakesTab();
   renderReattempt();
-  if(typeof toast==='function')toast(m.answer?'Logged - re-attempt it from the panel above':'Mistake logged');
+  // Prefer the specific message — "memory 68% → 56%, now due" tells the student what
+  // logging actually did. Fall back to the generic one when nothing moved (a mistake
+  // on a topic that has never been studied has no estimate to revise).
+  if(typeof toast==='function'){
+    toast(m.answer ? 'Logged - re-attempt it from the panel above'
+                   : (movedMsg || 'Mistake logged'));
+  }
 }
 
 // Generic sliding pill positioner — works for any container with position:relative

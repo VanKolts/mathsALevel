@@ -781,6 +781,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .mem-row{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);padding:2px 0;border-bottom:1px solid var(--border);}
 .mem-row:last-child{border-bottom:none;}
 .mem-k{color:var(--muted);}
+/* Evidence trail — the events that produced the memory estimate. */
+.ev-trail-hd{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--dim);margin:12px 0 4px;padding-top:8px;border-top:1px solid var(--border2);}
+.ev-row{display:flex;align-items:baseline;gap:8px;font-size:var(--fs-xs);padding:3px 0;}
+.ev-date{font-family:'JetBrains Mono',monospace;color:var(--dim);flex:none;min-width:52px;}
+.ev-label{color:var(--text);flex:1;min-width:0;}
+.ev-detail{font-family:'JetBrains Mono',monospace;color:var(--muted);flex:none;}
+.ev-row.ev-mistake .ev-label{color:var(--overdue);}
+.ev-row.ev-mistake .ev-detail{color:var(--overdue);}
+.ev-more{font-size:var(--fs-3xs);color:var(--dim);font-style:italic;padding-top:4px;}
 .mem-v{font-family:'JetBrains Mono',monospace;color:var(--text);text-align:right;}
 
 /*   AI PRACTICE QUESTION   */
