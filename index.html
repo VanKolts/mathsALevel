@@ -395,6 +395,7 @@
         <div class="rating-desc rd-3" id="rating-desc"><b id="rating-desc-short">3. OK</b><span id="rating-desc-text">Right method, a few slips along the way</span></div>
       </div>
     </div>
+    <div class="mem-curve" id="mem-curve"></div>
     <div class="modal-sched">
       <div class="modal-sched-title">Next review depending on your grade</div>
       <div id="sched-rows"></div>
@@ -2754,6 +2755,66 @@ function replayTimeline(name,reviewLog,mistakeEvents,paperEvents){
   }
   return (rec&&isFinite(rec.S)&&rec.S>0&&isFinite(rec.D))?rec:null;
 }
+/* ---- evidence quality: is this estimate measured, or self-reported? ----
+   A topic scheduled from one self-rating is a guess. One scheduled from six exam
+   questions is a measurement. The model presents both with identical authority, which
+   is not honest — so the UI distinguishes them. */
+function evidenceQuality(name){
+  const base=sr[name]; if(!validRec(base)) return {level:'none',reviews:0,papers:0,mistakes:0};
+  const ps=paperEventsByTopic()[name]||[], ms=mistakeEventsByTopic()[name]||[];
+  const reviews=(base.log||[]).length;
+  return { level: ps.length?'measured':'self', reviews:reviews, papers:ps.length, mistakes:ms.length };
+}
+
+/* ---- the forgetting curve, with the evidence marked on it ----
+   Walks the timeline and samples predicted recall day by day, so the curve shows the
+   real trajectory — every step down where a mistake or a bad paper landed, every jump
+   back up where a review did. Returns normalised 0-1 coordinates; the caller scales.
+   This is the whole model in one object, which is the point. */
+function memoryCurve(name){
+  const base=sr[name]; if(!validRec(base)) return null;
+  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const evs=buildTimeline(base.log,mistakeEventsByTopic()[name],paperEventsByTopic()[name]);
+  if(!evs.length) return null;
+  const start=evs[0].date, td=today(), due=dueDateFor(name);
+  // Run to whichever is later — today, or the next review — plus a little breathing room.
+  let end=td; if(due&&due>end) end=due;
+  const span=Math.max(2,daysDiff(start,end));
+  const total=span+Math.max(1,Math.round(span*0.08));
+  const step=Math.max(1,Math.ceil(total/240));   // cap the point count on long histories
+  const pts=[], marks=[];
+  let rec=null, ei=0;
+  for(let d=0;d<=total;d++){
+    const date=addDays(start,d);
+    while(ei<evs.length && evs[ei].date<=date){
+      const e=evs[ei++];
+      const before=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
+      if(e.kind===EV_REVIEW){ let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3; rec=applyReview(rec,g,e.date,tdiff); }
+      else if(e.kind===EV_PAPER) rec=applyPaper(rec,e.rating,e.c,e.date,tdiff);
+      else rec=applyMistake(rec,e.E,e.date,e.dOnly);
+      const after=rec?forgetting(Math.max(0,daysDiff(rec.last,e.date)),rec.S):null;
+      marks.push({x:daysDiff(start,e.date)/total,
+                  y:after!=null?after:0,
+                  kind:e.kind===EV_PAPER?'paper':(e.kind===EV_REVIEW?'review':'mistake'),
+                  drop:(before!=null&&after!=null&&after<before)});
+    }
+    if(rec && (d%step===0 || d===total)){
+      pts.push({x:d/total, y:forgetting(Math.max(0,daysDiff(rec.last,date)),rec.S)});
+    }
+  }
+  if(pts.length<2) return null;
+  /* Recall almost always lives in the top of the 0-100% range, so a fixed axis squashes
+     the whole story into a sliver. Floor the axis just under the lowest point instead —
+     but never zoom past 50%, so a shallow dip cannot be made to look like a collapse. */
+  let lo=1; for(const p of pts) if(p.y<lo) lo=p.y;
+  for(const m of marks) if(m.y<lo) lo=m.y;
+  lo=Math.max(0,Math.min(0.5,lo-0.05));
+  return { pts:pts, marks:marks, total:total, lo:lo,
+           todayX:Math.min(1,Math.max(0,daysDiff(start,td)/total)),
+           dueX:(due?Math.min(1,Math.max(0,daysDiff(start,due)/total)):null),
+           target:targetRetention(name), start:start, end:addDays(start,total) };
+}
+
 /* ---- the evidence trail: why this topic sits where it does ----
    Walks the same timeline one event at a time, recording what each one did, so the
    student can see which review or which logged mistake moved them. Nothing else in
@@ -3949,6 +4010,7 @@ function openModal(topicName,fromReviewPanel){
   const dtg=document.getElementById('mem-details-toggle'); if(dtg)dtg.textContent='Show memory details';
 
   renderMemDetails();
+  renderMemoryCurve();
   updateSchedPreview();
   pqOpen();
   document.getElementById('modal-overlay').classList.add('open');
@@ -3990,7 +4052,66 @@ function renderMemDetails(){
     const b=document.createElement('span');b.className='mem-v';b.textContent=pair[1];
     row.append(a,b);body.appendChild(row);
   });
+  renderEvidenceQuality(body);
   renderEvidenceTrail(body);
+}
+
+/* How much should the student trust this number? */
+function renderEvidenceQuality(body){
+  const eq=evidenceQuality(modalTopic);
+  if(eq.level==='none') return;
+  const el=document.createElement('div'); el.className='ev-quality';
+  const bits=[];
+  bits.push(eq.reviews+' review'+(eq.reviews===1?'':'s'));
+  if(eq.papers) bits.push(eq.papers+' exam question'+(eq.papers===1?'':'s'));
+  if(eq.mistakes) bits.push(eq.mistakes+' mistake'+(eq.mistakes===1?'':'s'));
+  el.textContent=(eq.level==='measured'
+    ? 'Measured against real exam marks — '
+    : 'Estimated from your own ratings — ')+bits.join(', ')+'.';
+  body.appendChild(el);
+}
+
+/* ---- the forgetting curve, drawn ----
+   The spectrum lives here, and it means something: the stroke is graded by recall, so
+   the line itself is red where memory is weak and green where it is strong. Every
+   marker is a real event — the curve visibly steps down at a bad paper or a concept
+   gap, and jumps back up at a review. */
+function renderMemoryCurve(){
+  const wrap=document.getElementById('mem-curve'); if(!wrap) return;
+  const c=modalTopic?memoryCurve(modalTopic):null;
+  if(!c){ wrap.innerHTML=''; wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  const W=300,H=86,PT=8,PB=15,LO=c.lo;
+  const px=x=>(x*W).toFixed(2);
+  const py=y=>(PT+(1-Math.max(0,Math.min(1,(y-LO)/(1-LO))))*(H-PT-PB)).toFixed(2);
+  let d=''; c.pts.forEach((p,i)=>{ d+=(i?'L':'M')+px(p.x)+' '+py(p.y); });
+  const last=c.pts[c.pts.length-1];
+  const area=d+'L'+px(last.x)+' '+py(LO)+'L'+px(c.pts[0].x)+' '+py(LO)+'Z';
+  // nearest sampled point to today, for the "you are here" dot
+  let now=c.pts[0];
+  for(const p of c.pts) if(Math.abs(p.x-c.todayX)<Math.abs(now.x-c.todayX)) now=p;
+  const marks=c.marks.map(m=>'<circle class="mc-mark mc-'+m.kind+'" cx="'+px(m.x)+'" cy="'+py(m.y)+'" r="2.4"><title>'+
+      (m.kind==='paper'?'past paper':m.kind)+'</title></circle>').join('');
+  const dueLine=(c.dueX!=null)?'<line class="mc-due" x1="'+px(c.dueX)+'" y1="'+PT+'" x2="'+px(c.dueX)+'" y2="'+(H-PB)+'"/>':'';
+  wrap.innerHTML=
+    '<div class="mc-hd">'+(plainLang?'How your memory of this has moved':'Predicted recall over time')+'</div>'+
+    '<svg class="mc-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+
+      '<defs><linearGradient id="mc-grad" x1="0" y1="1" x2="0" y2="0">'+
+        '<stop offset="0" stop-color="var(--spec-1)"/><stop offset=".28" stop-color="var(--spec-2)"/>'+
+        '<stop offset=".5" stop-color="var(--spec-3)"/><stop offset=".72" stop-color="var(--spec-4)"/>'+
+        '<stop offset="1" stop-color="var(--spec-5)"/>'+
+      '</linearGradient></defs>'+
+      '<line class="mc-target" x1="0" y1="'+py(c.target)+'" x2="'+W+'" y2="'+py(c.target)+'"/>'+
+      dueLine+
+      '<path class="mc-area" d="'+area+'"/>'+
+      '<path class="mc-line" d="'+d+'"/>'+
+      marks+
+      '<circle class="mc-now" cx="'+px(now.x)+'" cy="'+py(now.y)+'" r="3.6"/>'+
+    '</svg>'+
+    '<div class="mc-axis"><span>100%</span><span>'+Math.round(LO*100)+'%</span></div>'+
+    '<div class="mc-legend"><span>'+fmtDate(c.start)+'</span>'+
+      '<span class="mc-now-lbl">'+Math.round(now.y*100)+'% today</span>'+
+      '<span>'+(c.dueX!=null?('due '+fmtDate(dueDateFor(modalTopic))):fmtDate(c.end))+'</span></div>';
 }
 
 /* ---- "why is this due?" — the evidence behind the number ---- */
@@ -4489,7 +4610,14 @@ function buildClusterCard(c,vis,openIds){
 
     const si=strengthInfo(t.name);
     if(rec){
-      const bar=document.createElement('div');bar.className='strength-bar';bar.title=si.label;bar.setAttribute('aria-hidden','true');
+      const eq=evidenceQuality(t.name);
+      const bar=document.createElement('div');
+      // hollow bar = estimated from your own ratings; solid = measured against exam marks
+      bar.className='strength-bar'+(eq.level==='measured'?'':' est-self');
+      bar.title=si.label+(eq.level==='measured'
+        ? ' · measured against '+eq.papers+' exam question'+(eq.papers>1?'s':'')
+        : ' · from your own ratings only');
+      bar.setAttribute('aria-hidden','true');
       const fillb=document.createElement('div');fillb.className='strength-fill';
       fillb.style.width=(si.pct!=null?si.pct:0)+'%';fillb.style.background=si.color;
       bar.appendChild(fillb);right.appendChild(bar);

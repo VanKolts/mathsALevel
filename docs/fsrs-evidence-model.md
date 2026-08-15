@@ -1,6 +1,6 @@
 # The evidence model — making FSRS use everything the app knows
 
-**Status:** phases 1–3 implemented. Phase 4 (confidence indicator, forgetting-curve view) outstanding.
+**Status:** phases 1–4 implemented.
 **Scope:** how topic memory is estimated. Replaces the current mistake-weighting mechanic, adds past-paper marks as a first-class input, and unifies all three signals into one replayable timeline.
 
 ---
@@ -356,7 +356,7 @@ EXAM_RAMP_DAYS, MASTERY_STABILITY, MAX_INTERVAL, DIFF_D_SEED
 | **1 ✅ done** | One shared FSRS step (`applyReview`) behind `saveTopicStudied`, `simulateGrade` and `replayRecord`; stored state is now a pure function of the review log. Invariants locked by `scripts/fsrs-replay-test.mjs`. | one behavioural change — see below |
 | **2 ✅ done** | `mistake` events on the timeline (§3), plus the evidence trail (§9.1) and memory-delta toast (§9.2). Invariants in `scripts/fsrs-mistake-test.mjs`. | medium |
 | **3 ✅ done** | `paper` events (§4), a settings toggle, and a summary of what logging a paper changed. Invariants in `scripts/fsrs-paper-test.mjs`. | highest value, highest shock |
-| 4 | Confidence indicator (§9.4) and the forgetting-curve view (§9.3). | low, visual only |
+| **4 ✅ done** | Forgetting-curve view (§9.3) and evidence-quality indicator (§9.4). | low, visual only |
 
 Phase 1 is the one that de-risks everything else: if the replay reproduces current behaviour bit-for-bit from the review log alone, then every later phase is just adding events to a mechanism already known to be correct.
 
@@ -408,6 +408,18 @@ Both zeroes pull the topic forward; the ambiguous one bites less. Full marks pus
 **A settings toggle** (`alevel-paperfsrs-v1`, synced, default on) can turn the whole channel off. This is the largest change to how the app chooses what to revise, so it should not be a fait accompli. The key is stored inverted so its absence reads as "on" — existing installs get the new behaviour with no migration.
 
 **Logging a paper now reports what it did:** *"31 topics examined · 14 rescheduled sooner · 2 pushed back"*, and a paper logged as a single total says so, since without per-question marks nothing reaches the scheduler.
+
+### Phase 4, as built
+
+**The forgetting curve** (§9.3) sits in the study modal, above the grade forecast. It replays the topic's timeline day by day and plots predicted recall, so the curve shows the actual trajectory — stepping down where a mistake or a bad paper landed, jumping back up at a review. Markers are colour-coded by event kind (review / paper / mistake), with a "you are here" dot at today, a dashed line at the target retention, and a marker for the due date.
+
+**This is where the spectrum earns its keep.** The stroke is a vertical gradient across `--spec-1…5`, so the line is literally red where memory is weak and green-blue where it is strong. The rainbow stays the app's signature, but here it is a scale rather than decoration — which is the compromise between keeping the identity and making the colour mean something.
+
+One thing needed fixing during the build: a fixed 0–100% y-axis squashed every real curve into the top sliver, because recall rarely drops far. The axis is now floored just below the lowest point in the series — but never zooms past 50%, so a shallow dip cannot be dramatised into a collapse, and both bounds are labelled so a floored axis can't be mistaken for a full one.
+
+**The evidence-quality indicator** (§9.4) distinguishes a measurement from a guess. A strength bar backed by exam marks renders solid; one resting on self-ratings alone renders as a hollow outline with a faded fill, and its tooltip says which. The memory-details panel spells it out: *"Measured against real exam marks — 3 reviews, 1 exam question, 1 mistake."*
+
+That quietly teaches the thing worth teaching: logging papers question-by-question makes the app's advice better, and the UI now shows the difference rather than presenting a guess and a measurement with identical authority.
 
 ### Phase 1, as built
 

@@ -781,6 +781,38 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .mem-row{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);padding:2px 0;border-bottom:1px solid var(--border);}
 .mem-row:last-child{border-bottom:none;}
 .mem-k{color:var(--muted);}
+/* Forgetting curve. The stroke is graded by recall, so the line is red where memory is
+   weak and green where it is strong — the spectrum used as a scale, not decoration. */
+.mem-curve{display:none;background:var(--surface2);border-radius:var(--r-sm);padding:8px 12px 6px;}
+.mc-hd{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--dim);margin-bottom:4px;}
+.mem-curve{position:relative;}
+.mc-svg{width:100%;height:76px;display:block;overflow:visible;}
+/* Axis bounds, so a floored y-axis can never be mistaken for a full 0-100% one. */
+.mc-axis{position:absolute;right:12px;top:24px;bottom:26px;display:flex;flex-direction:column;
+  justify-content:space-between;align-items:flex-end;pointer-events:none;
+  font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;color:var(--dim);opacity:.6;}
+.mc-area{fill:url(#mc-grad);opacity:.07;stroke:none;}
+.mc-line{fill:none;stroke:url(#mc-grad);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
+  vector-effect:non-scaling-stroke;}
+.mc-target{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke;}
+.mc-due{stroke:var(--accent2);stroke-width:1;stroke-dasharray:2 3;opacity:.7;vector-effect:non-scaling-stroke;}
+.mc-mark{stroke:var(--surface2);stroke-width:1.5;vector-effect:non-scaling-stroke;}
+.mc-mark.mc-review{fill:var(--muted);}
+.mc-mark.mc-paper{fill:var(--accent2);}
+.mc-mark.mc-mistake{fill:var(--overdue);}
+.mc-now{fill:var(--text);stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;}
+.mc-legend{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;color:var(--dim);margin-top:2px;}
+.mc-now-lbl{color:var(--text);}
+
+/* Evidence quality — a bar backed by exam marks is a measurement; one backed only by
+   self-ratings is an estimate, and should not claim the same authority. */
+.strength-bar.est-self{background:transparent;box-shadow:inset 0 0 0 1px var(--border2);}
+.strength-bar.est-self .strength-fill{opacity:.55;}
+.ev-quality{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;color:var(--dim);
+  margin-top:6px;font-style:italic;}
+
 /* Evidence trail — the events that produced the memory estimate. */
 .ev-trail-hd{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;text-transform:uppercase;
   letter-spacing:.07em;color:var(--dim);margin:12px 0 4px;padding-top:8px;border-top:1px solid var(--border2);}
