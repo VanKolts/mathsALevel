@@ -7,7 +7,7 @@
  * Bump CACHE_VERSION whenever index.html, styles.css or data/ changes shape. Old caches are
  * deleted on activate, so a bump is the clean way to force every device onto a new build.
  */
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const SHELL_CACHE   = 'msh-shell-' + CACHE_VERSION;
 const VENDOR_CACHE  = 'msh-vendor-' + CACHE_VERSION;
 

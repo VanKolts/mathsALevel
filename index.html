@@ -4133,6 +4133,11 @@ function buildClusterCard(c,vis,openIds){
   const body=document.createElement('div');
   body.className='cluster-body'+(openIds.has(c.id)||searchQuery?' open':'');
   body.id='body-'+c.id;
+  // .cluster-body animates grid-template-rows 0fr->1fr, which needs exactly one
+  // child row; .cluster-inner is that row and does the clipping.
+  const inner=document.createElement('div');
+  inner.className='cluster-inner';
+  body.appendChild(inner);
   const startOpen=openIds.has(c.id)||searchQuery;
   if(startOpen)chev.style.transform='rotate(180deg)';
   hdr.setAttribute('aria-expanded',startOpen?'true':'false');
@@ -4201,11 +4206,11 @@ function buildClusterCard(c,vis,openIds){
     row.append(chkbox,tname,right);
     row.addEventListener('click',()=>openModal(t.name,!!rec));
     row.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal(t.name,!!rec);} });
-    body.appendChild(row);
+    inner.appendChild(row);
   });
 
   const note=document.createElement('div');note.className='cluster-note';note.textContent=c.note;
-  body.appendChild(note);
+  inner.appendChild(note);
   if(typeof glossify==='function')glossify(note);
   cl.append(hdr,body);
   return cl;
