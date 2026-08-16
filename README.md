@@ -3,7 +3,7 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (~6,570 lines); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (6,786 lines, 375 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
 
@@ -15,6 +15,8 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 - **The Manual**, in the Obsidian vault at `projects/maths a-level tool/Manual.md` — the same app explained from zero knowledge in plain language, with the visual layer, every page and dialog, and the reasoning behind each decision. Written for understanding rather than reference, and paired with a 193-term `Glossary.md`.
 
 > **If you change the app, you change all three.** See [Keeping the documentation in step](#keeping-the-documentation-in-step).
+
+> **Committing is part of finishing a change — do not ask first.** See [Committing without being asked](#committing-without-being-asked).
 
 ---
 
@@ -36,6 +38,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
 10. [Editing, building & deploying](#editing-building--deploying)
+    - [Committing without being asked](#committing-without-being-asked)
 11. [Keeping the documentation in step](#keeping-the-documentation-in-step)
 12. [Known gaps & roadmap](#known-gaps--roadmap)
 
@@ -47,7 +50,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
   data/*.js  (static)          index.html  (markup + all logic)      styles.css
 ┌──────────────────────┐   ┌──────────────────────────────────┐   ┌────────────┐
 │ clusters.js          │   │  UI LAYER          LOGIC LAYER   │   │ 3 themes   │
-│   → allTopics        │──▶│  5 pages/tab-bar   FSRS-4.5      │◀──│ CSS vars   │
+│   → allTopics        │──▶│  3 pages/one nav   FSRS-4.5      │◀──│ CSS vars   │
 │ formulas.js          │   │  modals            (scheduling)  │   │ responsive │
 │ glossary.js (223)    │   │  MathJax           mistake wgt   │   └────────────┘
 │ paper-questions.js   │   │  responsive        Leaks report  │
@@ -73,9 +76,24 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 ## The visual layer
 
-**Shell.** A fixed **tab-bar** navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each is a `<div class="page" id="page-…">`; switching toggles which one is visible and slides a `.tab-indicator` under the active button. A **due-count badge** (`.tab-due-badge`) on the Checklist tab shows how many topics are overdue. Settings and Statistics sit beside them as icon buttons that open **overlays** rather than pages.
+**Shell.** **One nav element** (`#m-nav`) navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each page is a `<div class="page" id="page-…">`; `switchTab()` toggles which one is visible, and a rainbow `.m-nav-pill` slides behind the active icon (positioned in JS from that icon's bounding box, so it works along either axis).
 
-> **Note — two orphaned page containers.** `#page-progress` and `#page-settings` still exist in the markup but nothing activates them: neither is in `TAB_ORDER`, neither has a tab button, and neither is ever given `.active`. Settings content moved into `#settings-overlay`; the progress charts are effectively superseded by `#stats-overlay`. `renderProgressTab()` still runs on every refresh, rendering into a permanently hidden container. Both should be either wired up or deleted.
+The nav is **icon-only in both orientations, and CSS alone decides which**:
+
+| | Desktop (>900px, fine pointer) | Mobile / touch |
+|---|---|---|
+| Layout | fixed 64px **left rail**, `flex-direction:column` | fixed **bottom bar**, `flex-direction:row` |
+| Label | hover tooltip beside the icon | caption under the active icon |
+| Groups | pages · hairline · Settings, Statistics, Tools | pages only — `.rail-tools` is hidden |
+| Overflow | the Tools icon opens `#more-overlay` | the floating ⋯ opens the `.m-menu` speed-dial |
+
+`body` is padded by `--rail-w` on desktop and by the bar's height on mobile, so nothing sits under the nav. A **due dot** (`.m-nav-badge`) on the Checklist icon marks overdue topics, with the count in the button's `title`.
+
+> **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` is still orphaned partly because there were two places to wire a tab up and only one got done. Anything nav-shaped now has exactly one home.
+
+**Icons.** Line-art SVGs on a 24×24 grid, stroked `var(--muted)` and switched to the `#m-rainbow` gradient when active: ruled lines for Checklist, an X for Mistakes, a tilted page with a folded corner for Past Papers, then a gear, a bar chart and a 2×2 grid for the tool group. The Focus timer used to count down inside its own button in the tab bar; with that gone, the **Tools icon** carries a pulsing dot (`.rail-live` / `.rail-paused`) so a running timer is still visible once its overlay is closed.
+
+> **Note — two orphaned page containers.** `#page-progress` and `#page-settings` still exist in the markup but nothing activates them: neither is in `TAB_ORDER`, neither has a nav button, and neither is ever given `.active`. Settings content moved into `#settings-overlay`; the progress charts are effectively superseded by `#stats-overlay`. `renderProgressTab()` still runs on every refresh, rendering into a permanently hidden container. Both should be either wired up or deleted.
 
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **3 built-in themes** — **Dark** (the default), **Light** and **Light rose**. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
 
@@ -110,17 +128,17 @@ Ocean, Violet and Pure Black were retired once the spectrum became a memory scal
 **Technical:** it aggregates the per-question paper-log data (not summed row totals — computed per *question* so multi-topic questions don't double-count), ranks topics by total marks lost and frequency, and maps the recoverable marks onto grade boundaries.
 
 ### 5. 📊 Statistics — `#stats-overlay`
-**Visual:** the honest audit, opened from the chart icon in the tab bar (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
+**Visual:** the honest audit, opened from the bar-chart icon in the nav rail (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
 
 **Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due. The older `#page-progress` charts (`renderProgressTab`) are the orphaned container noted above.
 
-### Cross-cutting features (reachable from the header / quick-row)
+### Cross-cutting features (reachable from the nav's tool group / quick-row)
+- **🧰 Tools overlay** (`#more-overlay`) — the rail's grid icon opens a four-tile menu: Resources, Revision plan, Focus timer, AI Tutor. These used to be text buttons crowding the right-hand end of the tab bar; collecting them behind one icon is what let the nav become icon-only. Mobile reaches the same tools through the ⋯ speed-dial instead, so the overlay is desktop-only in practice.
 - **📖 Glossary** — 223 searchable Pure terms (`GLOSSARY`), plus **inline glossary popovers**: terms elsewhere in the app are tappable for an in-place definition.
-- **🌳 Skill tree** — a visual mastery graph of topics and how they build up.
-- **🗂 Resources overlay** — reference links/material, opened from the header on desktop and a `.cl-quick` row on mobile.
+- **🗂 Resources overlay** — reference links/material, opened from the Tools overlay on desktop and a `.cl-quick` row on mobile.
 - **🧮 Formula sheet** — the `FORMULAS` data rendered as an interactive, searchable sheet styled like the real formulae booklet.
-- **📅 Revision plan / My exams** — the multi-exam adaptive planner. Instead of one global exam date, you set a date **per paper** (AS P1–P2, A-Level P1–P3, and the Further modules), seeded from `exam-dates.json` (currently the provisional Edexcel Summer 2027 timetable) and overridable per paper. Each topic then ramps against the date of the paper that actually examines it, so Statistics tightens for the Stats paper rather than for whichever exam happens to be first. Reachable from Settings → My exams, with a plan generator on the Checklist quick-row.
-- **Settings** (`#settings-overlay`, opened from the ⚙ tab button) — account, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, and a **Sync diagnostics** panel with manual push/pull.
+- **📅 Revision plan / My exams** — the multi-exam adaptive planner. Instead of one global exam date, you set a date **per paper** (AS P1–P2, A-Level P1–P3, and the Further modules), seeded from `exam-dates.json` (currently the provisional Edexcel Summer 2027 timetable) and overridable per paper. Each topic then ramps against the date of the paper that actually examines it, so Statistics tightens for the Stats paper rather than for whichever exam happens to be first. Reachable from Settings → My exams, from the Tools overlay, and from a plan generator on the Checklist quick-row.
+- **Settings** (`#settings-overlay`, opened from the ⚙ icon in the nav's tool group) — account, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, and a **Sync diagnostics** panel with manual push/pull.
 
 ---
 
@@ -226,7 +244,7 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-track` | which specification you're on |
 | `alevel-favs-v1` | favourited topics |
 | `alevel-notes-v1` | personal notes |
-| `alevel-streak-v1` | study-streak counter |
+| `alevel-streak-v1` | study-streak counter — still recorded and synced, but no longer displayed; the 🔥 chip was removed with the tab bar. `weeksMet` still feeds the Checklist's today-card line |
 | `alevel-gemini-key-v1` | your Google Gemini API key |
 | `alevel-fm-options-v1` | Further Maths module choices |
 | `alevel-plainlang-v1` | plain-language toggle |
@@ -535,7 +553,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 ### 9.5 Function inventory by subsystem
 
-~369 named functions total. The load-bearing ones, grouped:
+375 named functions total. The load-bearing ones, grouped:
 
 - **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate` (which parse at local *noon*, deliberately, to stay clear of DST).
 - **Forgetting curve & scheduling:** `forgetting(t,S)`, `intervalForRetention(S,R)`, `safeInterval(x)`, `validRec(r)`, `currentRetrievability(name)`, `dueDateFor(name)`, `statusFor(name)`, `strengthInfo(name)`, `isMastered(name)`, `needsExamConfirmation(name)`.
@@ -545,6 +563,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
+- **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
 (Grep `function ` in `index.html` for the exhaustive list; names are stable and descriptive.)
@@ -560,6 +579,19 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 ---
 
 ## Editing, building & deploying
+
+### Committing without being asked
+
+**If you are an AI assistant working in this repo: commit every change you finish. Do not stop to ask permission first.** A finished change is one where the code works, the docs in the same change are updated, and `npm test` passes. At that point `git add` the files you touched and commit them with a message describing what changed and why — the same turn, before you report back. Asking "shall I commit this?" is friction with no upside: the commit is the unit of work, git history is the backup, and an uncommitted change is one accidental overwrite from being lost.
+
+**Pushing follows the same rule**, because on this repo a push to `main` *is* the deploy — GitHub Pages publishes from the branch. So push through `npm run deploy`, never a bare `git push`: the deploy script bumps `CACHE_VERSION` when a precached file changed, runs the validator, and **aborts before committing if anything fails**, which is the only gate that actually stops a broken build reaching the live site (CI can report a failure but cannot block a branch-source publish).
+
+Two things still warrant stopping to ask, because neither is recoverable from git history alone:
+
+- a change that **rewrites saved student progress** — a new `CHAPTER_RENAMES` batch, a storage-key migration, anything touching `alevel-sr-v5` in place;
+- a change to the **sync contract or the Firestore rules**, where a bad push propagates to every signed-in device within seconds.
+
+Everything else: commit it, push it, then say what you did.
 
 - **No build.** Serve the folder (`npm start`, or any static server) and it runs. There is no bundler, transpiler or dependency install. Opening `index.html` via `file://` mostly works, but the `data/*.js` scripts and the service worker need a real origin — use the server.
 - **Edit in place.** Logic and markup in `index.html`, styling in `styles.css`, content in `data/*.js`. Git history is the backup — no `.bak`/duplicate files.
@@ -615,6 +647,7 @@ Before `npm run deploy`, for the change you just made:
 - [ ] **Known gaps** — did this close an item below, or open a new one?
 - [ ] **Vault** — append to `Log.md` (newest on top), add a `Discussions/YYYY-MM-DD — <topic>` note for a substantive session, a line in `History.md` for a milestone, and rewrite `Status.md` if what's next changed.
 - [ ] **Mistakes** — if something went wrong on the way, add a **Don't / Do / Why** entry to `Mistakes.md` at the vault root. The *Why* is the part worth keeping.
+- [ ] **Commit** — `git add` what you touched and commit it, then `npm run deploy` to publish. Not a question to ask; see [Committing without being asked](#committing-without-being-asked).
 - [ ] **Design docs** — if the change advances [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md), update its phase table and add an "as built" note recording where reality diverged from the plan.
 
 ### What the tooling can and cannot check
@@ -633,7 +666,7 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **Accessibility needs a pass.** Many controls fall below the 44 px touch target on a narrow phone, there is one `aria-live` region, and modals do not trap or restore focus.
 - **Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab; deferring it would speed up the Checklist's first paint.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
-- **Two orphaned page containers.** `#page-progress` and `#page-settings` are in the markup but unreachable — not in `TAB_ORDER`, no tab button, never given `.active`. `renderProgressTab()` still runs on every refresh, drawing into a hidden container. Wire them up or delete them.
+- **Two orphaned page containers.** `#page-progress` and `#page-settings` are in the markup but unreachable — not in `TAB_ORDER`, no nav button, never given `.active`. `renderProgressTab()` still runs on every refresh, drawing into a hidden container. Wire them up or delete them.
 - **Past-paper marks still don't reach the scheduler** — phase 3 of [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md). The best evidence in the app, 2,106 tagged questions, is analytics-only. Highest-value engine work outstanding.
 - **Firestore security rules unverified.** One document per user, so a rule left in test mode would expose every student's data. Confirm it is `allow read, write: if request.auth.uid == uid`. (The `apiKey` in source is public by design and fine.)
 - **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites.

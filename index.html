@@ -42,30 +42,9 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   </div>
 </header>
 
-<!-- TAB BAR -->
-<div class="tab-bar" role="tablist" aria-label="Study hub sections">
-  <div class="tab-bar-inner">
-    <span class="tab-indicator" id="tab-indicator"></span>
-    <button class="tab-btn active" id="tab-checklist-btn" role="tab" aria-selected="true">Checklist<span class="tab-due-badge" id="tab-due-badge"></span></button>
-    <button class="tab-btn" id="tab-mistakes-btn" role="tab" aria-selected="false">Mistakes</button>
-    <button class="tab-btn" id="tab-papers-btn" role="tab" aria-selected="false">Past Papers</button>
-    <button class="tab-btn tab-icon-btn si-btn" id="tab-settings-btn" role="tab" aria-selected="false" aria-label="Settings" title="Settings"><span class="si-ico">⚙</span></button>
-    <button class="tab-btn tab-icon-btn si-btn" id="stats-btn" aria-label="Your Stats" title="Your Progress Stats"><svg class="si-ico" width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="M10 10V1M10 10H19M10 10L14.5 17.79" stroke-width="1.5" stroke-linecap="round" style="stroke:var(--bg)"/></svg></button>
-    <span class="streak-chip" id="streak-chip" title="Day streak">🔥 <span id="streak-num">0</span></span>
-    <div class="tab-spacer"></div>
-    <div class="hdr-actions">
-      <button class="hdr-btn js-open-tree" aria-label="Skill tree" title="Skill tree">🌳 Skill tree</button>
-      <button class="hdr-btn js-open-resources" aria-label="Resources" title="Resources">📚 Resources</button>
-      <button class="hdr-btn" id="focus-btn" aria-label="Focus timer" title="Start a focus session">🍅 Focus</button>
-      <button class="hdr-btn" id="tutor-btn" aria-label="AI tutor" title="Get a step-by-step walkthrough">✨ Tutor</button>
-    </div>
-  </div>
-</div>
-
 <!--            CHECKLIST TAB             -->
 <div class="page active" id="page-checklist">
   <div class="cl-quick">
-    <button class="cl-quick-btn js-open-tree"><span class="cqi">🌳</span> Skill tree</button>
     <button class="cl-quick-btn js-open-resources"><span class="cqi">📚</span> Resources</button>
     <button class="cl-quick-btn" id="open-planner-btn"><span class="cqi">📅</span> Revision plan</button>
   </div>
@@ -105,7 +84,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="sep"></div>
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
-        <input class="search-input" type="text" id="search-input" placeholder="Search topics"/>
+        <input class="search-input" type="text" id="search-input" placeholder="Search topics…"/>
       </div>
       <button class="rand-btn" id="open-random-btn">🎲  Random</button>
     </div>
@@ -162,29 +141,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div class="res-cat-lbl">Practice  for drilling exam questions</div>
         <div class="res-grid" id="res-practice"></div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!--            MISTAKES TAB             -->
-<!-- SKILL TREE OVERLAY -->
-<div class="stats-overlay" id="tree-overlay">
-  <div class="stats-panel tree-panel">
-    <div class="stats-hdr">
-      <div class="stats-title">🌳 Skill Tree</div>
-      <span class="stats-subtitle">Your whole course, lit up by how well you know it</span>
-      <button class="stats-close" id="tree-close" aria-label="Close">&#10005;</button>
-    </div>
-    <div class="stats-body">
-      <div class="tree-summary" id="tree-summary"></div>
-      <div class="tree-legend">
-        <span><i class="tdot locked"></i>Not started</span>
-        <span><i class="tdot weak"></i>Shaky</span>
-        <span><i class="tdot ok"></i>Getting there</span>
-        <span><i class="tdot strong"></i>Strong</span>
-        <span><i class="tdot mastered"></i>Mastered</span>
-      </div>
-      <div id="tree-body"></div>
     </div>
   </div>
 </div>
@@ -983,7 +939,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 
 <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
-<!-- ===== Mobile app-shell chrome (phones + tablets only; hidden on desktop) ===== -->
+<!-- ===== App-shell chrome — the nav is shared; the ⋯ speed-dial is phones/tablets only ===== -->
 <svg class="m-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
   <linearGradient id="m-rainbow" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="24" y2="24">
     <stop offset="0" stop-color="var(--spec-1)"/><stop offset=".28" stop-color="var(--spec-2)"/>
@@ -996,21 +952,54 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="19" cy="12" r="2.1"/></svg>
 </button>
 
+<!-- MAIN NAV — one element, two orientations: a fixed left rail on desktop,
+     the bottom bar on mobile. CSS decides which; the JS below is shared. -->
 <nav class="m-nav" id="m-nav" aria-label="Main sections">
   <span class="m-nav-pill" id="m-nav-pill"></span>
-  <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l1.6 1.6L8.4 4.8"/><path d="M4 12l1.6 1.6L8.4 10.8"/><path d="M4 18l1.6 1.6L8.4 16.8"/><line x1="11" y1="6" x2="20" y2="6"/><line x1="11" y1="12" x2="20" y2="12"/><line x1="11" y1="18" x2="20" y2="18"/></svg>
-    <span class="m-nav-badge" id="m-nav-badge"></span><span class="m-nav-dot"></span>
-  </button>
-  <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5L21.5 20H2.5L12 3.5z"/><line x1="12" y1="10" x2="12" y2="14.5"/><line x1="12" y1="17.4" x2="12" y2="17.5"/></svg>
-    <span class="m-nav-dot"></span>
-  </button>
-  <button class="m-nav-btn" data-tab="papers" aria-label="Past Papers">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/></svg>
-    <span class="m-nav-dot"></span>
-  </button>
+  <div class="m-nav-group">
+    <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="10.7" x2="20" y2="10.7"/><line x1="4" y1="15.4" x2="20" y2="15.4"/><line x1="4" y1="20.1" x2="13.5" y2="20.1"/></svg>
+      <span class="m-nav-badge" id="m-nav-badge"></span>
+    </button>
+    <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>
+    </button>
+    <button class="m-nav-btn" data-tab="papers" aria-label="Past Papers">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(-9 12 12)"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></g></svg>
+    </button>
+  </div>
+  <span class="rail-sep" aria-hidden="true"></span>
+  <div class="m-nav-group rail-tools">
+    <button class="m-nav-btn rail-act" data-act="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="m-nav-btn rail-act" data-act="stats" aria-label="Statistics">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    </button>
+    <button class="m-nav-btn rail-act" data-act="more" id="rail-more-btn" aria-label="More tools" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.7"/></svg>
+    </button>
+  </div>
 </nav>
+
+<!-- MORE TOOLS OVERLAY — the rail's grid icon; mobile uses the ⋯ speed-dial instead -->
+<div class="stats-overlay" id="more-overlay">
+  <div class="stats-panel more-panel">
+    <div class="stats-hdr">
+      <div class="stats-title">Tools</div>
+      <span class="stats-subtitle">Everything that isn't a page of its own</span>
+      <button class="stats-close" id="more-close" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="stats-body">
+      <div class="more-grid">
+        <button class="more-item" data-act="resources"><span class="more-ico">📚</span><span class="more-name">Resources</span><span class="more-sub">Hand-picked sites for learning and practice</span></button>
+        <button class="more-item" data-act="planner"><span class="more-ico">📅</span><span class="more-name">Revision plan</span><span class="more-sub">Exam dates per paper, and the plan they drive</span></button>
+        <button class="more-item" data-act="focus"><span class="more-ico">🍅</span><span class="more-name">Focus timer</span><span class="more-sub">Timed study sessions with your own presets</span></button>
+        <button class="more-item" data-act="tutor"><span class="more-ico">✨</span><span class="more-name">AI Tutor</span><span class="more-sub">Photograph a question, get a worked walkthrough</span></button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="m-menu-backdrop" id="m-menu-backdrop"></div>
 <div class="m-menu" id="m-menu" role="menu" aria-label="More options">
@@ -1978,22 +1967,7 @@ function bumpStreak(){
   streakData.days=streakData.days||[];
   if(streakData.days.indexOf(td)===-1) streakData.days.push(td);
   streakData.last=td;
-  saveStreak();renderStreak();
-}
-function renderStreak(){
-  const chip=document.getElementById('streak-chip');
-  const num=document.getElementById('streak-num');
-  if(!chip||!num)return;
-  _rolloverStreak();
-  const goal=streakData.goal||WEEK_GOAL;
-  const days=(streakData.days||[]).length;
-  if(streakData.last){
-    const met=days>=goal;
-    num.textContent=days;
-    chip.classList.add('visible');
-    chip.classList.toggle('streak-met',met);
-    chip.title=met?('Weekly goal reached — '+days+' study days this week'):('Studied '+days+' of '+goal+' days this week');
-  } else { chip.classList.remove('visible'); }
+  saveStreak();
 }
 loadStreak();
 var _celebrateT=null;
@@ -2077,17 +2051,16 @@ loadPomoFavs();
 var pomo={presetId:'classic',mode:'focus',focusLen:25*60,breakLen:5*60,remaining:25*60,total:25*60,running:false,timer:null,rounds:0};
 function pomoFmt(s){var m=Math.floor(s/60),ss=s%60;return (m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;}
 function pomoActive(){ return pomo.running || pomo.remaining<pomo.total || pomo.mode!=='focus' || pomo.rounds>0; }
+// The Focus timer no longer has a button in the chrome that can count down in place — it
+// lives inside the rail's Tools overlay. Without a signal out here a running timer would be
+// invisible the moment the overlay closes, so the rail's Tools icon carries the state instead.
 function updateFocusBtn(){
-  var btn=document.getElementById('focus-btn'); if(!btn)return;
-  btn.classList.remove('pomo-live','pomo-paused');
-  if(pomo.running){
-    btn.classList.add('pomo-live');
-    btn.innerHTML=(pomo.mode==='break'?'☕ ':'🍅 ')+pomoFmt(pomo.remaining);
-  } else if(pomo.remaining<pomo.total){
-    btn.classList.add('pomo-paused');
-    btn.innerHTML='⏸ '+pomoFmt(pomo.remaining);
-  } else {
-    btn.innerHTML='🍅 Focus';
+  var more=document.getElementById('rail-more-btn');
+  if(more){
+    more.classList.toggle('rail-live',!!pomo.running);
+    more.classList.toggle('rail-paused',!pomo.running&&pomo.remaining<pomo.total);
+    more.title=pomo.running?((pomo.mode==='break'?'Break':'Focus')+' — '+pomoFmt(pomo.remaining)+' left')
+             :(pomo.remaining<pomo.total?('Paused — '+pomoFmt(pomo.remaining)+' left'):'');
   }
 }
 function renderPomoPresets(){
@@ -2169,7 +2142,6 @@ function pomoToggle(){
 function pomoReset(){ clearInterval(pomo.timer); pomo.running=false; pomo.mode='focus'; pomo.total=pomo.focusLen; pomo.remaining=pomo.focusLen; pomoRender(); }
 function openPomodoro(){ pomoRender(); document.getElementById('pomodoro-overlay').classList.add('open'); }
 function closePomodoro(){ document.getElementById('pomodoro-overlay').classList.remove('open'); }
-document.getElementById('focus-btn').addEventListener('click',openPomodoro);
 document.getElementById('pomo-toggle').addEventListener('click',pomoToggle);
 document.getElementById('pomo-reset').addEventListener('click',pomoReset);
 document.getElementById('pomo-close').addEventListener('click',closePomodoro);
@@ -2361,7 +2333,6 @@ async function askTutor(){
     res.innerHTML='<div class="tutor-answer err">Couldn\'t get a walkthrough: '+tutorEsc(geminiFriendly(err))+'</div>';
   }finally{ btn.disabled=false; }
 }
-document.getElementById('tutor-btn').addEventListener('click',openTutor);
 document.getElementById('tutor-close').addEventListener('click',closeTutor);
 document.getElementById('tutor-overlay').addEventListener('click',function(e){if(e.target===this)closeTutor();});
 document.getElementById('open-tutor-settings-btn').addEventListener('click',function(){ if(typeof closeSettings==='function')closeSettings(); openTutor(); });
@@ -2590,7 +2561,7 @@ function strengthInfo(name){
   // The bands must climb monotonically in hue as recall improves:
   // red 0° -> orange 27° -> amber 43° -> green 158°. Amber and orange were the wrong
   // way round, so improving from 84% to 86% recall moved the badge *backwards* towards
-  // red. This order also matches retColors, the 10-step ramp used by the skill tree.
+  // red. This order also matches retColors, the 10-step ramp used by the stats distributions.
   if(r<0.70) color='#f87171'; else if(r<0.85) color='#fb923c'; else if(r<0.93) color='#fbbf24';
   // Mastered topics used to report a hardcoded 100%, which stayed at 100% however long ago the
   // topic was last seen. Show the real number and keep the label.
@@ -3058,60 +3029,48 @@ function renderTodayCard(){
   }
 }
 
+// The overdue count is a dot on the Checklist nav icon. It used to be a text badge in the
+// desktop tab bar which the mobile nav then mirrored by reading its textContent; with one
+// nav element there is one badge, and the count lives in the title rather than a second DOM node.
 function updateDueBadge(){
-  const badge=document.getElementById('tab-due-badge'); if(!badge)return;
+  const badge=document.getElementById('m-nav-badge'); if(!badge)return;
   const ov=activeTopics().filter(t=>statusFor(t.name)==='overdue').length;
-  if(ov===0){badge.textContent='';badge.className='tab-due-badge';return;}
-  badge.textContent=ov+'!';
-  badge.className='tab-due-badge urgency';
+  badge.classList.toggle('show',ov>0);
+  const btn=badge.closest('.m-nav-btn');
+  if(btn)btn.title=ov>0?(ov+' topic'+(ov===1?'':'s')+' overdue'):'';
 }
 
 const TAB_ORDER=['checklist','mistakes','papers'];
 let activeTab='checklist';
-function positionTabIndicator(){
-  const ind=document.getElementById('tab-indicator');
-  const active=document.querySelector('.tab-bar-inner .tab-btn.active');
-  if(!ind||!active)return;
-  ind.style.transform='translateX('+(active.offsetLeft+12)+'px) scaleX('+(active.offsetWidth-24)+')';
-}
 function switchTab(tab){
   if(tab===activeTab)return;
   activeTab=tab;
   document.body.classList.add('tab-switching');
   TAB_ORDER.forEach(t=>{
     const page=document.getElementById('page-'+t);
-    const btn=document.getElementById('tab-'+t+'-btn');
-    page.classList.toggle('active',t===tab);
-    btn.classList.toggle('active',t===tab);
-    btn.setAttribute('aria-selected',t===tab?'true':'false');
+    if(page)page.classList.toggle('active',t===tab);
   });
-  positionTabIndicator();
   if(tab==='mistakes'){renderMistakesTab();requestAnimationFrame(()=>requestAnimationFrame(()=>positionPill('mv-tabs','mv-pill')));}
   if(tab==='papers'){renderPaperBrowser();requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));}
   setTimeout(syncSpringSliders,50);
   setTimeout(()=>document.body.classList.remove('tab-switching'),300);
 }
-TAB_ORDER.forEach(t=>{
-  document.getElementById('tab-'+t+'-btn').addEventListener('click',()=>switchTab(t));
-});
-(function(){
-  const sb=document.getElementById('tab-settings-btn');
-  sb.addEventListener('click',()=>{
-    if(!sb.classList.contains('si-spinning')){
-      sb.classList.add('si-spinning');
-      const ico=sb.querySelector('.si-ico');
-      if(ico)ico.addEventListener('animationend',()=>sb.classList.remove('si-spinning'),{once:true});
-    }
-    openSettings();
-  });
-})();
 
 /* ===== Mobile app-shell: bottom icon nav + three-dots overflow menu ===== */
 (function(){
-  // Bottom nav icons drive the same switchTab() as desktop
+  // One nav for both orientations: page buttons carry data-tab, tool buttons carry data-act.
+  // The label doubles as the mobile caption and the desktop rail's hover tooltip.
   document.querySelectorAll('.m-nav-btn').forEach(function(b){
     var lbl=document.createElement('span'); lbl.className='m-nav-lbl'; lbl.textContent=b.getAttribute('aria-label')||''; b.appendChild(lbl);
-    b.addEventListener('click',function(){ if(navigator.vibrate)navigator.vibrate(7); switchTab(b.getAttribute('data-tab')); });
+    var tab=b.getAttribute('data-tab');
+    b.addEventListener('click',function(){
+      if(navigator.vibrate)navigator.vibrate(7);
+      if(tab){ switchTab(tab); return; }
+      var a=b.getAttribute('data-act');
+      if(a==='settings'&&typeof openSettings==='function')openSettings();
+      else if(a==='stats'&&typeof openStats==='function')openStats();
+      else if(a==='more')openMore();
+    });
   });
   function positionMNavPill(){
     var nav=document.getElementById('m-nav'), pill=document.getElementById('m-nav-pill');
@@ -3142,13 +3101,7 @@ TAB_ORDER.forEach(t=>{
   };
   updateMNav();
 
-  // Mirror the "due" badge onto the checklist nav icon
-  if(typeof updateDueBadge==='function'){
-    var _origDue=updateDueBadge;
-    updateDueBadge=function(){ _origDue(); var b=document.getElementById('m-nav-badge'),
-      src=document.getElementById('tab-due-badge'); if(b)b.classList.toggle('show',!!(src&&src.textContent)); };
-    updateDueBadge();
-  }
+  if(typeof updateDueBadge==='function')updateDueBadge();
 
   // Three-dots overflow menu (Settings / Statistics / Focus / Tutor)
   var menu=document.getElementById('m-menu'),
@@ -3388,75 +3341,33 @@ function closeStats(){
 function openResources(){ renderResources(); document.getElementById('resources-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
 function closeResources(){ document.getElementById('resources-overlay').classList.remove('open'); document.body.style.overflow=''; }
 
-// ---- Skill Tree overlay ----
-function treeNode(name){
-  const rec=sr[name];
-  if(!validRec(rec)) return {cls:'locked', mastered:false, started:false};
-  if(rec.S>=MASTERY_STABILITY) return {cls:'mastered', mastered:true, started:true};
-  const r=currentRetrievability(name)||0;
-  let cls = r>=0.92?'strong' : r>=0.80?'ok' : 'weak';
-  return {cls, mastered:false, started:true};
-}
-function openTree(){ renderTree(); document.getElementById('tree-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
-function closeTree(){ document.getElementById('tree-overlay').classList.remove('open'); document.body.style.overflow=''; }
-function renderTree(){
-  const body=document.getElementById('tree-body'); if(!body)return;
-  const cls=activeClusters();
-  // overall mastery
-  let total=0, mastered=0, started=0;
-  cls.forEach(c=>c.topics.forEach(t=>{ total++; const n=treeNode(t); if(n.mastered)mastered++; if(n.started)started++; }));
-  const pct = total?Math.round(mastered/total*100):0;
-  const sum=document.getElementById('tree-summary');
-  if(sum){
-    sum.innerHTML=
-      '<div class="tree-ring" style="--p:'+pct+'"><span>'+pct+'%</span></div>'+
-      '<div class="tree-sum-txt"><div class="tree-sum-big">'+mastered+' of '+total+' topics mastered</div>'+
-      '<div class="tree-sum-sub">'+started+' started · '+(total-started)+' not yet touched · keep watering 🌱</div></div>';
-  }
-  // group clusters by qual+component, preserving cluster order
-  const groups=[]; const seen={};
-  cls.forEach(c=>{
-    const key=c.qual+'|'+c.component;
-    if(!seen[key]){ seen[key]={qual:c.qual, component:c.component, name:componentName(c.qual,c.component), clusters:[]}; seen[key].order=groups.length; groups.push(seen[key]); }
-    seen[key].clusters.push(c);
-  });
-  let html='';
-  groups.forEach(g=>{
-    html+='<div class="tree-comp"><div class="tree-comp-hdr">'+tutorEsc(g.name)+'</div>';
-    g.clusters.forEach(c=>{
-      let cMast=0, cStart=0;
-      c.topics.forEach(t=>{ const n=treeNode(t); if(n.mastered)cMast++; if(n.started)cStart++; });
-      const cPct=Math.round(cMast/c.topics.length*100);
-      const done = cMast===c.topics.length;
-      html+='<div class="tree-branch'+(done?' tree-done':'')+'">'+
-        '<div class="tree-branch-spine" style="background:'+c.color+'"></div>'+
-        '<div class="tree-branch-main">'+
-          '<div class="tree-branch-hdr"><span class="tree-cl-name">'+tutorEsc(c.name)+(done?' <span class="tree-crown">👑</span>':'')+'</span>'+
-          '<span class="tree-cl-count">'+cMast+'/'+c.topics.length+'</span></div>'+
-          '<div class="tree-cl-track"><div class="tree-cl-fill" style="width:'+cPct+'%;background:'+c.color+'"></div></div>'+
-          '<div class="tree-leaves">';
-      c.topics.forEach(t=>{
-        const n=treeNode(t);
-        html+='<button class="tdot '+n.cls+'" data-topic="'+tutorEsc(t).replace(/"/g,'&quot;')+'" title="'+tutorEsc(t).replace(/"/g,'&quot;')+'" aria-label="'+tutorEsc(t).replace(/"/g,'&quot;')+'"></button>';
-      });
-      html+='</div></div></div>';
-    });
-    html+='</div>';
-  });
-  body.innerHTML=html;
-  // clicking a leaf opens that topic's study modal
-  body.querySelectorAll('.tdot[data-topic]').forEach(b=>{
-    b.addEventListener('click',function(){ const t=this.getAttribute('data-topic'); closeTree(); if(typeof openModal==='function')openModal(t,false); });
-  });
-}
+// ---- "More tools" overlay (the rail's grid icon) ----
+// Desktop only in practice: mobile reaches the same four tools through the ⋯ speed-dial.
+function openMore(){ document.getElementById('more-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeMore(){ document.getElementById('more-overlay').classList.remove('open'); document.body.style.overflow=''; }
+
 // Checklist quick-access buttons + overlay close (Esc handled by the global .stats-overlay handler)
 (function(){
   var w=function(id,fn){ var el=document.getElementById(id); if(el)el.addEventListener('click',fn); };
-  document.querySelectorAll('.js-open-tree').forEach(function(el){ el.addEventListener('click',openTree); });
   document.querySelectorAll('.js-open-resources').forEach(function(el){ el.addEventListener('click',openResources); });
-  w('tree-close',closeTree); w('resources-close',closeResources);
-  var to=document.getElementById('tree-overlay'); if(to)to.addEventListener('click',function(e){if(e.target===this)closeTree();});
+  w('resources-close',closeResources);
   var ro=document.getElementById('resources-overlay'); if(ro)ro.addEventListener('click',function(e){if(e.target===this)closeResources();});
+  w('more-close',closeMore);
+  var mo=document.getElementById('more-overlay'); if(mo)mo.addEventListener('click',function(e){if(e.target===this)closeMore();});
+  document.querySelectorAll('.more-item').forEach(function(it){
+    it.addEventListener('click',function(){
+      var a=it.getAttribute('data-act');
+      closeMore();
+      // Let the overlay finish closing before the next one opens, so body overflow
+      // isn't cleared by closeMore() after the new overlay has already set it.
+      setTimeout(function(){
+        if(a==='resources'&&typeof openResources==='function')openResources();
+        else if(a==='planner'&&typeof openPlanner==='function')openPlanner();
+        else if(a==='focus'&&typeof openPomodoro==='function')openPomodoro();
+        else if(a==='tutor'&&typeof openTutor==='function')openTutor();
+      },140);
+    });
+  });
 })();
 // ── Keyboard shortcuts ──────────────────────────────────────────────────────
 const SHORTCUTS_DEF=[
@@ -3655,21 +3566,6 @@ function closeSettings(){
 }
 document.getElementById('settings-close').addEventListener('click',closeSettings);
 document.getElementById('settings-overlay').addEventListener('click',function(e){if(e.target===this)closeSettings();});
-
-// Stats button spin + open
-(function(){
-  const btn=document.getElementById('stats-btn');
-  if(!btn)return;
-  btn.addEventListener('click',function(){
-    if(btn.classList.contains('si-spinning'))return;
-    btn.classList.add('si-spinning');
-    const ico=btn.querySelector('.si-ico');
-    if(ico)ico.addEventListener('animationend',function(){
-      btn.classList.remove('si-spinning');
-    },{once:true});
-    openStats();
-  });
-})();
 document.getElementById('stats-close').addEventListener('click',closeStats);
 document.getElementById('stats-overlay').addEventListener('click',function(e){
   if(e.target===this)closeStats();
@@ -6237,7 +6133,6 @@ document.getElementById('gb-year').addEventListener('change',function(){gbActive
 document.getElementById('plog-marks').addEventListener('input',updatePlogGradeHint);
 document.querySelectorAll('#pp-type-seg .pp-type-btn').forEach(function(b){b.addEventListener('click',function(){ppSetType(b.getAttribute('data-type'));});});
 requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));
-requestAnimationFrame(()=>requestAnimationFrame(positionTabIndicator));
 document.getElementById('paperperf-close').addEventListener('click',closePaperPerf);
 document.getElementById('paperperf-overlay').addEventListener('click',function(e){if(e.target===this)closePaperPerf();});
 document.getElementById('perf-module').addEventListener('change',renderPerfCharts);
@@ -6270,7 +6165,7 @@ renderReviewPanel();
 renderAll();
 renderMistakesTab();
 renderResources();
-renderStreak();
+_rolloverStreak();
 applyPlainLang();
 loadRemoteExamDates();
 // First-run: show onboarding only for genuinely new users
@@ -6706,7 +6601,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     var th=null; try{ th=localStorage.getItem('msh-theme'); }catch(e){}
     if(th&&typeof applyTheme==='function'){ try{ applyTheme(th); }catch(e){} }
     ['renderAll','renderReviewPanel','renderMistakesTab','renderProgressTab','renderResources',
-     'renderStreak','renderSettings','updateDueBadge','syncExamInputs','applyPlainLang'
+     'renderSettings','updateDueBadge','syncExamInputs','applyPlainLang'
     ].forEach(function(fn){
       if(typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ console.warn('[cloud] '+fn+' failed',e); } }
     });

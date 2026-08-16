@@ -35,9 +35,13 @@
   --ease-spring:cubic-bezier(.34,1.4,.64,1);
   --tr-ui:background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease),width var(--t-fast) var(--ease);
 
-  /* Height of the sticky desktop tab bar — .filters-bar parks under it.
-     Overridden to 0 in the mobile shell, where the tab bar is hidden. */
-  --tabbar-h:48px;
+  /* Nothing is stuck to the top of the viewport any more — the nav is a left rail on
+     desktop and a bottom bar on mobile — so .filters-bar parks at 0. Kept as a variable
+     because several sticky offsets read it. */
+  --tabbar-h:0px;
+
+  /* Width of the desktop nav rail; body is padded by exactly this. */
+  --rail-w:64px;
 
   /* Minimum comfortable touch target. */
   --tap:44px;
@@ -55,26 +59,66 @@
   --severity:#34d399,#a3e635,#fbbf24,#fb923c,#f87171;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:var(--fs-base);line-height:1.6;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:var(--fs-base);line-height:1.6;min-height:100vh;padding-left:var(--rail-w);}
 
-/*   TAB BAR    */
-.tab-bar{background:var(--surface-glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;}
-.tab-bar-inner{max-width:1060px;margin:0 auto;display:flex;align-items:stretch;padding:0 24px;gap:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;position:relative;}
-.tab-bar-inner::-webkit-scrollbar{display:none;}
-.tab-btn{font-size:var(--fs-md);padding:12px 16px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color var(--t-base),background var(--t-base);white-space:nowrap;font-family:'Inter',sans-serif;position:relative;}
-.tab-btn:hover{color:var(--text);background:rgba(var(--accent-rgb),.07);}
-.tab-btn.active{color:var(--tab-active);}
-.tab-indicator{position:absolute;left:0;bottom:0;height:2px;width:1px;background:var(--grad);border-radius:var(--r-xs);pointer-events:none;transform-origin:left center;transition:transform var(--t-base) var(--ease);will-change:transform;}
-.tab-spacer{flex:1;}
-.hdr-actions{display:flex;gap:4px;align-items:center;}
-.hdr-btn{font-size:var(--fs-xs);font-family:'JetBrains Mono',monospace;padding:4px 8px;border-radius:var(--r-xs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);}
-.hdr-btn:hover{color:var(--text);}
-.hdr-btn.acc{background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1px solid transparent;color:var(--text);}
-.hdr-btn.acc:hover{filter:brightness(1.12);}
-.streak-chip{display:none;align-items:center;gap:2px;font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);font-weight:700;padding:2px 8px;border-radius:var(--r-pill);background:linear-gradient(var(--surface-glass),var(--surface-glass)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;color:var(--text);white-space:nowrap;user-select:none;line-height:1;margin:auto 2px;}
-.streak-chip.visible{display:flex;}
-/* Mobile app-shell chrome — hidden on desktop, shown only in the mobile media query below */
-.m-nav,.m-menu-btn,.m-menu,.m-menu-backdrop{display:none;}
+/*   MAIN NAV — DESKTOP LEFT RAIL
+   One element serves both orientations. This block is the rail; the mobile media query
+   below turns the same markup into the bottom bar. The rail replaced a horizontal tab bar
+   with text labels: two navs meant two sets of icons, two active states and two click
+   paths to keep in step, which is how #page-progress ended up orphaned.   */
+.m-nav{position:fixed;left:0;top:0;bottom:0;z-index:450;width:var(--rail-w);
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0;
+  background:var(--surface-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-right:1px solid var(--border);}
+.m-nav-group{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.rail-sep{width:22px;height:1px;background:var(--border2);margin:6px 0;flex-shrink:0;}
+/* The pill is positioned in JS from the active icon's box, so it works in either axis. */
+.m-nav-pill{position:absolute;border-radius:var(--r-md);background:linear-gradient(160deg,var(--spectrum));
+  opacity:0;pointer-events:none;z-index:0;
+  transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) var(--ease-spring),width var(--t-slow) ease,height var(--t-slow) ease,opacity var(--t-base);}
+.m-nav-btn{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+  width:var(--tap);height:var(--tap);padding:0;background:none;border:none;border-radius:var(--r-md);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast);}
+.m-nav-btn:active{transform:scale(.92);}
+.m-nav-btn svg{width:24px;height:24px;fill:none;stroke:var(--muted);stroke-width:1.85;
+  stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
+.m-nav-btn:hover svg{stroke:var(--text);}
+.m-nav-btn.active svg{stroke:url(#m-rainbow);}
+/* Label doubles as the rail's hover tooltip and the bottom bar's caption. */
+.m-nav-lbl{position:absolute;left:calc(100% + 10px);top:50%;
+  transform:translateY(-50%) translateX(-4px);white-space:nowrap;
+  font-family:'Inter',sans-serif;font-size:var(--fs-xs);font-weight:600;color:var(--text);
+  background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);
+  padding:5px 9px;line-height:1;opacity:0;pointer-events:none;z-index:5;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+  transition:opacity var(--t-fast),transform var(--t-fast);}
+.m-nav-btn:hover .m-nav-lbl,.m-nav-btn:focus-visible .m-nav-lbl{opacity:1;transform:translateY(-50%) translateX(0);}
+.m-nav-badge{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;
+  background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
+.m-nav-badge.show{display:block;}
+/* A running Focus timer used to count down in the tab bar. It lives in the Tools overlay
+   now, so the Tools icon carries the state instead — otherwise it vanishes when you close it. */
+.m-nav-btn.rail-live svg{stroke:url(#m-rainbow);}
+.m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:6px;right:6px;
+  width:8px;height:8px;border-radius:50%;border:1.5px solid var(--surface-glass);}
+.m-nav-btn.rail-live::after{background:var(--overdue);animation:rail-pulse 1.9s var(--ease) infinite;}
+.m-nav-btn.rail-paused::after{background:var(--muted);}
+@keyframes rail-pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* Mobile-only chrome — the ⋯ speed-dial. Shown in the mobile media query below. */
+.m-menu-btn,.m-menu,.m-menu-backdrop{display:none;}
+
+/*   "MORE TOOLS" OVERLAY   */
+.more-panel{width:min(620px,96vw);}
+.more-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.more-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
+  padding:16px;border-radius:var(--r-md);border:1px solid var(--border2);background:var(--surface2);
+  cursor:pointer;font-family:'Inter',sans-serif;transition:var(--tr-ui);}
+.more-item:hover{border-color:rgba(var(--accent-rgb),.5);transform:translateY(-2px);}
+.more-ico{font-size:var(--fs-2xl);line-height:1.2;margin-bottom:4px;}
+.more-name{font-size:var(--fs-md);font-weight:600;color:var(--text);}
+.more-sub{font-size:var(--fs-sm);color:var(--muted);line-height:1.45;}
+@media (max-width:560px){.more-grid{grid-template-columns:1fr;}}
 
 /*   PAGES    */
 .page{display:none;}.page.active{display:block;}
@@ -122,7 +166,6 @@ h1 em{font-style:italic;}
 .onboard-choice span{font-size:var(--fs-xs);color:var(--muted);}
 .onboard-tip{font-size:var(--fs-xs);color:var(--dim);font-style:italic;background:var(--surface2);border-radius:var(--r-sm);padding:8px 12px;line-height:1.45;text-align:left;}
 .onboard-btns{margin-top:16px;justify-content:space-between;}
-.streak-chip.streak-met{filter:brightness(1.1);}
 .celebrate-overlay{position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(4,7,18,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity var(--t-base);}
 .celebrate-overlay.open{opacity:1;pointer-events:all;}
 .celebrate-card{position:relative;text-align:center;background:var(--surface);border:1.5px solid transparent;background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(135deg,var(--spectrum)) border-box;border-radius:var(--r-lg);padding:32px 40px;max-width:min(380px,90vw);transform:scale(.8);transition:transform var(--t-slow) var(--ease-spring);box-shadow:0 20px 60px rgba(0,0,0,.45);}
@@ -522,9 +565,6 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
 }
 
 @media(max-width:640px){
-  /* Tab bar shrinks here, so the sticky offset .filters-bar parks at follows it. */
-  :root{--tabbar-h:38px;}
-
   /* Layout */
   .rand-filters,.form-row,.pie-section,.prog-donut-wrap{grid-template-columns:1fr;}
   .ptab-name{width:90px;}
@@ -533,15 +573,6 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .hdr-title{font-size:var(--fs-xl);}
   .hdr-sub{font-size:var(--fs-2xs);}
   header{padding:calc(.7rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) .7rem calc(1rem + env(safe-area-inset-left));}
-
-  /* Tab bar: horizontally scrollable, no wrap */
-  .tab-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .tab-bar-inner{flex-wrap:nowrap;min-width:max-content;gap:0;padding:0 8px;}
-  .tab-btn{font-size:var(--fs-sm);padding:8px 12px;flex-shrink:0;}
-  .tab-icon-btn{padding:8px 8px;}
-  .tab-spacer{display:none;}
-  .hdr-actions{flex-shrink:0;}
-  .hdr-btn{font-size:var(--fs-xs);padding:4px 8px;}
 
   /* Review panel */
   .review-panel{padding:8px 12px;}
@@ -592,25 +623,19 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
 @media(max-width:400px){
   .filter-btn.sf{display:none;}
   #btn-notstarted{display:none;}
-  .tab-btn{font-size:var(--fs-xs);padding:8px 8px;}
 }
 
 /* ============ Mobile / tablet app-shell (desktop is never affected) ============ */
 @media (max-width:900px), (pointer:coarse){
   /* Lock the view horizontally — like a native app, vertical scroll only */
   html,body{overflow-x:clip;max-width:100%;}
-  body{overscroll-behavior-x:none;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
+  body{overscroll-behavior-x:none;padding-left:0;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
   .page,main,.review-panel,.tab-content,footer{max-width:100%;overflow-x:hidden;}
   /* Lock horizontal panning inside EVERY overlay/menu too (settings, stats, tutor, logger, timer, modals…) */
   .stats-overlay,.modal-overlay,.tutor-overlay,.img-viewer-overlay,#mh-login,#onboard-overlay,#topicpp-overlay{overflow-x:hidden;overscroll-behavior:contain;}
   .stats-panel,.stats-body,.modal,.modal-overlay>*,.stats-overlay>*{max-width:100%;overflow-x:hidden;overscroll-behavior:contain;}
   /* …but the few elements meant to scroll sideways keep doing so within their own box */
   .pp-type-seg,.prog-bar-section,.fx-body,.pp-slider-ticks{overflow-x:auto;}
-
-  /* Hide the desktop top tab bar — replaced by the bottom nav + three-dots menu.
-     With it gone there is nothing above .filters-bar, so its sticky offset is 0. */
-  .tab-bar{display:none!important;}
-  :root{--tabbar-h:0px;}
 
   /* Slim header; reserve the top-right corner for the floating menu button */
   header{padding:calc(.85rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) .85rem calc(1rem + env(safe-area-inset-left));}
@@ -627,29 +652,32 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .m-menu-btn:active{transform:scale(.92);}
   .m-menu-btn svg circle{fill:url(#m-rainbow);}
 
-  /* ---- Bottom icon nav ---- */
-  .m-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:450;
+  /* ---- The same nav, laid out along the bottom ---- */
+  .m-nav{flex-direction:row;position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;z-index:450;
     justify-content:space-around;align-items:center;gap:2px;
     padding:7px 6px calc(7px + env(safe-area-inset-bottom));
     background:var(--surface-glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-    border-top:1px solid var(--border);}
+    border-right:none;border-top:1px solid var(--border);}
+  /* display:contents so the page buttons stay direct flex children and keep flex:1 1 0 */
+  .m-nav-group{display:contents;}
+  /* Settings/Stats/Tools are the ⋯ speed-dial's job down here */
+  .rail-sep,.rail-tools{display:none;}
   /* sliding rainbow indicator that flows behind the active icon */
-  .m-nav-pill{position:absolute;border-radius:var(--r-md);background:linear-gradient(90deg,var(--spectrum));
-    opacity:0;pointer-events:none;z-index:0;
+  .m-nav-pill{background:linear-gradient(90deg,var(--spectrum));
     transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) ease,width var(--t-slow) var(--ease-spring),height var(--t-slow) ease,opacity var(--t-base);}
-  .m-nav-btn{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-    min-height:54px;max-width:92px;background:none;border:none;border-radius:var(--r-md);
-    cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast);padding:4px 0;}
-  .m-nav-lbl{font-size:var(--fs-3xs);font-weight:600;line-height:1;height:11px;color:var(--muted);opacity:0;transition:opacity var(--t-base),color var(--t-base);font-family:'Inter',sans-serif;letter-spacing:.01em;}
+  .m-nav-btn{flex:1 1 0;flex-direction:column;gap:2px;
+    width:auto;height:auto;min-height:54px;max-width:92px;padding:4px 0;}
+  .m-nav-lbl{position:static;transform:none;opacity:0;background:none;border:none;box-shadow:none;
+    padding:0;font-size:var(--fs-3xs);font-weight:600;line-height:1;height:11px;color:var(--muted);
+    transition:opacity var(--t-base),color var(--t-base);letter-spacing:.01em;}
   .m-nav-btn.active .m-nav-lbl{opacity:1;color:var(--text);}
+  .m-nav-btn:hover .m-nav-lbl{opacity:0;}          /* hover is meaningless on touch */
+  .m-nav-btn.active:hover .m-nav-lbl{opacity:1;}
   .m-nav-btn:active{transform:scale(.9);}
-  .m-nav-btn svg{width:26px;height:26px;fill:none;stroke:var(--muted);stroke-width:1.85;
-    stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
-  .m-nav-btn.active svg{stroke:url(#m-rainbow);}
-  .m-nav-dot{display:none;}
-  .m-nav-badge{position:absolute;top:6px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;
-    background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
-  .m-nav-badge.show{display:block;}
+  .m-nav-btn svg{width:26px;height:26px;}
+  .m-nav-btn:hover svg{stroke:var(--muted);}
+  .m-nav-btn.active:hover svg{stroke:url(#m-rainbow);}
+  .m-nav-badge{top:6px;right:auto;left:calc(50% + 8px);}
 
   /* ---- Three-dots dropdown menu ---- */
   .m-menu-backdrop{display:block;position:fixed;inset:0;z-index:470;background:rgba(0,0,0,.28);
@@ -699,7 +727,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Chips and segmented controls: grow to --tap, keep their pill shape. */
   .filter-btn,.rchip,.mk-filter-btn,.mex-fmchip,.leak-sort-btn,.pq-act,
   .pq-diff-btn,.mv-tab,.trend-range-btn,.m-mode-btn,.rev-done-btn,
-  .hdr-btn,.reattempt-shuffle,.pp-type-btn{min-height:var(--tap);
+  .reattempt-shuffle,.pp-type-btn{min-height:var(--tap);
     display:inline-flex;align-items:center;justify-content:center;}
   .filter-btn{padding:6px 12px;font-size:var(--fs-sm);}
   /* Icon-only buttons need width as well as height. */
@@ -721,7 +749,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
 
 /*   ACCESSIBILITY    */
 a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,
-.topic-row:focus-visible,.cluster-hdr:focus-visible,.checkbox:focus-visible,.tab-btn:focus-visible{
+.topic-row:focus-visible,.cluster-hdr:focus-visible,.checkbox:focus-visible{
   outline:2px solid var(--accent2);outline-offset:2px;border-radius:var(--r-xs);
 }
 .note-indicator{font-size:var(--fs-2xs);color:var(--accent2);flex-shrink:0;}
@@ -733,7 +761,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 
 /*   PRINT    */
 @media print{
-  .tab-bar,.review-panel,.filters-bar,.modal-overlay,.img-viewer-overlay,footer,.rand-btn,.hdr-actions{display:none!important;}
+  .m-nav,.review-panel,.filters-bar,.modal-overlay,.img-viewer-overlay,footer,.rand-btn{display:none!important;}
+  body{padding-left:0;}
   body{background:#fff;color:#000;}
   h1{background:none!important;-webkit-text-fill-color:#000!important;}
   .cluster{border-color:#ccc;break-inside:avoid;}
@@ -898,8 +927,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .qual-name{font-family:'Manrope',sans-serif;font-size:var(--fs-xl);font-weight:700;color:var(--text);}
 .qual-code{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.3);background:rgba(var(--accent2-rgb),.08);padding:2px 6px;border-radius:var(--r-pill);}
 .comp-header{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;margin:16px 0 8px;}
-.tab-icon-btn{font-size:var(--fs-lg);padding:12px 12px;}
-
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;}
 .settings-row{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;}
 .settings-row-info{flex:1;min-width:200px;}
@@ -931,9 +958,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .legend-item .diff-pip{width:8px;height:8px;}
 
 /* FSRS status filters + due badge + toasts */
-.tab-due-badge{display:none;font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;background:var(--overdue);color:#fff;border-radius:var(--r-pill);padding:2px 4px;margin-left:4px;vertical-align:middle;font-weight:700;line-height:1.4;}
-.tab-due-badge.urgency{background:var(--overdue);}
-.tab-due-badge:not(:empty){display:inline-block;}
 .filter-btn.sf{color:var(--accent2);}
 .filter-btn.sf:hover{color:var(--accent2);border-color:rgba(var(--accent2-rgb),.5);}
 .filter-btn.sf.active{background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;color:var(--text);font-weight:500;box-shadow:0 0 10px rgba(248,113,113,.18),0 0 6px rgba(96,165,250,.1);}
@@ -1107,43 +1131,13 @@ html{scroll-behavior:smooth;}
 .gloss-pop-eg{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;margin-top:6px;font-family:'JetBrains Mono','Georgia',serif;}
 .gloss-pop-more{margin-top:8px;width:100%;font-size:var(--fs-xs);font-weight:600;padding:6px;border-radius:var(--r-sm);border:none;background:var(--grad);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;}
 
-/* ── CHECKLIST QUICK BUTTONS (resources + skill tree) ─────────────── */
+/* ── CHECKLIST QUICK BUTTONS ──────────────────────────────────────── */
 .cl-quick{display:none;gap:8px;margin:0 0 12px;flex-wrap:wrap;}  /* desktop: lives in the header instead */
 @media (max-width:900px),(pointer:coarse){ .cl-quick{display:flex;} }
 .cl-quick-btn{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:8px 12px;cursor:pointer;transition:var(--tr-ui);}
 .cl-quick-btn:hover{border-color:rgba(var(--accent-rgb),.5);color:var(--accent);transform:translateY(-1px);}
 .cl-quick-btn .cqi{font-size:var(--fs-lg);}
 
-/* ── SKILL TREE OVERLAY ───────────────────────────────────────────── */
-.tree-panel{width:min(840px,98vw);}
-.tree-summary{display:flex;align-items:center;gap:16px;margin-bottom:12px;}
-.tree-ring{width:66px;height:66px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(#34d399 calc(var(--p)*1%), var(--border2) 0);}
-.tree-ring span{width:52px;height:52px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-lg);color:var(--text);font-family:'Manrope',sans-serif;}
-.tree-sum-big{font-size:var(--fs-lg);font-weight:700;color:var(--text);font-family:'Manrope',sans-serif;}
-.tree-sum-sub{font-size:var(--fs-sm);color:var(--muted);margin-top:2px;}
-.tree-legend{display:flex;flex-wrap:wrap;gap:12px;padding:8px 0 16px;margin-bottom:6px;border-bottom:1px solid var(--border);font-size:var(--fs-2xs);color:var(--muted);}
-.tree-legend span{display:inline-flex;align-items:center;gap:4px;}
-.tree-comp{margin-bottom:16px;}
-.tree-comp-hdr{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin:6px 0 8px;}
-.tree-branch{display:flex;gap:12px;margin-bottom:12px;}
-.tree-branch-spine{width:4px;border-radius:var(--r-xs);flex-shrink:0;opacity:.85;}
-.tree-branch-main{flex:1;min-width:0;}
-.tree-branch-hdr{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px;}
-.tree-cl-name{font-size:var(--fs-md);font-weight:600;color:var(--text);font-family:'Manrope',sans-serif;}
-.tree-crown{font-size:var(--fs-sm);}
-.tree-cl-count{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);flex-shrink:0;}
-.tree-cl-track{height:4px;border-radius:var(--r-xs);background:var(--border2);overflow:hidden;margin-bottom:8px;}
-.tree-cl-fill{height:100%;border-radius:var(--r-xs);transition:width var(--t-slow);}
-.tree-leaves{display:flex;flex-wrap:wrap;gap:6px;}
-.tdot{width:15px;height:15px;border-radius:50%;border:none;cursor:pointer;padding:0;transition:transform var(--t-fast);position:relative;}
-.tdot:hover{transform:scale(1.35);z-index:2;}
-.tdot.locked{background:var(--border2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);}
-.tdot.weak{background:#f87171;}
-.tdot.ok{background:#fb923c;}
-.tdot.strong{background:#34d399;}
-.tdot.mastered{background:#fbbf24;box-shadow:0 0 7px rgba(251,191,36,.75);}
-.tree-branch.tree-done .tree-cl-name{color:#fbbf24;}
-.tree-branch.tree-done .tree-branch-spine{opacity:1;box-shadow:0 0 8px rgba(251,191,36,.5);}
 
 /* ── PAPER LOGGER ──────────────────────────────────────────────────── */
 .plog-modal{width:min(560px,96vw);}
@@ -1283,17 +1277,6 @@ html{scroll-behavior:smooth;}
 .pomo-num{width:62px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:var(--fs-lg);font-weight:700;padding:6px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--surface2);color:var(--text);}
 .pomo-fav-btn{font-size:var(--fs-xs);font-family:'Inter',sans-serif;padding:6px 12px;border-radius:var(--r-sm);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);}
 .pomo-fav-btn:hover{color:#f59e0b;border-color:rgba(245,158,11,.45);}
-@keyframes pomo-flow{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
-.hdr-btn.pomo-live{background:linear-gradient(90deg,var(--spectrum),#f87171);background-size:200% 100%;border:1px solid transparent;color:#fff;font-weight:700;animation:pomo-flow 3.5s linear infinite;}
-.hdr-btn.pomo-paused{background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1px solid transparent;color:var(--text);font-weight:700;}
-
-/* ── STATS ICON BUTTON ────────────────────────────────────── */
-.si-btn{display:inline-flex;align-items:center;justify-content:center;}
-.si-btn .si-ico{display:block;transition:transform var(--t-slow) var(--ease-spring);}
-.si-btn span.si-ico{font-size:var(--fs-2xl);line-height:1;}
-.si-btn:hover:not(.si-spinning) .si-ico{transform:rotate(20deg);}
-@keyframes si-fullspin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-.si-btn.si-spinning .si-ico{animation:si-fullspin .7s var(--ease) forwards;transition:none;}
 
 /* ── STATS OVERLAY ────────────────────────────────────────── */
 .stats-overlay{position:fixed;inset:0;background:rgba(4,7,18,.82);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);z-index:600;display:flex;align-items:flex-start;justify-content:center;opacity:0;pointer-events:none;transition:opacity var(--t-base);overflow-y:auto;padding:32px 16px 48px;}
