@@ -4080,12 +4080,19 @@ function renderEvidenceQuality(body){
    the line itself is red where memory is weak and green where it is strong. Every
    marker is a real event — the curve visibly steps down at a bad paper or a concept
    gap, and jumps back up at a review. */
-function renderMemoryCurve(){
+function renderMemoryCurve(isRetry){
   const wrap=document.getElementById('mem-curve'); if(!wrap) return;
   const c=modalTopic?memoryCurve(modalTopic):null;
   if(!c){ wrap.innerHTML=''; wrap.style.display='none'; return; }
   wrap.style.display='block';
-  const W=300,H=86,PT=8,PB=15,LO=c.lo;
+  /* The viewBox has to match the element's real pixel box. A fixed 300-wide box stretched
+     to fit with preserveAspectRatio="none" scales x and y by different factors, and every
+     <circle> then renders as an ellipse (a path doesn't care, which is why the line looked
+     fine). So measure the container and build the viewBox from it: one unit = one pixel,
+     both axes, and circles stay circular. H must equal the CSS height of .mc-svg. */
+  const H=76,PT=8,PB=15,LO=c.lo;
+  const inner=wrap.clientWidth-24;                 // .mem-curve has 12px side padding
+  const W=inner>120?Math.round(inner):300;         // 0 while the modal is still hidden
   const px=x=>(x*W).toFixed(2);
   const py=y=>(PT+(1-Math.max(0,Math.min(1,(y-LO)/(1-LO))))*(H-PT-PB)).toFixed(2);
   let d=''; c.pts.forEach((p,i)=>{ d+=(i?'L':'M')+px(p.x)+' '+py(p.y); });
@@ -4101,7 +4108,7 @@ function renderMemoryCurve(){
      default units each circle would instead contain a whole squashed rainbow. */
   wrap.innerHTML=
     '<div class="mc-hd">'+(plainLang?'How your memory of this has moved':'Predicted recall over time')+'</div>'+
-    '<svg class="mc-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+
+    '<svg class="mc-svg" viewBox="0 0 '+W+' '+H+'" aria-hidden="true">'+
       '<defs><linearGradient id="mc-grad" gradientUnits="userSpaceOnUse" x1="0" y1="'+(H-PB)+'" x2="0" y2="'+PT+'">'+
         '<stop offset="0" stop-color="var(--spec-1)"/><stop offset=".28" stop-color="var(--spec-2)"/>'+
         '<stop offset=".5" stop-color="var(--spec-3)"/><stop offset=".72" stop-color="var(--spec-4)"/>'+
@@ -4117,7 +4124,30 @@ function renderMemoryCurve(){
     '<div class="mc-legend"><span>'+fmtDate(c.start)+'</span>'+
       '<span class="mc-now-lbl">'+Math.round(now.y*100)+'% today</span>'+
       '<span>'+(c.dueX!=null?('due '+fmtDate(dueDateFor(modalTopic))):fmtDate(c.end))+'</span></div>';
+  /* The modal is still settling on the frame it opens, so the first measurement can be a
+     few pixels stale — harmless now that the scale is uniform (it just letterboxes), but
+     one rAF correction lands the viewBox exactly on the rendered box. Guarded so the
+     retry can never re-trigger itself. */
+  if(!isRetry){
+    requestAnimationFrame(function(){
+      const settled=wrap.clientWidth-24;
+      if(settled>120 && Math.abs(settled-W)>2) renderMemoryCurve(true);
+    });
+  }
 }
+
+/* The viewBox is measured from the rendered box, so it has to be rebuilt whenever that
+   box changes width — otherwise rotating a phone or resizing a window reintroduces the
+   very stretch that turned the dots into ellipses. */
+(function(){
+  var t=null;
+  window.addEventListener('resize',function(){
+    if(typeof modalTopic==='undefined'||!modalTopic) return;
+    var ov=document.getElementById('modal-overlay');
+    if(!ov||!ov.classList.contains('open')) return;
+    clearTimeout(t); t=setTimeout(renderMemoryCurve,120);
+  });
+})();
 
 /* ---- "why is this due?" — the evidence behind the number ---- */
 function renderEvidenceTrail(body){
