@@ -217,7 +217,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <label class="form-lbl">Severity &nbsp;<span id="m-sev-lbl" style="color:var(--accent);font-weight:600;font-size:11px;">3 — Moderate</span></label>
         <div class="sev-row">
           <input type="range" min="1" max="5" step="1" value="3" class="rating-slider" id="m-severity" style="flex:1;"/>
-          <div class="sev-pips" id="m-sev-pips"></div>
         </div>
       </div>
       <div class="form-group">
@@ -354,8 +353,9 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div>
       <div class="modal-lbl">How did it go? <span class="modal-lbl-hint">(after attempting a question, no notes)</span></div>
       <div class="rating-slider-wrap">
+        <!-- No scale row here: the shared slider draws its own 1-5 above the track
+             (.sspring-nums), so a second set underneath was the odd one out. -->
         <input type="range" min="1" max="5" step="1" value="3" id="rating-slider" class="rating-slider" aria-label="Rate your recall from 1 to 5"/>
-        <div class="rating-scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
         <div class="rating-desc rd-3" id="rating-desc"><b id="rating-desc-short">3. OK</b><span id="rating-desc-text">Right method, a few slips along the way</span></div>
       </div>
     </div>
@@ -900,7 +900,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <label class="form-lbl">Severity &nbsp;<span id="em-sev-lbl" style="color:var(--accent);font-weight:600;font-size:11px;">3 — Moderate</span></label>
         <div class="sev-row">
           <input type="range" min="1" max="5" step="1" value="3" class="rating-slider" id="em-severity" style="flex:1;"/>
-          <div class="sev-pips" id="em-sev-pips"></div>
         </div>
       </div>
       <div class="form-row">
@@ -5619,7 +5618,50 @@ function ppSetupSlider(){
   now.textContent=disp(ppActiveYear);
   if(typeof syncSpringSliders==='function')setTimeout(syncSpringSliders,30); // re-seat the spring thumb after a programmatic value change
 }
-function renderPaperBrowser(){ ppSetupSlider(); renderPaperBreakdown(); }
+/* Switching module or year replaces the whole paper list, and modules hold different
+   numbers of papers. When the new list is shorter the document shrinks, and if you were
+   scrolled down the browser has no choice but to clamp scrollTop — the entire page jumps
+   upward under your cursor. Measured on A-Level -> Further Maths at scrollY 220: the
+   document went 1058 -> 940 and the view was yanked up 116px. That is the "twitch"; it is
+   a scroll clamp, not lag.
+
+   So reserve exactly enough height on the list to keep the current scroll position legal,
+   and give it back the moment scrolling up means it is no longer needed. The reserved
+   space only ever exists below the fold, so nothing is visible except the page holding
+   still — which is the point. */
+function ppRenderKeepingView(render){
+  var wrap=document.getElementById('pp-browser');
+  var y=window.scrollY;
+  if(!wrap||y<=0){ render(); return; }
+
+  var prevH=wrap.offsetHeight;
+  render();
+  wrap.style.minHeight=prevH+'px';   // the document never gets shorter, so it never clamps
+
+  /* Content height without the reservation, measured from the children rather than by
+     clearing min-height and reading back. Clearing it works, but `window.scrollY` does not
+     update synchronously with the forced reflow, so the shortfall reads ~20px light and the
+     page still nudges. Never ask the browser what it did; work out what it would do. */
+  var last=wrap.lastElementChild;
+  var natural=last?Math.round(last.getBoundingClientRect().bottom-wrap.getBoundingClientRect().top):0;
+  if(natural>=prevH){ wrap.style.minHeight=''; return; }
+
+  /* Hand the space back when scrolling up means the real content can hold the position on
+     its own. The floor is 0, where shrinking the page below the fold cannot move the view
+     at all — so even if this arithmetic is off, the reservation always clears in the end. */
+  var releaseAt=Math.max(0,
+    (document.documentElement.scrollHeight-(prevH-natural))-document.documentElement.clientHeight);
+  var release=function(){
+    if(window.scrollY<=releaseAt){
+      wrap.style.minHeight='';
+      window.removeEventListener('scroll',release);
+    }
+  };
+  window.addEventListener('scroll',release,{passive:true});
+  wrap._ppRelease&&window.removeEventListener('scroll',wrap._ppRelease);   // only ever one
+  wrap._ppRelease=release;
+}
+function renderPaperBrowser(){ ppRenderKeepingView(function(){ ppSetupSlider(); renderPaperBreakdown(); }); }
 function positionPpPill(){
   var seg=document.getElementById('pp-type-seg');
   var active=seg&&seg.querySelector('.pp-type-btn.active');
@@ -6301,9 +6343,12 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   var SPRING_K=300,SPRING_C=24,SPRING_M=1;
   function enhance(input){
     var isPP=input.classList.contains('pp-slider');
-    var THUMB_D=isPP?20:18,THUMB_R=THUMB_D/2;
+    // The 1-5 rating/severity sliders share one look: a full-height gradient bar with a
+    // translucent rounded-rect thumb riding on it. The year slider keeps its round knob.
+    var isBar=input.classList.contains('rating-slider');
+    var THUMB_D=isPP?20:(isBar?22:18),THUMB_R=THUMB_D/2;
     var wrap=document.createElement('div');
-    wrap.className='sspring-wrap';
+    wrap.className='sspring-wrap'+(isBar?' sspring-bar':'');
     if(input.style.flex)wrap.style.flex=input.style.flex;
     if(input.style.width&&input.style.width!=='100%')wrap.style.width=input.style.width;
     input.parentNode.insertBefore(wrap,input);
@@ -6317,7 +6362,9 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     // name, which is why the severity numbers ran red->blue while their own pips
     // beside them ran green->red.)
     var isSeverity=(input.id==='m-severity'||input.id==='em-severity');
-    var needsNums=(isSeverity||input.classList.contains('plog-slider'));
+    // Every 1-5 slider draws its own scale above the track. The study modal used to carry a
+    // separate row of numbers *underneath* instead, which is why the two looked unrelated.
+    var needsNums=!isPP;
     if(needsNums){
       var numWrap=document.createElement('div');numWrap.className='sspring-nums';
       numWrap.style.padding='0 '+THUMB_R+'px';
@@ -6327,7 +6374,9 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
         nd.appendChild(sp);numWrap.appendChild(nd);
       }
       wrap.appendChild(numWrap);
-      if(input.classList.contains('plog-slider'))wrap.style.marginTop='21px';
+      // The numbers are absolutely positioned above the track, so the wrap has to reserve
+      // the room itself or they overlap whatever label sits above.
+      wrap.classList.add('sspring-has-nums');
     }
     var cur=-1,vel=0,anim=false,lastTs=0;
     function tgt(){

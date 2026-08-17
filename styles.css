@@ -645,7 +645,8 @@ main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .m-card-actions{display:flex;flex-direction:column;gap:2px;align-items:center;}
 .mistakes-empty{text-align:center;padding:40px;color:var(--dim);font-style:italic;font-size:var(--fs-sm);}
 .sev-row{display:flex;align-items:center;gap:8px;margin-top:20px;}
-.sev-pips{display:flex;gap:2px;align-items:center;flex-shrink:0;}
+/* .sev-pip is still used on mistake cards; the .sev-pips row that used to sit beside the
+   severity slider is gone — the slider carries its own 1-5 scale now. */
 .sev-pip{width:8px;height:8px;border-radius:50%;transition:background var(--t-fast);}
 .sev-lbl-val{font-size:var(--fs-2xs);color:var(--muted);flex-shrink:0;min-width:72px;}
 .mk-filter-bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-bottom:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);}
@@ -912,6 +913,12 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Sliders: thin visible track, tall invisible touch zone */
   .rating-slider,.pp-slider,.plog-slider{height:40px;background-size:100% 5px;background-position:center;background-repeat:no-repeat;}
   .sspring-thumb{width:23px;height:23px;}
+  /* The bar sliders are the exception: the track *is* the touch target, so it gets a real
+     height rather than a thin line inside a tall invisible box. 34px still clears SC 2.5.8
+     comfortably while stopping short of the 40px slab that a full-height fill would give. */
+  .rating-slider{height:34px;background-size:100% 100%;}
+  .sspring-bar .sspring-thumb{width:26px;height:27px;border-radius:6px;}
+  .sspring-bar .sspring-nums{bottom:calc(50% + 22px);}
   /* Past-papers type toggle scrolls sideways when it has many tabs (AS/A-Level/FM/Madas) */
   .pp-type-seg{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
   .pp-type-seg::-webkit-scrollbar{display:none;}
@@ -1074,17 +1081,38 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   background-position:center;background-size:100% 5px;}
 .rating-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .rating-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
+
+/* ── The 1-5 bar slider — recall rating and mistake severity ──────────────
+   One control in two places. The track is the full 26px rather than a 5px line
+   painted inside it, and the thumb is a translucent rounded rectangle riding on
+   the gradient instead of an opaque knob sitting over it, so the colour under
+   the handle stays readable and the handle reads as *part of* the scale.
+
+   Both use the app's own spectrum. Severity previously had its own green->red
+   ramp, which is the one thing that stopped them looking like the same control.  */
+.rating-slider{background-size:100% 100%;border-radius:var(--r-sm);}
+.sspring-bar .sspring-thumb{
+  top:50%;width:22px;height:20px;border-radius:5px;
+  background:rgba(255,255,255,.55);
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:0 1px 4px rgba(0,0,0,.22);
+}
+.sspring-bar:hover .sspring-thumb,.sspring-bar:focus-within .sspring-thumb{
+  background:rgba(255,255,255,.72);box-shadow:0 2px 9px rgba(0,0,0,.3);}
+/* The default offset clears a 5px line painted mid-box; this track is the full 26px,
+   so the scale has to be lifted clear of it or the digits sit on the bar. */
+.sspring-bar .sspring-nums{bottom:calc(50% + 18px);}
+
 /* Spring slider overlay */
 .sspring-wrap{position:relative;display:block;}
-.sspring-thumb{position:absolute;top:calc(50% + 2px);width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.25);pointer-events:none;z-index:5;will-change:left,transform;transform-origin:center center;transition:box-shadow var(--t-base);}
+.sspring-has-nums{margin-top:20px;}
+.sspring-thumb{position:absolute;top:calc(50% + 2px);width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.25);pointer-events:none;z-index:5;will-change:left,transform;transform-origin:center center;transition:box-shadow var(--t-base),background var(--t-base);}
 .sspring-wrap:hover .sspring-thumb,.sspring-wrap:focus-within .sspring-thumb{box-shadow:0 2px 12px rgba(var(--accent-rgb),.45);}
-#m-severity,#em-severity{background:linear-gradient(90deg,var(--severity))!important;}
 .sspring-nums{position:absolute;left:0;right:0;bottom:calc(50% + 11px);display:flex;justify-content:space-between;pointer-events:none;z-index:3;font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);font-weight:700;line-height:1;}
 .sspring-num{width:0;display:flex;justify-content:center;overflow:visible;flex-shrink:0;}
 .sspring-num span{white-space:nowrap;opacity:.85;}
 .sspring-wrap input[type=range]::-webkit-slider-thumb{opacity:0!important;}
 .sspring-wrap input[type=range]::-moz-range-thumb{opacity:0!important;width:0!important;height:0!important;}
-.rating-scale{display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--dim);font-family:'JetBrains Mono',monospace;padding:0 2px;}
 .rating-desc{background:var(--surface2);border-radius:var(--r-sm);padding:6px 8px;font-size:var(--fs-sm);display:flex;gap:8px;align-items:baseline;border-left:3px solid var(--muted);}
 .rating-desc b{font-size:var(--fs-sm);white-space:nowrap;}
 .rating-desc span{color:var(--muted);}
@@ -1248,6 +1276,12 @@ html{scroll-behavior:smooth;}
 .pp-slider-ticks span{font-size:var(--fs-3xs);color:var(--dim);font-family:'JetBrains Mono',monospace;}
 
 /* module + paper breakdown */
+/* flow-root makes #pp-browser a block formatting context, so .pp-module's bottom margin
+   cannot collapse out through it. Without that the last module's 20px escapes and lands on
+   the document instead, which means min-height on the list is NOT authoritative: pinning it
+   across a module switch still let the page shrink by exactly that 20px, and the scroll
+   position was clamped by the same amount. See ppRenderKeepingView(). */
+#pp-browser{display:flow-root;}
 .pp-module{margin-bottom:20px;}
 .pp-module-head{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;}
 .pp-module-name{font-family:'Manrope',sans-serif;font-size:var(--fs-lg);font-weight:700;color:var(--text);}

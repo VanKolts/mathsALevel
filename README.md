@@ -159,6 +159,10 @@ Ocean, Violet and Pure Black were retired once the spectrum became a memory scal
 
 **No C1 control characters.** `index.html` carried 12 of them — 11 × U+0097 and 1 × U+0096 — in place of em and en dashes, in the review-panel subtitle, the favourites empty state, all three Resources category labels and four resource descriptions. They are cp1252 bytes `0x97`/`0x96` decoded as Latin-1 and re-encoded as UTF-8: unprintable, so browsers drew a tofu box or nothing. Anything that round-trips this file through a non-UTF-8 editor can reintroduce them; the giveaway is a dash that has become a blank or a box.
 
+**One 1–5 slider, used twice.** Recall rating (study modal) and mistake severity are the same control: a full-height gradient track with the scale drawn above it and a **translucent rounded-rect thumb riding on the gradient** rather than an opaque knob sitting over it, so the colour under the handle stays readable and the handle reads as part of the scale. Both run on the app's own `--spectrum`. They used to diverge in three ways at once, which is why they never looked related: severity had its own green→red ramp; severity's track filled its whole 26px box while the rating track was a 5px line painted inside one (an accident — the `background` shorthand in the severity override reset `background-size`); and the rating slider carried a separate row of numbers *underneath* while severity drew its own above. The severity pips beside the track are gone with them — the scale is on the slider now.
+
+> The spring physics are untouched (`SPRING_K/C/M`, ζ≈0.69), so the thumb still settles onto the discrete value with the same small rebound. Only the geometry changed: `THUMB_D` is 22px for the bar variant, which is what the travel maths and the scale's padding key off.
+
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
 **Maths.** All mathematical content is written in LaTeX and typeset by **MathJax** (`$…$` inline, `$$…$$` displayed).
@@ -176,6 +180,13 @@ Tapping a topic opens the **study modal**, where rating how a review went (1–5
 
 ### 2. 📝 Papers — `#page-papers`
 **Visual:** the past-paper command centre. Tabs for **AS**, **A-Level**, **Further Maths**, **Old-spec** (C1–C4, FP, M1, S1…) and practice sets (Madas, Naiker). Pick a paper, log your marks (a single total *or* question-by-question), and see performance charts, grade boundaries and an exam timer.
+
+**Switching module no longer moves the page.** Modules hold different numbers of papers, so replacing the list changed the document height — and if you were scrolled down, the browser clamped `scrollTop` and the whole view lurched upward. Measured on A-Level → Further Maths at `scrollY 220`: document 1058 → 940, view yanked up 116px. That was the reported "twitch"; it is a scroll clamp, not lag.
+
+`ppRenderKeepingView()` reserves exactly enough height on `#pp-browser` to keep the current scroll position legal, and gives it back on the first scroll that no longer needs it (floor: `scrollY 0`, where shrinking below the fold cannot move anything, so the reservation always clears eventually). Two things make it work that are easy to get wrong:
+
+- **`#pp-browser` is `display:flow-root`.** `.pp-module` has `margin-bottom:20px`, and the last one's margin **collapsed out through the wrapper** — so `min-height` on the list was not authoritative, and pinning it still let the document shrink by exactly that 20px. A block formatting context contains the margin and makes the pin exact.
+- **Never ask the browser what it just did.** An earlier version cleared `min-height`, read back how far `window.scrollY` had been clamped, and reserved that. `scrollY` does not update synchronously with the forced reflow, so it read ~20px light and the page still nudged every switch. The height that will be needed is computed from the children instead.
 
 The **exam timer opens paused** (`timerState.running=false`, button reads `Start`). It used to start on `openTimer()`, so the clock ran while you found a pen and opened the PDF and every logged `timeTakenMin` was inflated. `timerLabel()` returns `Start` while `remaining===total` and `Resume` after, so a paused timer never claims to have been running; `timerReset()` returns to full duration *paused*, matching the open state.
 
