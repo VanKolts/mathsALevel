@@ -913,11 +913,11 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Sliders: thin visible track, tall invisible touch zone */
   .rating-slider,.pp-slider,.plog-slider{height:40px;background-size:100% 5px;background-position:center;background-repeat:no-repeat;}
   .sspring-thumb{width:23px;height:23px;}
-  /* The bar sliders are the exception: the track *is* the touch target, so it gets a real
-     height rather than a thin line inside a tall invisible box. 34px still clears SC 2.5.8
-     comfortably while stopping short of the 40px slab that a full-height fill would give. */
-  .rating-slider{height:34px;background-size:100% 100%;}
-  .sspring-bar .sspring-thumb{width:26px;height:30px;border-radius:6px;}   /* 34px track */
+  /* No bar-slider overrides here. The .rating-slider / .plog-slider rules further down the
+     file are outside any media query, and media queries add no specificity — so source order
+     wins and anything set here is silently dead. (The 40px rule above is in exactly that
+     position and has never applied either.) The bar sliders therefore use the same 26px
+     track on touch as on desktop, which clears SC 2.5.8's 24px minimum on its own. */
   .sspring-bar .sspring-nums{bottom:calc(50% + 22px);}
   /* Past-papers type toggle scrolls sideways when it has many tabs (AS/A-Level/FM/Madas) */
   .pp-type-seg{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -1098,6 +1098,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
    Scoped to .sspring-bar: the round-knob sliders still carry a +2px nudge that compensates
    for the very same gap, and would go off-centre the other way. */
 .sspring-bar input[type=range]{display:block;}
+.sspring-bar input[type=range]::-webkit-slider-thumb{opacity:0;}
+.sspring-bar input[type=range]::-moz-range-thumb{opacity:0;width:0;height:0;}
 .sspring-bar .sspring-thumb{
   top:50%;width:22px;height:22px;border-radius:5px;
   background:rgba(255,255,255,.55);
@@ -1402,7 +1404,12 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 .plog-field.full{grid-column:1/-1;}
 .plog-sel,.plog-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:var(--fs-sm);padding:6px 8px;outline:none;font-family:'Inter',sans-serif;}
 .plog-sel:focus,.plog-input:focus{border-color:rgba(var(--accent-rgb),.5);}
-.plog-slider{width:100%;-webkit-appearance:none;appearance:none;height:26px;border-radius:var(--r-xs);background:linear-gradient(90deg,var(--spectrum));background-repeat:no-repeat;background-position:center;background-size:100% 5px;outline:none;margin-top:6px;}
+/* Same bar as the recall/severity sliders — full-height track, --r-sm corners. The
+   translucent thumb comes from .sspring-bar, which the spring enhancer adds. */
+/* No margin-top here. The spring enhancer wraps the input, so a margin on the input sits
+   INSIDE that wrapper and makes it taller than the track — which throws the thumb's
+   top:50% off centre by half the margin. Spacing above comes from .sspring-has-nums. */
+.plog-slider{width:100%;-webkit-appearance:none;appearance:none;height:26px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--spectrum));background-repeat:no-repeat;background-position:center;background-size:100% 100%;outline:none;}
 .plog-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .plog-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .plog-diff-val{font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);color:var(--text);}

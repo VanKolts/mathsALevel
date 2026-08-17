@@ -6345,8 +6345,14 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     var isPP=input.classList.contains('pp-slider');
     // The 1-5 rating/severity sliders share one look: a full-height gradient bar with a
     // translucent rounded-rect thumb riding on it. The year slider keeps its round knob.
-    var isBar=input.classList.contains('rating-slider');
+    var isBar=input.classList.contains('rating-slider')||input.classList.contains('plog-slider');
     var THUMB_D=isPP?20:(isBar?22:18),THUMB_R=THUMB_D/2;
+    /* Keep the thumb off the ends of the track by the same 2px it is inset from the top and
+       bottom, so at 1 and 5 it sits just inside the bar rather than flush against the cap.
+       Everything that maps a value to an x position has to use it — the target, the walls
+       that stop the spring overshooting out of the track, and the padding on the 1-5 scale,
+       or the numbers stop lining up with where the thumb actually lands. */
+    var EDGE_PAD=isBar?2:0;
     var wrap=document.createElement('div');
     wrap.className='sspring-wrap'+(isBar?' sspring-bar':'');
     if(input.style.flex)wrap.style.flex=input.style.flex;
@@ -6367,7 +6373,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     var needsNums=!isPP;
     if(needsNums){
       var numWrap=document.createElement('div');numWrap.className='sspring-nums';
-      numWrap.style.padding='0 '+THUMB_R+'px';
+      numWrap.style.padding='0 '+(THUMB_R+EDGE_PAD)+'px';
       for(var i=1;i<=5;i++){
         var nd=document.createElement('div');nd.className='sspring-num';
         var sp=document.createElement('span');sp.textContent=i;
@@ -6384,7 +6390,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       var min=+input.min||0,max=+(input.max)||1;
       var ratio=(+input.value-min)/(max-min);
       if(isNaN(ratio))return-1;
-      return THUMB_R+ratio*(W-THUMB_D);
+      return THUMB_R+EDGE_PAD+ratio*(W-THUMB_D-2*EDGE_PAD);
     }
     function draw(x,sx){
       var sy=sx<1?1+(1-sx)*0.32:1;
@@ -6401,7 +6407,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
         var a=(-SPRING_K*(cur-t)-SPRING_C*vel)/SPRING_M; // F = -kx - cv
         vel+=a*h;cur+=vel*h;
       }
-      var W=input.offsetWidth,minX=THUMB_R,maxX=W-THUMB_R; // hard walls — no leaving the track
+      var W=input.offsetWidth,minX=THUMB_R+EDGE_PAD,maxX=W-THUMB_R-EDGE_PAD; // hard walls — no leaving the track
       if(cur<minX){cur=minX;if(vel<0)vel=0;}
       else if(cur>maxX){cur=maxX;if(vel>0)vel=0;}
       draw(cur,Math.max(0.95,Math.min(1.05,1+vel*0.00002)));
