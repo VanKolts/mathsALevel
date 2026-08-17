@@ -1018,6 +1018,9 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           <rect class="ic-mv ic-hole" x="5" y="3.5" width="14" height="17" rx="1" fill="#000"/>
         </mask>
         <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
+        <!-- Carries .ic-paint/.ic-rain so it flows in on exactly the same slide as the
+             border rather than fading independently; .ic-dim is what holds it back. -->
+        <rect class="ic-paint ic-rain ic-dim" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
         <g mask="url(#ic-paper-cut)">
           <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
           <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>

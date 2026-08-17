@@ -163,8 +163,19 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    them read as clean negative space, exactly as drawn in the source SVG. */
 .ic-plate{fill:var(--nav-plate);}
 .ic-base{fill:var(--muted);transition:fill var(--t-base);}
-.m-nav-btn:hover .ic-base{fill:var(--text);}
+/* Hover brightens the icon — but NOT while it is the one the colour is flowing
+   into or out of. You click with the pointer still on the button, so without
+   the :not() the base underneath the arriving rainbow was --text: the icon
+   filled from white in dark mode and from near-black in light. The rainbow
+   should always be seen sliding over the resting muted colour. */
+.m-nav-btn:not(.active):not(.nav-leaving):hover .ic-base{fill:var(--text);}
 .ic-rain{fill:url(#m-rainbow);}
+/* Past Papers only: a dimmed rainbow across the whole silhouette, so the page's
+   interior reads as tinted rainbow rather than flat rail colour. It sits above
+   the opaque plate (which is what keeps it crisp and independent of the pill)
+   and below the full-strength border, so the outline stays clearly darker than
+   what it encloses. Masked by -sil rather than -cut, hence it covers the hole. */
+.ic-dim{opacity:.35;}
 
 /* Shape morph — 400ms ease-out, 180ms behind the pill so the icon resolves
    just as the pill finishes arriving. Deliberately not the pill's curve:
@@ -826,7 +837,10 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .m-nav-btn svg{width:26px;height:26px;}
   .m-nav-btn:hover svg{stroke:var(--muted);}
   .m-nav-btn.active:hover svg{stroke:url(#m-rainbow);}
-  .m-nav-btn:hover .ic-base{fill:var(--muted);}          /* hover is meaningless on touch */
+  /* Hover is meaningless on touch. These must carry at least as much specificity as the
+     :not(.active):not(.nav-leaving):hover rule above, or that one wins here despite coming
+     first — specificity beats source order, and a phone would brighten icons on tap. */
+  .m-nav-btn:not(.active):not(.nav-leaving):hover .ic-base,
   .m-nav-btn.active:hover .ic-base{fill:var(--muted);}
   /* The bar runs left-to-right down here, so the colour has to travel along X.
      Same --nav-dir, same hand-off — only the axis changes. */
