@@ -51,8 +51,12 @@
      because several sticky offsets read it. */
   --tabbar-h:0px;
 
-  /* Width of the desktop nav rail; body is padded by exactly this. */
-  --rail-w:64px;
+  /* Width of the desktop nav rail; body is padded by exactly this.
+     172px is set by the longest label ("Past Papers", ~84px at 14px/600) plus
+     the icon (24), the gap (12) and the row padding (2x10) = 140px, leaving
+     slack so nothing truncates. Labels are permanent rather than hover-revealed:
+     a tooltip you must hover to read is not a label, it is a quiz. */
+  --rail-w:172px;
 
   /* Container caps. Lists get the wider one so a big monitor shows more rows;
      prose is pinned to a measure instead (see --prose below). */
@@ -96,39 +100,43 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    with text labels: two navs meant two sets of icons, two active states and two click
    paths to keep in step, which is how #page-progress ended up orphaned.   */
 .m-nav{position:fixed;left:0;top:0;bottom:0;z-index:450;width:var(--rail-w);
-  display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0;
+  display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:16px 12px;
   background:var(--surface-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border-right:1px solid var(--border);}
-.m-nav-group{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.rail-sep{width:22px;height:1px;background:var(--border2);margin:6px 0;flex-shrink:0;}
+.m-nav-group{display:flex;flex-direction:column;align-items:stretch;gap:4px;}
+.rail-sep{width:auto;height:1px;background:var(--border2);margin:8px 10px;flex-shrink:0;}
 /* The pill is positioned in JS from the active icon's box, so it works in either axis. */
 .m-nav-pill{position:absolute;border-radius:var(--r-md);background:linear-gradient(160deg,var(--spectrum));
   opacity:0;pointer-events:none;z-index:0;
   transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) var(--ease-spring),width var(--t-slow) ease,height var(--t-slow) ease,opacity var(--t-base);}
-.m-nav-btn{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
-  width:var(--tap);height:var(--tap);padding:0;background:none;border:none;border-radius:var(--r-md);
+/* A full-width row: icon, then label, left-aligned. The button is the whole row
+   rather than a 44px square, so the pill, the hover state and the click target
+   all cover the label too — a label you can read but not click is a trap. */
+.m-nav-btn{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-start;gap:12px;
+  width:100%;height:var(--tap);padding:0 10px;background:none;border:none;border-radius:var(--r-md);
   cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast);}
 .m-nav-btn:active{transform:scale(.92);}
-.m-nav-btn svg{width:24px;height:24px;fill:none;stroke:var(--muted);stroke-width:1.85;
+.m-nav-btn svg{width:24px;height:24px;flex-shrink:0;fill:none;stroke:var(--muted);stroke-width:1.85;
   stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
 .m-nav-btn:hover svg{stroke:var(--text);}
 .m-nav-btn.active svg{stroke:url(#m-rainbow);}
-/* Label doubles as the rail's hover tooltip and the bottom bar's caption. */
-.m-nav-lbl{position:absolute;left:calc(100% + 10px);top:50%;
-  transform:translateY(-50%) translateX(-4px);white-space:nowrap;
-  font-family:'Inter',sans-serif;font-size:var(--fs-xs);font-weight:600;color:var(--text);
-  background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);
-  padding:5px 9px;line-height:1;opacity:0;pointer-events:none;z-index:5;
-  box-shadow:0 6px 18px rgba(0,0,0,.35);
-  transition:opacity var(--t-fast),transform var(--t-fast);}
-.m-nav-btn:hover .m-nav-lbl,.m-nav-btn:focus-visible .m-nav-lbl{opacity:1;transform:translateY(-50%) translateX(0);}
-.m-nav-badge{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;
+/* Same element in both orientations: inline text on the rail, caption under the
+   icon on the bottom bar (restyled in the mobile query). It was a hover tooltip
+   on the rail until 2026-08-17; permanently visible is the point of widening. */
+.m-nav-lbl{position:static;transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-family:'Inter',sans-serif;font-size:var(--fs-sm);font-weight:600;color:var(--muted);
+  background:none;border:none;border-radius:0;padding:0;line-height:1;opacity:1;
+  pointer-events:none;box-shadow:none;transition:color var(--t-base);}
+.m-nav-btn:hover .m-nav-lbl,.m-nav-btn:focus-visible .m-nav-lbl,.m-nav-btn.active .m-nav-lbl{color:var(--text);}
+/* Anchored to the icon's top-right corner, not the row's: the row is now 172px
+   wide, so right:7px would float the dot off in the whitespace past the label. */
+.m-nav-badge{position:absolute;top:7px;left:28px;right:auto;width:9px;height:9px;border-radius:50%;
   background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
 .m-nav-badge.show{display:block;}
 /* A running Focus timer used to count down in the tab bar. It lives in the Tools overlay
    now, so the Tools icon carries the state instead — otherwise it vanishes when you close it. */
 .m-nav-btn.rail-live svg{stroke:url(#m-rainbow);}
-.m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:6px;right:6px;
+.m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:6px;left:29px;right:auto;
   width:8px;height:8px;border-radius:50%;border:1.5px solid var(--surface-glass);}
 .m-nav-btn.rail-live::after{background:var(--overdue);animation:rail-pulse 1.9s var(--ease) infinite;}
 .m-nav-btn.rail-paused::after{background:var(--muted);}
@@ -726,11 +734,12 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* sliding rainbow indicator that flows behind the active icon */
   .m-nav-pill{background:linear-gradient(90deg,var(--spectrum));
     transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) ease,width var(--t-slow) var(--ease-spring),height var(--t-slow) ease,opacity var(--t-base);}
-  .m-nav-btn{flex:1 1 0;flex-direction:column;gap:2px;
+  .m-nav-btn{flex:1 1 0;flex-direction:column;justify-content:center;gap:2px;
     width:auto;height:auto;min-height:54px;max-width:92px;padding:4px 0;}
   .m-nav-lbl{position:static;transform:none;opacity:0;background:none;border:none;box-shadow:none;
     padding:0;font-size:var(--fs-3xs);font-weight:600;line-height:1;height:11px;color:var(--muted);
-    transition:opacity var(--t-base),color var(--t-base);letter-spacing:.01em;}
+    transition:opacity var(--t-base),color var(--t-base);letter-spacing:.01em;
+    max-width:100%;}
   .m-nav-btn.active .m-nav-lbl{opacity:1;color:var(--text);}
   .m-nav-btn:hover .m-nav-lbl{opacity:0;}          /* hover is meaningless on touch */
   .m-nav-btn.active:hover .m-nav-lbl{opacity:1;}
@@ -738,7 +747,10 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .m-nav-btn svg{width:26px;height:26px;}
   .m-nav-btn:hover svg{stroke:var(--muted);}
   .m-nav-btn.active:hover svg{stroke:url(#m-rainbow);}
+  /* Icons are centred in a column down here, so the dot goes back to the icon's
+     corner measured from the centre — the rail's fixed 28px offset is wrong. */
   .m-nav-badge{top:6px;right:auto;left:calc(50% + 8px);}
+  .m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{top:6px;left:calc(50% + 8px);right:auto;}
 
   /* ---- Three-dots dropdown menu ---- */
   .m-menu-backdrop{display:block;position:fixed;inset:0;z-index:470;background:rgba(0,0,0,.28);

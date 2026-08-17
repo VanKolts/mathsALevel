@@ -78,16 +78,26 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 **Shell.** **One nav element** (`#m-nav`) navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each page is a `<div class="page" id="page-…">`; `switchTab()` toggles which one is visible, and a rainbow `.m-nav-pill` slides behind the active icon (positioned in JS from that icon's bounding box, so it works along either axis).
 
-The nav is **icon-only in both orientations, and CSS alone decides which**:
+**CSS alone decides which orientation**:
 
 | | Desktop (>900px, fine pointer) | Mobile / touch |
 |---|---|---|
-| Layout | fixed 64px **left rail**, `flex-direction:column` | fixed **bottom bar**, `flex-direction:row` |
-| Label | hover tooltip beside the icon | caption under the active icon |
+| Layout | fixed 172px **labelled left rail**, `flex-direction:column` | fixed **bottom bar**, `flex-direction:row` |
+| Label | **always visible**, inline beside the icon | caption under the active icon |
 | Groups | pages · hairline · Settings, Statistics, Tools | pages only — `.rail-tools` is hidden |
 | Overflow | the Tools icon opens `#more-overlay` | the floating ⋯ opens the `.m-menu` speed-dial |
 
 `body` is padded by `--rail-w` on desktop and by the bar's height on mobile, so nothing sits under the nav. A **due dot** (`.m-nav-badge`) on the Checklist icon marks overdue topics, with the count in the button's `title`.
+
+**The rail is labelled, not icon-only** (`--rail-w: 172px`, since 2026-08-17). `.m-nav-lbl` is the same element in both orientations — it was a hover tooltip on the rail and is now inline text; the mobile query still restyles it into the caption under the active icon. 172px is set by the longest label ("Past Papers", ~84px at 14px/600) plus icon, gap and row padding = 140px, so nothing truncates; verified at 920px, where the widest label still ends 34px short of the edge. The `.m-nav-btn` is now the **whole row** rather than a 44px square, so the hover state, the focus ring, the click target and the pill all cover the label — a label you can read but not click is a trap.
+
+Three knock-on details, each of which breaks if you only widen the rail:
+
+- **`positionMNavPill()` anchors per axis.** On the rail it measures the *button* (`pad = 0`) so the pill spans icon and label; on the bottom bar it measures the *SVG* (`pad = 9`) because a full-height pill would swallow the caption. It reads the axis off `getComputedStyle(nav).flexDirection` rather than re-testing the media query in JS, so the breakpoint has exactly one definition.
+- **The due dot and the timer dot are anchored to the icon** (`left: 28px` / `29px`), not the row. At `right: 7px` they would float out in the whitespace past the label. The mobile query puts both back to `calc(50% + 8px)`, since icons are centred in a column down there.
+- **Label contrast is a new surface pairing.** The label used to be `--text` on `--surface2`; it is now `--muted` (inactive) / `--text` (active) over `--surface-glass` composited on `--bg`. Measured: inactive 6.13 / 6.14 / 9.29:1 and active 16.62 / 19.11 / 21:1 across `rose-dark` / `rose-light` / `pure-white`.
+
+> **Measuring a themed colour with a `transition` on it gives the wrong answer.** `.m-nav-lbl` transitions `color`, so `getComputedStyle` immediately after flipping `data-theme` returns the mid-transition value — in practice one theme behind, which reported the labels at 2.96:1 and looked like a real AA failure. Inject `*{transition:none!important}` before auditing colour, or the audit measures the animation.
 
 > **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` is still orphaned partly because there were two places to wire a tab up and only one got done. Anything nav-shaped now has exactly one home.
 

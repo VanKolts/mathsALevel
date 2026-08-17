@@ -3090,9 +3090,16 @@ function switchTab(tab){
   function positionMNavPill(){
     var nav=document.getElementById('m-nav'), pill=document.getElementById('m-nav-pill');
     var act=nav&&nav.querySelector('.m-nav-btn.active'); if(!nav||!pill||!act)return;
-    var svg=act.querySelector('svg'); if(!svg)return;
-    var nr=nav.getBoundingClientRect(), sr=svg.getBoundingClientRect(); if(!sr.width)return; // SVG has no offset* props
-    var pad=9;
+    /* Two orientations, two anchors. On the rail the button is a full-width row
+       carrying icon *and* label, so the pill tracks the button and covers both;
+       on the bottom bar the button is a tall column with the caption underneath,
+       where a full-height pill would swallow the caption — so it tracks the icon
+       and is padded out. Read the axis off the computed style rather than
+       re-testing the media query in JS, so there is only one place to change. */
+    var vertical=getComputedStyle(nav).flexDirection==='column';
+    var target=vertical?act:act.querySelector('svg'); if(!target)return;
+    var nr=nav.getBoundingClientRect(), sr=target.getBoundingClientRect(); if(!sr.width)return; // SVG has no offset* props
+    var pad=vertical?0:9;
     pill.style.left=(sr.left-nr.left-pad)+'px';
     pill.style.top=(sr.top-nr.top-pad)+'px';
     pill.style.width=(sr.width+pad*2)+'px';
