@@ -2,9 +2,9 @@
 :root{
   --bg:#160b10;--surface:#24101a;--surface2:#2e1522;--surface3:#38192c;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.15);
-  --text:#fff1f2;--muted:#9a7080;--dim:#5a3344;
-  --accent:#f43f5e;--accent2:#fb923c;--accent-h:#fb7185;
-  --y1:#34d399;--y2:#3B82F6;--fm:#f472b6;
+  --text:#fff1f2;--muted:#b08c99;--dim:#a1848e;   /* were #9a7080 and #5a3344; both under AA (4.30:1 / 1.71:1 on --surface) */
+  --accent:#f5506c;--accent2:#fb923c;--accent-h:#fb7185;   /* --accent was #f43f5e, 4.26:1 on --surface3 */
+  --y1:#34d399;--y2:#478af7;--fm:#f472b6;   /* --y2 was #3B82F6, 4.25:1 on --surface3 */
   --y1-bg:rgba(52,211,153,0.08);--y2-bg:rgba(59,130,246,0.1);--fm-bg:rgba(244,114,182,0.08);
   --y1-bd:rgba(52,211,153,0.22);--y2-bd:rgba(59,130,246,0.25);--fm-bd:rgba(244,114,182,0.22);
   --overdue:#f87171;--due:#fbbf24;--upcoming:#fb923c;
@@ -20,10 +20,21 @@
    Add a new component by reaching for a step here, not a new number. */
 :root{
   /* Type — 9 steps. 26/38/52px and 3.4/3.6rem are emoji + display
-     numerals: graphics, not type, so they sit outside the scale. */
-  --fs-3xs:9px;   --fs-2xs:10px;  --fs-xs:11px;   --fs-sm:12px;
-  --fs-md:13px;   --fs-base:14px; --fs-lg:16px;   --fs-xl:18px;
-  --fs-2xl:21px;
+     numerals: graphics, not type, so they sit outside the scale.
+
+     Raised by ~2px in Aug 2026. The old scale bottomed out at 9px and set body
+     at 14px. There is no standard minimum font size — WCAG regulates contrast,
+     spacing and resizability, not absolute size — but three things pointed the
+     same way. NN/g's stated floor is 8pt (~10.7px), which 9px and 10px sat
+     under. Bernard et al. (2002, n=60) found 10pt text read significantly more
+     slowly than 12pt. And Piepenbrock et al. (2013) found the light-mode
+     reading advantage *grows as font size shrinks* — this app defaults to a
+     dark theme, so small type costs more here than it would on white.
+     The floor is now 11px and body is 16px; --fs-2xl is 24px, which is exactly
+     WCAG's "large text" threshold, so headings get the 3:1 contrast allowance. */
+  --fs-3xs:11px;  --fs-2xs:12px;  --fs-xs:13px;   --fs-sm:14px;
+  --fs-md:15px;   --fs-base:16px; --fs-lg:18px;   --fs-xl:20px;
+  --fs-2xl:24px;
 
   /* Corners — 4 steps + a pill. Anything whose radius exceeds half its
      height is a pill and uses --r-pill, not a corner step. */
@@ -42,6 +53,24 @@
 
   /* Width of the desktop nav rail; body is padded by exactly this. */
   --rail-w:64px;
+
+  /* Container caps. Lists get the wider one so a big monitor shows more rows;
+     prose is pinned to a measure instead (see --prose below). */
+  --wrap:min(100% - 96px, 1360px);
+  --wrap-narrow:min(100% - 96px, 1060px);
+
+  /* Reading measure. Dyson & Haselgrove (2001) found 55 characters per line
+     read faster than 25 and comprehended best; Bernard et al. (2002) found
+     45-76 preferred; WCAG SC 1.4.8 (AAA) caps text blocks at 80. Before this,
+     the prose containers permitted ~135. */
+  --prose:70ch;
+
+  /* How wide a row's name column may grow before the metadata column starts.
+     Without this the name had flex:1 and the metadata was pinned to the far
+     right, leaving up to 930px of dead space between a topic and its controls.
+     NN/g's lawn-mower eyetracking work found that distance between a row label
+     and its values makes users break their scan pattern and lose their row. */
+  --row-name-max:24rem;
 
   /* Minimum comfortable touch target. */
   --tap:44px;
@@ -126,19 +155,19 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 /*   HEADER    */
 header{border-bottom:1px solid var(--border);padding:calc(1.8rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right)) 1.4rem calc(1.5rem + env(safe-area-inset-left));background:linear-gradient(180deg,var(--bg-top) 0%,var(--bg) 100%);position:relative;}
 header::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad);pointer-events:none;}
-.hdr-inner{max-width:1060px;margin:0 auto;}
+.hdr-inner{width:var(--wrap);margin:0 auto;}
 h1{font-family:'Manrope',sans-serif;font-size:clamp(1.4rem,3vw,2rem);font-weight:800;letter-spacing:-.025em;margin-bottom:4px;color:var(--text);}
 h1 em{font-style:italic;}
 .hdr-sub{font-size:var(--fs-sm);color:var(--muted);}
 
 /*   REVIEW PANEL    */
-.review-panel{max-width:1060px;margin:0 auto;padding:24px 24px 12px;}
+.review-panel{width:var(--wrap);margin:0 auto;padding:24px 0 12px;}
 .today-card{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:16px 20px 16px 20px;margin-bottom:16px;position:relative;overflow:hidden;}
 .today-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--spectrum));}
 .today-main{flex:1;min-width:0;}
 .today-eyebrow{font-family:'JetBrains Mono',monospace;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
 .today-headline{font-family:'Manrope',sans-serif;font-size:var(--fs-xl);font-weight:700;color:var(--text);margin-bottom:2px;line-height:1.25;}
-.today-sub{font-size:var(--fs-sm);color:var(--muted);line-height:1.45;}
+.today-sub{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;max-width:var(--prose);}
 .today-cta{flex-shrink:0;font-family:'Manrope',sans-serif;font-size:var(--fs-md);font-weight:700;padding:12px 16px;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;color:var(--text);background:linear-gradient(var(--surface2),var(--surface2)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;transition:filter var(--t-fast),transform var(--t-fast);}
 .today-cta:hover{filter:brightness(1.12);transform:translateY(-1px);}
 .today-cta:active{transform:translateY(0);}
@@ -202,19 +231,19 @@ h1 em{font-style:italic;}
 .dot-overdue{background:var(--overdue);}
 .dot-due{background:var(--due);}
 .dot-upcoming{background:var(--upcoming);}
-.rev-name{flex:1;color:var(--text);}
+.rev-name{flex:1 1 0;max-width:var(--row-name-max);color:var(--text);}
 .rev-stage{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--dim);margin-right:2px;}
 .rev-date{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);}
 .rev-date.overdue{color:var(--overdue);}
 .rev-date.due{color:var(--due);}
-.rev-done-btn{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;padding:2px 8px;border-radius:var(--r-xs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);white-space:nowrap;}
+.rev-done-btn{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;padding:5px 10px;min-height:28px;display:inline-flex;align-items:center;border-radius:var(--r-xs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);white-space:nowrap;}
 .rev-done-btn:hover{background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border-color:transparent;color:var(--text);}
 .rev-empty{padding:12px 16px;font-size:var(--fs-sm);color:var(--muted);font-style:italic;}
 
 /*   FILTERS    */
 .filters-bar{border-bottom:1px solid var(--border);border-top:1px solid var(--border);padding:8px 24px;background:var(--bg);position:sticky;top:var(--tabbar-h);z-index:99;}
-.filters-inner{max-width:1060px;margin:0 auto;display:flex;gap:4px;flex-wrap:wrap;align-items:center;}
-.filter-btn{font-size:var(--fs-xs);padding:4px 12px;border-radius:var(--r-pill);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);font-family:'Inter',sans-serif;}
+.filters-inner{width:var(--wrap);margin:0 auto;display:flex;gap:4px;flex-wrap:wrap;align-items:center;}
+.filter-btn{font-size:var(--fs-xs);padding:6px 12px;min-height:28px;display:inline-flex;align-items:center;border-radius:var(--r-pill);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);font-family:'Inter',sans-serif;}
 .filter-btn:hover{color:var(--text);}
 .filter-btn.active,.filter-btn.y1.active,.filter-btn.y2.active,.filter-btn.fm.active{background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;color:var(--text);font-weight:500;transform:scale(1.04);box-shadow:0 0 10px rgba(248,113,113,.18),0 0 6px rgba(96,165,250,.1);}
 .sep{width:1px;height:16px;background:var(--border2);margin:0 2px;flex-shrink:0;}
@@ -227,7 +256,7 @@ h1 em{font-style:italic;}
 .rand-btn:hover{background:rgba(var(--accent2-rgb),.15);}
 
 /*   MAIN    */
-main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
+main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .stats-bar{display:flex;gap:20px;margin-bottom:8px;flex-wrap:wrap;}
 .stat-item{font-size:var(--fs-sm);color:var(--muted);}
 .stat-item strong{color:var(--text);font-weight:500;}
@@ -237,6 +266,17 @@ main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
 .prog-pct{font-size:var(--fs-xs);color:var(--muted);font-family:'JetBrains Mono',monospace;min-width:32px;}
 
 /*   CLUSTERS    */
+/* Two columns once there is room for them. Baymard's responsive-upscaling
+   research is the source for the shape of this fix: on large screens, repackage
+   the same content into more columns rather than stretching each row wider.
+   Widening rows would have made the label-to-value distance worse, which is the
+   thing the --row-name-max cap exists to fix. Section headers span both columns,
+   so the DOM stays flat and no JS changed. */
+@media (min-width:1500px){
+  #clusters-container{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start;}
+  #clusters-container > .qual-header,
+  #clusters-container > .comp-header{grid-column:1 / -1;}
+}
 .cluster{margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;transition:border-color var(--t-base),box-shadow var(--t-base),transform var(--t-fast);}
 .cluster:hover{border-color:rgba(var(--accent-rgb),.3);box-shadow:0 4px 24px rgba(0,0,0,.3);}
 .cluster.hi{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(var(--accent2-rgb),.12);}
@@ -265,10 +305,19 @@ main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
 .topic-row:hover .checkbox{border-color:var(--accent);}
 .checkbox.checked{background:var(--accent);border-color:var(--accent);}
 .checkbox.checked::after{content:'';display:block;width:3px;height:6px;border:1.5px solid #fff;border-top:none;border-left:none;transform:rotate(40deg) translateY(-1px);}
-.topic-name{font-size:var(--fs-sm);color:var(--text);flex:1;padding:8px 0;line-height:1.4;}
+.topic-name{font-size:var(--fs-sm);color:var(--text);flex:1 1 0;max-width:var(--row-name-max);padding:8px 0;line-height:1.5;}
 .topic-right{display:flex;align-items:center;gap:4px;flex-shrink:0;}
-.diff-pip{width:5px;height:5px;border-radius:50%;flex-shrink:0;opacity:.75;}
-.sr-badge{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;padding:2px 4px;border-radius:var(--r-xs);font-weight:500;cursor:pointer;}
+/* The difficulty pip encoded Standard/Challenging/Hard as green/amber/red and
+   nothing else. Red-green is the exact axis ~8% of men cannot resolve (NEI;
+   Wong 2011, Nature Methods), so for them the three states collapsed into one
+   indistinguishable dot. SC 1.4.1 Use of Color is Level A — the strictest —
+   and a contrast difference does not satisfy it when the meaning depends on
+   identifying *which* colour it is. Each level now has its own shape too:
+   solid disc, hollow ring, square. */
+.diff-pip{width:7px;height:7px;border-radius:50%;flex-shrink:0;opacity:.9;box-sizing:border-box;}
+.diff-pip.d-2{background:transparent!important;border:2px solid currentColor;}
+.diff-pip.d-3{border-radius:1px;}
+.sr-badge{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;padding:4px 6px;border-radius:var(--r-xs);font-weight:500;cursor:pointer;display:inline-flex;align-items:center;min-height:24px;}
 .sr-badge.overdue{background:rgba(248,113,113,.14);color:var(--overdue);border:1px solid rgba(248,113,113,.32);}
 .sr-badge.due{background:rgba(251,191,36,.14);color:var(--due);border:1px solid rgba(251,191,36,.32);}
 .sr-badge.upcoming{background:rgba(var(--accent2-rgb),.09);color:var(--upcoming);border:1px solid rgba(var(--accent2-rgb),.22);}
@@ -332,11 +381,11 @@ main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
 .mex-paper-name{font-size:var(--fs-sm);color:var(--text);flex:1;}
 .mex-paper-edited{font-size:var(--fs-3xs);color:var(--due);font-family:'JetBrains Mono',monospace;}
 .mex-paper input{background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);padding:4px 6px;}
-.mex-reset{align-self:flex-start;background:none;border:none;color:var(--muted);font-size:var(--fs-xs);cursor:pointer;padding:2px 0;text-decoration:underline;font-family:'Inter',sans-serif;}
+.mex-reset{align-self:flex-start;background:none;border:none;color:var(--muted);font-size:var(--fs-xs);cursor:pointer;padding:4px 0;min-height:26px;display:inline-flex;align-items:center;text-decoration:underline;font-family:'Inter',sans-serif;}
 .myexams-current,.settings-current{font-size:var(--fs-xs);color:var(--muted);margin-top:8px;font-family:'JetBrains Mono',monospace;}
 .planner-modal{width:min(620px,95vw);}
 .planner-hd{display:flex;align-items:center;justify-content:space-between;}
-.planner-close{background:none;border:none;color:var(--muted);font-size:var(--fs-lg);cursor:pointer;line-height:1;}
+.planner-close{background:none;border:none;color:var(--muted);font-size:var(--fs-lg);cursor:pointer;line-height:1;min-width:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;}
 .plan-empty{font-size:var(--fs-md);color:var(--muted);padding:12px;text-align:center;}
 .plan-today{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:12px 12px;margin-bottom:12px;}
 .plan-today-hd{font-size:var(--fs-sm);font-weight:700;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
@@ -361,9 +410,9 @@ main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
 .rg{display:flex;flex-direction:column;gap:4px;}
 .rg-lbl{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-family:'JetBrains Mono',monospace;}
 .rchips{display:flex;flex-wrap:wrap;gap:4px;}
-.rchip{font-size:var(--fs-xs);padding:2px 8px;border-radius:var(--r-pill);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);}
+.rchip{font-size:var(--fs-xs);padding:4px 10px;min-height:26px;display:inline-flex;align-items:center;border-radius:var(--r-pill);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:var(--tr-ui);}
 .rchip:hover{color:var(--text);}
-.rchip.active{background:rgba(var(--accent-rgb),.18);color:var(--accent);border-color:rgba(var(--accent-rgb),.38);}
+.rchip.active{background:rgba(var(--accent-rgb),.18);color:var(--text);font-weight:600;border-color:rgba(var(--accent-rgb),.38);}
 .rand-result{background:var(--surface2);border-radius:var(--r-sm);padding:12px;text-align:center;min-height:60px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;}
 .rr-topic{font-family:'Manrope',sans-serif;font-size:var(--fs-lg);font-weight:600;color:var(--text);}
 .rr-meta{font-size:var(--fs-2xs);color:var(--muted);font-family:'JetBrains Mono',monospace;}
@@ -394,7 +443,7 @@ main{max-width:1060px;margin:0 auto;padding:20px 24px 32px;}
 .tag-learn{background:rgba(var(--accent-rgb),.1);color:var(--y2);border:1px solid rgba(var(--accent-rgb),.22);}
 .tag-revise{background:rgba(244,114,182,.1);color:var(--fm);border:1px solid rgba(244,114,182,.22);}
 .tag-practice{background:rgba(52,211,153,.1);color:var(--y1);border:1px solid rgba(52,211,153,.22);}
-.star-btn{background:transparent;border:none;cursor:pointer;font-size:var(--fs-lg);color:var(--dim);transition:color var(--t-fast);flex-shrink:0;padding:2px;}
+.star-btn{background:transparent;border:none;cursor:pointer;font-size:var(--fs-lg);color:var(--muted);transition:color var(--t-fast);flex-shrink:0;min-width:28px;min-height:28px;display:inline-flex;align-items:center;justify-content:center;padding:2px;}
 .star-btn:hover{color:#f59e0b;}
 .star-btn.starred{color:#f59e0b;}
 
@@ -630,6 +679,10 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Lock the view horizontally — like a native app, vertical scroll only */
   html,body{overflow-x:clip;max-width:100%;}
   body{overscroll-behavior-x:none;padding-left:0;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
+  :root{--wrap:min(100% - 32px, 1360px);--wrap-narrow:min(100% - 32px, 1060px);--row-name-max:none;}
+  /* The larger type widened the filter chips enough to reflow this row, which
+     collapsed the search field to one character. Give it a floor and its own line. */
+  .search-wrap{flex:1 1 100%;min-width:180px;max-width:none;}
   .page,main,.review-panel,.tab-content,footer{max-width:100%;overflow-x:hidden;}
   /* Lock horizontal panning inside EVERY overlay/menu too (settings, stats, tutor, logger, timer, modals…) */
   .stats-overlay,.modal-overlay,.tutor-overlay,.img-viewer-overlay,#mh-login,#onboard-overlay,#topicpp-overlay{overflow-x:hidden;overscroll-behavior:contain;}
@@ -803,7 +856,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .sched-row.fc-hard .sched-stage{color:var(--d2);}
 .sched-row.fc-good .sched-stage{color:var(--accent);}
 .sched-row.fc-easy .sched-stage{color:var(--d1);}
-.mem-details-toggle{background:transparent;border:none;color:var(--accent2);font-size:var(--fs-xs);cursor:pointer;padding:2px 0;font-family:'Inter',sans-serif;}
+.mem-details-toggle{background:transparent;border:none;color:var(--accent2);font-size:var(--fs-xs);cursor:pointer;padding:4px 0;min-height:26px;display:inline-flex;align-items:center;font-family:'Inter',sans-serif;}
 .mem-details-toggle:hover{text-decoration:underline;}
 .mem-details-body{display:none;margin-top:6px;background:var(--surface2);border-radius:var(--r-sm);padding:8px 12px;}
 .mem-details.open .mem-details-body{display:block;}
@@ -861,9 +914,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .pq-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .pq-title{font-size:var(--fs-sm);font-weight:600;color:var(--text);font-family:'Inter',sans-serif;}
 .pq-diff{display:inline-flex;gap:0;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden;}
-.pq-diff-btn{font-size:var(--fs-2xs);padding:4px 8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;border-right:1px solid var(--border2);}
+.pq-diff-btn{font-size:var(--fs-2xs);padding:6px 10px;min-height:26px;display:inline-flex;align-items:center;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;border-right:1px solid var(--border2);}
 .pq-diff-btn:last-child{border-right:none;}
-.pq-diff-btn.on{background:rgba(var(--accent-rgb),.18);color:var(--accent);font-weight:600;}
+.pq-diff-btn.on{background:rgba(var(--accent-rgb),.18);color:var(--text);font-weight:600;}
 .pq-body{margin-top:8px;}
 .pq-gen-btn{width:100%;font-size:var(--fs-sm);font-weight:600;padding:8px;border-radius:var(--r-sm);border:none;background:var(--grad);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;}
 .pq-gen-btn:disabled{opacity:.55;cursor:default;}
@@ -894,6 +947,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 /*   RATING SLIDER   */
 .rating-slider-wrap{display:flex;flex-direction:column;gap:4px;}
 .rating-slider{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:var(--r-xs);background:linear-gradient(90deg,var(--spectrum));outline:none;}
+/* The visible track is 5px on purpose, but a 5px-tall drag target fails SC 2.5.8.
+   The input gets a 24px box with the track painted as a centred background, so
+   the hit area is 24px while the graphic is unchanged. */
+.rating-slider,.plog-slider,.pp-slider{height:26px;background-repeat:no-repeat;
+  background-position:center;background-size:100% 5px;}
 .rating-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .rating-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 /* Spring slider overlay */
@@ -910,22 +968,28 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .rating-desc{background:var(--surface2);border-radius:var(--r-sm);padding:6px 8px;font-size:var(--fs-sm);display:flex;gap:8px;align-items:baseline;border-left:3px solid var(--muted);}
 .rating-desc b{font-size:var(--fs-sm);white-space:nowrap;}
 .rating-desc span{color:var(--muted);}
-.rating-desc.rd-1{border-left-color:#f87171;} .rating-desc.rd-1 b{color:#f87171;}
-.rating-desc.rd-2{border-left-color:#fb923c;} .rating-desc.rd-2 b{color:#fb923c;}
-.rating-desc.rd-3{border-left-color:#fbbf24;} .rating-desc.rd-3 b{color:#fbbf24;}
-.rating-desc.rd-4{border-left-color:#34d399;} .rating-desc.rd-4 b{color:#34d399;}
-.rating-desc.rd-5{border-left-color:#60a5fa;} .rating-desc.rd-5 b{color:#60a5fa;}
-.sched-row.rd-1 .sched-stage{color:#f87171;}
-.sched-row.rd-2 .sched-stage{color:#fb923c;}
-.sched-row.rd-3 .sched-stage{color:#fbbf24;}
-.sched-row.rd-4 .sched-stage{color:#34d399;}
-.sched-row.rd-5 .sched-stage{color:#60a5fa;}
+.rating-desc.rd-1{border-left-color:var(--spec-1);} .rating-desc.rd-1 b{color:var(--spec-1);}
+.rating-desc.rd-2{border-left-color:var(--spec-2);} .rating-desc.rd-2 b{color:var(--spec-2);}
+.rating-desc.rd-3{border-left-color:var(--spec-3);} .rating-desc.rd-3 b{color:var(--spec-3);}
+.rating-desc.rd-4{border-left-color:var(--spec-4);} .rating-desc.rd-4 b{color:var(--spec-4);}
+.rating-desc.rd-5{border-left-color:var(--spec-5);} .rating-desc.rd-5 b{color:var(--spec-5);}
+.sched-row.rd-1 .sched-stage{color:var(--spec-1);}
+.sched-row.rd-2 .sched-stage{color:var(--spec-2);}
+.sched-row.rd-3 .sched-stage{color:var(--spec-3);}
+.sched-row.rd-4 .sched-stage{color:var(--spec-4);}
+.sched-row.rd-5 .sched-stage{color:var(--spec-5);}
 
 /*   TOPIC HIERARCHY + SETTINGS + LEGEND   */
 .qual-header{display:flex;align-items:baseline;gap:8px;margin:24px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border2);}
 .qual-header:first-child{margin-top:.2rem;}
 .qual-name{font-family:'Manrope',sans-serif;font-size:var(--fs-xl);font-weight:700;color:var(--text);}
 .qual-code{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--accent2);border:1px solid rgba(var(--accent2-rgb),.3);background:rgba(var(--accent2-rgb),.08);padding:2px 6px;border-radius:var(--r-pill);}
+.legend-shape{color:var(--muted);font-size:var(--fs-2xs);}
+.modal-lbl-hint{font-size:var(--fs-2xs);color:var(--muted);font-weight:400;}
+/* Resource cards are the one place a link's whole row is the target. Each sat at
+   16px tall — SC 2.5.8's inline exception covers links inside a sentence, which
+   these are not, so they get real height instead of leaning on it. */
+.res-card-name a{display:inline-flex;align-items:center;min-height:26px;}
 .comp-header{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;margin:16px 0 8px;}
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;}
 .settings-row{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;}
@@ -971,9 +1035,19 @@ html{scroll-behavior:smooth;}
 [data-theme="rose-light"]{
   --bg:#fef2f4;--surface:#ffffff;--surface2:#fdf0f2;--surface3:#fce8eb;
   --border:rgba(0,0,0,0.07);--border2:rgba(0,0,0,0.13);
-  --text:#1c0810;--muted:#8a5060;--dim:#c090a0;
-  --accent:#e11d48;--accent2:#ea580c;--accent-h:#f43f5e;
-  --upcoming:#ea580c;
+  --text:#1c0810;--muted:#8a5060;--dim:#965769;   /* --dim was #c090a0, 2.71:1 on --surface */
+  --accent:#be1741;--accent2:#bd3f0c;--accent-h:#f43f5e;
+  /* These were inherited straight from the dark theme and never re-tinted, so
+     the entire status and difficulty palette sat between 1.5:1 and 2.5:1 on a
+     white surface — --due (#fbbf24) measured 1.67:1, i.e. effectively invisible.
+     Re-tinted to clear SC 1.4.11's 3:1 floor for meaningful graphics, and 4.5:1
+     where the token is used as text. */
+  --overdue:#c81e1e;--due:#975c07;--upcoming:#a63709;   /* --upcoming also backs .sr-badge on a 9% tint */
+  --d1:#047857;--d2:#975c07;--d3:#c81e1e;
+  --y1:#03603f;--y2:#1a45bd;--fm:#a3134f;   /* deepened: these sit on 9% tints of themselves in .lvl-badge, which composited to ~4.4:1 */
+  --y1-bg:rgba(3,96,63,0.09);--y2-bg:rgba(26,69,189,0.09);--fm-bg:rgba(163,19,79,0.09);
+  --y1-bd:rgba(4,120,87,0.28);--y2-bd:rgba(29,78,216,0.28);--fm-bd:rgba(190,24,93,0.28);
+  --spec-1:#c81e1e; --spec-2:#bd3f0c; --spec-3:#975c07; --spec-4:#047857; --spec-5:#1d4ed8;
   --grad:linear-gradient(135deg,#e11d48,#ea580c);
   --glow:0 0 20px rgba(225,29,72,.1);
   --accent-rgb:225,29,72;--accent2-rgb:234,88,12;
@@ -982,16 +1056,22 @@ html{scroll-behavior:smooth;}
 [data-theme="pure-white"]{
   --bg:#ffffff;--surface:#f2f2f2;--surface2:#e8e8e8;--surface3:#dddddd;
   --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.16);
-  --text:#000000;--muted:#666666;--dim:#bbbbbb;
-  --accent:#e11d48;--accent2:#0284c7;--accent-h:#f43f5e;
-  --y1:#059669;--y2:#1d4ed8;--fm:#be185d;
+  --text:#000000;--muted:#474747;--dim:#5f5f5f;   /* were #666666 and #bbbbbb. Three grey tiers all clearing 4.5:1 against --surface3 (#dddddd) needs --muted darker than it was, so the step down to --dim stays visible. */
+  --accent:#be1741;--accent2:#036499;--accent-h:#e11d48;   /* were #e11d48 (4.20:1) and #0284c7 (3.66:1) on --surface */
+  --y1:#046e50;--y2:#1d4ed8;--fm:#b9175b;
   --y1-bg:rgba(5,150,105,0.1);--y2-bg:rgba(29,78,216,0.1);--fm-bg:rgba(190,24,93,0.1);
   --y1-bd:rgba(5,150,105,0.28);--y2-bd:rgba(29,78,216,0.28);--fm-bd:rgba(190,24,93,0.28);
-  --overdue:#dc2626;--due:#d97706;--upcoming:#ea580c;
-  --d1:#059669;--d2:#d97706;--d3:#dc2626;
+  --overdue:#bd1c1c;--due:#8a5406;--upcoming:#aa390b;   /* --due was #d97706, 2.85:1 on --surface */
+  --d1:#046e50;--d2:#8a5406;--d3:#bd1c1c;
+  /* The spectrum is re-tinted per theme rather than shared. On white it measured
+     1.2-2.8:1 against the surfaces, which matters because it is not purely
+     decorative: it paints the active nav icon's stroke (a component state, so
+     SC 1.4.11's 3:1 applies) and is clipped to text on two active tab labels.
+     rose-dark keeps the vivid original, where it already clears 5.6:1. */
+  --spec-1:#c10a0a; --spec-2:#9b4703; --spec-3:#7c5a02; --spec-4:#186d4e; --spec-5:#065cc5;
   --grad:linear-gradient(135deg,var(--spectrum));
   --glow:0 0 20px rgba(225,29,72,.12);
-  --accent-rgb:225,29,72;--accent2-rgb:2,132,199;
+  --accent-rgb:190,23,65;--accent2-rgb:3,105,161;
   --surface-glass:rgba(255,255,255,.92);--bg-top:#ffffff;--tab-active:#000000;
 }
 
@@ -1146,7 +1226,7 @@ html{scroll-behavior:smooth;}
 .plog-field.full{grid-column:1/-1;}
 .plog-sel,.plog-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:var(--fs-sm);padding:6px 8px;outline:none;font-family:'Inter',sans-serif;}
 .plog-sel:focus,.plog-input:focus{border-color:rgba(var(--accent-rgb),.5);}
-.plog-slider{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:var(--r-xs);background:linear-gradient(90deg,var(--spectrum));outline:none;margin-top:6px;}
+.plog-slider{width:100%;-webkit-appearance:none;appearance:none;height:26px;border-radius:var(--r-xs);background:linear-gradient(90deg,var(--spectrum));background-repeat:no-repeat;background-position:center;background-size:100% 5px;outline:none;margin-top:6px;}
 .plog-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .plog-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--accent);cursor:pointer;}
 .plog-diff-val{font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);color:var(--text);}
@@ -1286,7 +1366,7 @@ html{scroll-behavior:smooth;}
 .stats-hdr{display:flex;align-items:center;gap:8px;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .stats-title{font-family:'Manrope',sans-serif;font-size:var(--fs-lg);font-weight:700;color:var(--text);flex:1;}
 .stats-subtitle{font-size:var(--fs-xs);color:var(--muted);margin-left:6px;font-family:'JetBrains Mono',monospace;}
-.stats-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:var(--fs-xl);padding:4px 6px;border-radius:var(--r-sm);line-height:1;transition:color var(--t-fast),background var(--t-fast);}
+.stats-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:var(--fs-xl);padding:4px 8px;min-width:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-sm);line-height:1;transition:color var(--t-fast),background var(--t-fast);}
 .stats-close:hover{color:var(--text);background:var(--surface2);}
 .stats-body{padding:16px 20px 24px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;}
 

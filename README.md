@@ -3,7 +3,7 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (6,786 lines, 375 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (6,787 lines, 375 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
 
@@ -98,6 +98,24 @@ The nav is **icon-only in both orientations, and CSS alone decides which**:
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **3 built-in themes** — **Dark** (the default), **Light** and **Light rose**. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
 
 Ocean, Violet and Pure Black were retired once the spectrum became a memory scale rather than decoration: a palette that retints the whole app fights a colour ramp that has to mean the same thing everywhere. `THEME_MIGRATE` in `index.html` maps the retired keys onto the survivors, and — like `applyChapterRenames` — it runs on **every** load rather than once behind a flag, because sync can push a retired value back down from a device still on an older build at any moment. A copy of the map lives in the boot `<script>` in `<head>` so the migration lands before first paint.
+
+**Measure, density and the accessibility floor.** Three constraints are enforced in the tokens rather than per-component, because they were each being violated in dozens of places at once. All numbers below were measured against the built app, not estimated.
+
+| Constraint | Token | Why that number |
+|---|---|---|
+| Reading measure | `--prose: 70ch` | The prose containers previously permitted ~135 characters per line. [Dyson & Haselgrove (2001)](https://www.sciencedirect.com/science/article/abs/pii/S1071581901904586) found 55 cpl read faster than 25 and comprehended best; Bernard et al. (2002) found 45–76 preferred; [WCAG SC 1.4.8](https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html) (AAA) caps text blocks at 80 |
+| Container width | `--wrap: min(100% - 96px, 1360px)` | Lists get the wider cap so a large monitor shows *more rows*; prose is pinned to the measure above instead. At 2560px the old fixed 1060px cap left 742px of dead margin each side |
+| Label→value distance | `--row-name-max: 24rem` | A Checklist row's metadata was pinned to the far right, leaving up to **930px** between a topic and its controls. [NN/g's lawn-mower eyetracking work](https://www.nngroup.com/articles/lawn-mower-pattern/) found that distance makes users break their scan pattern and lose their row. Now measures 8px |
+
+**Two columns above 1500px.** `#clusters-container` becomes a two-column grid with the `.qual-header` / `.comp-header` rows spanning `1 / -1`. This is [Baymard's responsive-upscaling](https://baymard.com/blog/responsive-upscaling) prescription — repackage the same content into more columns rather than stretching each row, since stretching would reopen the label→value gap the cap just closed. The DOM was already flat, so no JS changed.
+
+**The type scale has a floor.** There is no standard minimum font size — WCAG regulates contrast, spacing and resizability, not absolute size — but the old scale bottomed out at **9px** and set body at 14px. NN/g's stated floor is 8pt (~10.7px); Bernard et al. (2002, n=60) found 10pt read significantly more slowly than 12pt; and [Piepenbrock et al. (2013)](https://www.tandfonline.com/doi/full/10.1080/00140139.2013.790485) found the light-mode reading advantage *grows as font size shrinks*, which matters because this app defaults to dark. The scale is now 11 → 24px with body at 16px, and `--fs-2xl` is 24px precisely because that is WCAG's "large text" threshold, so headings earn the 3:1 contrast allowance.
+
+**Contrast is checked against every surface, not just the background.** `--surface3` is the binding constraint: a token can clear 4.5:1 on `--bg` and still fail inside a nested panel. All three themes now clear [SC 1.4.3](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) AA (4.5:1) for every token against all four surfaces. The worst offender was **`rose-light`, which inherited the entire status and difficulty palette from the dark theme and never re-tinted it** — `--due` measured **1.67:1** on white, i.e. the memory-strength and difficulty indicators were effectively invisible on that theme. `--dim` is used as a text colour in 70 places and sat at 1.7–2.7:1, so it could not stay a "tertiary" tier below the AA floor. The spectrum is now re-tinted per theme rather than shared, because it is not purely decorative: it strokes the active nav icon (a component state, so [SC 1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)'s 3:1 applies) and is clipped to text on two active tab labels.
+
+**Colour is never the only cue.** The difficulty pip encoded Standard / Challenging / Hard as green / amber / red and nothing else. Red-green is the exact axis ~8% of men cannot resolve ([NEI](https://www.nei.nih.gov/learn-about-eye-health/eye-conditions-and-diseases/color-blindness); [Wong 2011, *Nature Methods*](https://www.nature.com/articles/nmeth.1618)), so for those users the three states collapsed into one indistinguishable dot. [SC 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) is **Level A** — the strictest — and a contrast difference does *not* satisfy it when the meaning depends on identifying which colour it is. Each level now carries a shape as well: solid disc, hollow ring, square. The 1–5 slider numerals were painted with the dark-theme ramp hexes (1.3–2.4:1 on white); they are ordinary readable text now, with the gradient track still carrying the scale.
+
+**Target sizes.** [SC 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) (AA) requires 24×24 CSS px and applies to pointer input too, not just touch. 57 controls were under it — filter chips at 22px, the `Test` button at 42×17, the favourite star at 17×22, and the rating sliders whose drag target was the 5px visible track. Two remain, both explicit exceptions in the SC: a lone checkbox (the **Spacing** exception, and its wrapping `<label>` is the real target) and one link inside a sentence (the **Inline** exception).
 
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
@@ -549,6 +567,17 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 | `MISTAKE_D_WEIGHT` | **`0`** — retired in phase 2; `D` now moves at the mistake event itself |
 | `MISTAKE_RET_WEIGHT` | `0.015` — down from 0.04, since the real penalty now lands on stability |
 
+**Layout & type tokens** (in `styles.css :root`, not `index.html`):
+| Token | Value | Meaning |
+|---|---|---|
+| `--fs-3xs` … `--fs-2xl` | `11 · 12 · 13 · 14 · 15 · 16 · 18 · 20 · 24px` | 9-step type scale; body is `--fs-base` 16px |
+| `--wrap` | `min(100% - 96px, 1360px)` | container cap for list surfaces (32px gutter on mobile) |
+| `--wrap-narrow` | `min(100% - 96px, 1060px)` | the old cap, kept for narrower surfaces |
+| `--prose` | `70ch` | reading measure for prose blocks |
+| `--row-name-max` | `24rem` | how wide a row's name column grows before its metadata starts (`none` on mobile) |
+| `--rail-w` | `64px` | desktop nav rail width; `body` is padded by exactly this |
+| `--tap` | `44px` | SC 2.5.5 (AAA) target; SC 2.5.8's 24px floor is enforced per-component |
+
 **AI:** `TUTOR_MODEL` = Gemini model id (`gemini-2.5-flash`); shared call timeout 60 s; 1 retry; `pqGenerate` temperature 0.9 / `pqVerify` temperature 0.
 
 ### 9.5 Function inventory by subsystem
@@ -663,7 +692,8 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **Grade boundaries are A-Level only.** `GRADE_BOUNDARIES` contains a single module (`alevel`), and `getGradeForMarks()` returns `null` for anything else. Logging an AS, Further Maths or legacy Core paper records the marks correctly but shows no grade — 120 of the 142 supported papers. Adding `as`, `fmcp` and the legacy boundaries is the highest-value data job outstanding.
 - **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
-- **Accessibility needs a pass.** Many controls fall below the 44 px touch target on a narrow phone, there is one `aria-live` region, and modals do not trap or restore focus.
+- **Accessibility — contrast, type and target sizes are done; focus management is not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, and every control clears SC 2.5.8's 24×24 except two documented exceptions. Still outstanding: there is only one `aria-live` region, and **modals neither trap focus nor restore it to the element that opened them** — tabbing out of an open dialog wanders into the page behind. That is the next accessibility job. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
+- **Light-mode default is arguably the better call and has not been made.** [Piepenbrock et al. (2013)](https://www.tandfonline.com/doi/full/10.1080/00140139.2013.790485) found positive polarity (dark text on light) gave better visual acuity for both younger (d=2.17) and older (d=0.58) adults and better proofreading accuracy, with the advantage growing as text shrinks. The app defaults to `rose-dark`. Dark mode is a genuine accessibility win for readers with cloudy ocular media (Legge et al. 1985), so the right answer is probably to default to the system preference rather than to either theme — currently there is no `prefers-color-scheme` handling at all.
 - **Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab; deferring it would speed up the Checklist's first paint.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
 - **Two orphaned page containers.** `#page-progress` and `#page-settings` are in the markup but unreachable — not in `TAB_ORDER`, no nav button, never given `.active`. `renderProgressTab()` still runs on every refresh, drawing into a hidden container. Wire them up or delete them.

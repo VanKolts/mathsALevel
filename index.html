@@ -103,9 +103,9 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <details class="legend" id="legend">
       <summary>What do the symbols mean?</summary>
       <div class="legend-grid">
-        <div class="legend-item"><span class="diff-pip" style="background:#34d399;opacity:1"></span> Standard difficulty</div>
-        <div class="legend-item"><span class="diff-pip" style="background:#fbbf24;opacity:1"></span> Challenging</div>
-        <div class="legend-item"><span class="diff-pip" style="background:#f87171;opacity:1"></span> Hard</div>
+        <div class="legend-item"><span class="diff-pip d-1" style="background:#34d399;color:#34d399;opacity:1"></span> Standard difficulty <span class="legend-shape">(solid disc)</span></div>
+        <div class="legend-item"><span class="diff-pip d-2" style="background:#fbbf24;color:#fbbf24;opacity:1"></span> Challenging <span class="legend-shape">(hollow ring)</span></div>
+        <div class="legend-item"><span class="diff-pip d-3" style="background:#f87171;color:#f87171;opacity:1"></span> Hard <span class="legend-shape">(square)</span></div>
         <div class="legend-item"><span class="strength-bar"><span class="strength-fill" style="width:70%;background:#34d399"></span></span> <span id="legend-strength-text">Memory strength (predicted recall)</span></div>
         <div class="legend-item"><span class="sr-badge overdue">Review now</span> Review overdue</div>
         <div class="legend-item"><span class="sr-badge due">Due today</span> Due for review today</div>
@@ -352,7 +352,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="pq-body" id="pq-body"></div>
     </div>
     <div>
-      <div class="modal-lbl">How did it go? <span style="font-size:10px;color:var(--dim)">(after attempting a question, no notes)</span></div>
+      <div class="modal-lbl">How did it go? <span class="modal-lbl-hint">(after attempting a question, no notes)</span></div>
       <div class="rating-slider-wrap">
         <input type="range" min="1" max="5" step="1" value="3" id="rating-slider" class="rating-slider" aria-label="Rate your recall from 1 to 5"/>
         <div class="rating-scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
@@ -365,7 +365,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div id="sched-rows"></div>
     </div>
     <div>
-      <div class="modal-lbl">Notes <span style="font-size:10px;color:var(--dim)">(optional - a sticking point or reminder)</span></div>
+      <div class="modal-lbl">Notes <span class="modal-lbl-hint">(optional - a sticking point or reminder)</span></div>
       <textarea class="modal-notes" id="modal-notes" placeholder="e.g. Always forget the +c on indefinite integrals"></textarea>
     </div>
     <div class="mem-details" id="mem-details">
@@ -469,7 +469,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="plog-marks-row"><input type="number" class="plog-input" id="plog-marks" min="0" placeholder="0"> <span class="max">/ <span id="plog-max">100</span></span> <span class="plog-grade-hint" id="plog-grade-hint"></span></div>
     </div>
     <div class="plog-field full">
-      <label class="plog-check"><input type="checkbox" id="plog-bd-toggle"> Enter marks question-by-question <span style="font-size:10px;color:var(--dim)">(optional — tracks marks lost per topic)</span></label>
+      <label class="plog-check"><input type="checkbox" id="plog-bd-toggle"> Enter marks question-by-question <span class="modal-lbl-hint">(optional — tracks marks lost per topic)</span></label>
       <div id="plog-bd-wrap" style="display:none;margin-top:10px;">
         <div class="plog-bd-note" id="plog-bd-note"></div>
         <div class="plog-bd-list" id="plog-bd-list"></div>
@@ -477,7 +477,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       </div>
     </div>
     <div class="plog-field full">
-      <div class="modal-lbl">Mistakes made <span style="font-size:10px;color:var(--dim)">(each is added to your Mistake tracker)</span></div>
+      <div class="modal-lbl">Mistakes made <span class="modal-lbl-hint">(each is added to your Mistake tracker)</span></div>
       <div class="plog-mk-list" id="plog-mk-list"></div>
       <div class="plog-mk-add">
         <select class="plog-sel" id="plog-mk-topic"></select>
@@ -4530,7 +4530,10 @@ function buildClusterCard(c,vis,openIds){
     const tname=document.createElement('span');tname.className='topic-name';tname.textContent=t.name;
     const right=document.createElement('div');right.className='topic-right';
 
-    const pip=document.createElement('div');pip.className='diff-pip';pip.style.background=DIFF_COLORS[t.diff];pip.title=DIFF_LABELS[t.diff];pip.setAttribute('aria-hidden','true');
+    // Shape as well as colour — see .diff-pip in styles.css (SC 1.4.1, Level A).
+    const pip=document.createElement('div');pip.className='diff-pip d-'+t.diff;
+    pip.style.background=DIFF_COLORS[t.diff];pip.style.color=DIFF_COLORS[t.diff];
+    pip.title=DIFF_LABELS[t.diff];pip.setAttribute('aria-hidden','true');
     right.appendChild(pip);
 
     if(notes[t.name]){
@@ -6203,17 +6206,14 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     // (This local array used to be called SEV_COLORS, shadowing the global one of that
     // name, which is why the severity numbers ran red->blue while their own pips
     // beside them ran green->red.)
-    var RAMP_UP=['#f87171','#fb923c','#fbbf24','#34d399','#60a5fa'];  // 1..5 poor -> strong
-    var RAMP_DOWN=SEV_COLORS.slice(1);                                // 1..5 mild -> critical
     var isSeverity=(input.id==='m-severity'||input.id==='em-severity');
-    var ramp=isSeverity?RAMP_DOWN:RAMP_UP;
     var needsNums=(isSeverity||input.classList.contains('plog-slider'));
     if(needsNums){
       var numWrap=document.createElement('div');numWrap.className='sspring-nums';
       numWrap.style.padding='0 '+THUMB_R+'px';
       for(var i=1;i<=5;i++){
         var nd=document.createElement('div');nd.className='sspring-num';
-        var sp=document.createElement('span');sp.textContent=i;sp.style.color=ramp[i-1];
+        var sp=document.createElement('span');sp.textContent=i;
         nd.appendChild(sp);numWrap.appendChild(nd);
       }
       wrap.appendChild(numWrap);
