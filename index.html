@@ -61,7 +61,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div class="review-box">
       <div class="review-box-hdr">
         <span class="review-box-title">Ready to strengthen</span>
-        <span class="review-sub">Attempt exam questions  don't re-read notes</span>
+        <span class="review-sub">Attempt exam questions — don't re-read notes</span>
         <span class="rev-badge rb-clear" id="review-badge">All clear</span>
       </div>
       <div class="review-list" id="review-list">
@@ -132,13 +132,13 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="res-section">
     <div class="fav-strip">
       <div class="fav-strip-title">Favourites</div>
-      <div class="fav-grid" id="fav-grid"><div class="fav-empty" id="fav-empty">No favourites yet  click the star on any resource below.</div></div>
+      <div class="fav-grid" id="fav-grid"><div class="fav-empty" id="fav-empty">No favourites yet — click the star on any resource below.</div></div>
     </div>
-    <div class="res-cat-lbl">📖  Learning  for working through topics from scratch</div>
+    <div class="res-cat-lbl">📖  Learning — for working through topics from scratch</div>
     <div class="res-grid" id="res-learn"></div>
-    <div class="res-cat-lbl">🔁  Revision  for going back through and solidifying topics</div>
+    <div class="res-cat-lbl">🔁  Revision — for going back through and solidifying topics</div>
     <div class="res-grid" id="res-revise"></div>
-    <div class="res-cat-lbl">Practice  for drilling exam questions</div>
+    <div class="res-cat-lbl">Practice — for drilling exam questions</div>
         <div class="res-grid" id="res-practice"></div>
       </div>
     </div>
@@ -1031,7 +1031,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <script src="data/grade-boundaries.js"></script>
 <script>
 //                                                           
-// DATA  topics verified against Edexcel 9MA0 spec Issue 4
+// DATA — topics verified against Edexcel 9MA0 spec Issue 4
 //                                                           
 // ============================================================
 // MEMORY MODEL  -  DSR (Difficulty / Stability / Retrievability)
@@ -1157,9 +1157,9 @@ function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
 //   hard(3)  → multiplier starts low (0.6) so intervals are shorter initially
 //   standard(1) → multiplier starts at 1.0, grows faster per easy rating
 // (legacy difficulty-multiplier scheme replaced by the DSR model above)
-// Easy:  +0.15 (stretch intervals  learning well)
+// Easy:  +0.15 (stretch intervals — learning well)
 // OK:    no change
-// Hard:  -0.20 (compress intervals  needs more practice), stage goes back 1
+// Hard:  -0.20 (compress intervals — needs more practice), stage goes back 1
 
 
 // Qualification + component metadata for the grouped checklist + Settings.
@@ -1266,18 +1266,18 @@ const PIE_COLORS = ['#3B82F6','#fb923c','#34d399','#fbbf24','#f97316','#f472b6',
 
 //   RESOURCES                                               
 const RESOURCES = [
-  {id:'drfrost',cat:'learn',name:'Dr Frost Powerpoints',url:'https://www.drfrostmaths.com/sow.php?year=A%20Level%202017&term=Main',desc:'Step-by-step teaching powerpoints  primary resource in many schools. Edexcel spec.'},
+  {id:'drfrost',cat:'learn',name:'Dr Frost Powerpoints',url:'https://www.drfrostmaths.com/sow.php?year=A%20Level%202017&term=Main',desc:'Step-by-step teaching powerpoints — primary resource in many schools. Edexcel spec.'},
   {id:'owen',cat:'learn',name:'Owen Powerpoints',url:'https://drive.google.com/file/d/1XkJla5vGBEceuzQMQOdeUAs-IJArm1zr/view',desc:'Year 1 & Year 2 slide decks. Also recorded on YouTube. Edexcel spec.',url2:'https://drive.google.com/file/d/1qQfmSOS9i1GXTkEBg4m7igj9xv8Q-Fav/view',url2label:'Year 2'},
   {id:'tlmaths',cat:'learn',name:'TLMaths',url:'https://sites.google.com/view/tlmaths/home',desc:'Teaching videos for the entire A-Level Maths course, plus past paper walkthroughs.'},
   {id:'examsol',cat:'learn',name:'ExamSolutions',url:'https://www.examsolutions.net/',desc:'One of the original A-Level maths video channels. Content dating back to 2009.'},
-  {id:'tayyub',cat:'learn',name:'Tayyub Majeed',url:'https://www.youtube.com/c/TayyubMajeed',desc:'Past paper walkthroughs  good perspective from someone who sat A-Levels recently.'},
+  {id:'tayyub',cat:'learn',name:'Tayyub Majeed',url:'https://www.youtube.com/c/TayyubMajeed',desc:'Past paper walkthroughs — good perspective from someone who sat A-Levels recently.'},
   {id:'bicen',cat:'learn',name:'Bicen Maths',url:'https://www.youtube.com/channel/UC58b34-W7M-bLEARri1912g',desc:'10 years of teaching experience. Top-quality videos using Dr Frost powerpoints.'},
-  {id:'bicendrive',cat:'revise',name:'Bicen Maths Google Drive',url:'https://drive.google.com/drive/folders/1uUbx_lRLLE9O4WnI8TS77dUOJw_DjljV',desc:'Excellent revision resources  the "everything you need to know" sheet is superb.'},
+  {id:'bicendrive',cat:'revise',name:'Bicen Maths Google Drive',url:'https://drive.google.com/drive/folders/1uUbx_lRLLE9O4WnI8TS77dUOJw_DjljV',desc:'Excellent revision resources — the "everything you need to know" sheet is superb.'},
   {id:'handnotes',cat:'revise',name:'Handwritten Revision Notes',url:'https://alevelmathsrevision.com/a-level-maths-revision-notes/',desc:'Useful as a supplement, though can miss some key points.'},
   {id:'textbook',cat:'revise',name:'Official Textbook',url:null,desc:'If you have the official textbook, use it. Annotate worked examples carefully.'},
   {id:'pmt',cat:'practice',name:'Physics and Maths Tutor',url:'https://www.physicsandmathstutor.com/maths-revision/',desc:'Huge bank of questions by topic, Edexcel through to OCR MEI. Solomon papers are challenging.'},
   {id:'mathsgenie',cat:'practice',name:'Maths Genie',url:'https://www.mathsgenie.co.uk/alevelpapers.php',desc:'Worked solutions to exam questions and full past papers. Clean and well-organised.'},
-  {id:'madas',cat:'practice',name:'MadasMaths',url:'https://www.madasmaths.com/',desc:'Challenging questions rated AZ. Preserved in memory of creator Dr Trifon Madas.'},
+  {id:'madas',cat:'practice',name:'MadasMaths',url:'https://www.madasmaths.com/',desc:'Challenging questions rated A–Z. Preserved in memory of creator Dr Trifon Madas.'},
   {id:'mme',cat:'practice',name:'Maths Made Easy (MME)',url:'https://mmerevise.co.uk/a-level-maths-revision/',desc:'Another solid source of exam questions and revision materials.'},
 ];
 
@@ -2187,7 +2187,8 @@ function tutorMd(text){
   // Protect $$...$$ display-maths blocks BEFORE line-splitting: MathJax cannot parse
   // across the <br> tags we insert, so multi-line display equations would silently break.
   var mjx=[];
-  var t0=String(text).replace(/\$\$([\s\S]*?)\$\$/g,function(_,m){ mjx.push(m); return ' MJX'+(mjx.length-1)+' '; });
+  var MJX_SENTINEL='\uE000';   // Private Use Area — cannot occur in tutor output.
+  var t0=String(text).replace(/\$\$([\s\S]*?)\$\$/g,function(_,m){ mjx.push(m); return MJX_SENTINEL+'MJX'+(mjx.length-1)+MJX_SENTINEL; });
   var lines=tutorEsc(t0).split(/\n/);
   var out=lines.map(function(ln){
     var t=ln.trim();
@@ -2199,7 +2200,7 @@ function tutorMd(text){
     return tutorInlineBold(t);
   });
   var html=out.join('<br>').replace(/(<br>)+(<div class="tutor-ans-h">)/g,'$2').replace(/(<\/div>)(<br>)+/g,'$1');
-  return html.replace(/ MJX(\d+) /g,function(_,i){ return '$$'+tutorEsc(mjx[+i])+'$$'; });
+  return html.replace(/\uE000MJX(\d+)\uE000/g,function(_,i){ return '$$'+tutorEsc(mjx[+i])+'$$'; });
 }
 var TUTOR_MODEL="gemini-2.5-flash"; // free-tier vision model (gemini-2.0-flash retired Mar 2026). Swap here if Google changes the free model.
 var TUTOR_PROMPT=[
@@ -2983,6 +2984,20 @@ function renderReviewPanel(){
 }
 var _todayCtaAction=null;
 function _greeting(){const h=new Date().getHours();if(h<12)return'Good morning';if(h<17)return'Good afternoon';if(h<22)return'Good evening';return'Still at it';}
+/* The greeting was only evaluated inside renderTodayCard(), so it froze at
+   whatever it said when the page loaded. This app is a PWA that gets left open
+   on a phone for hours, which means it would still say "Good morning" at 9pm.
+   Poll once a minute and on tab focus, and write only when the text changes —
+   this touches the eyebrow alone, never the card, so it can't clobber a
+   half-typed input or fight an incoming sync redraw. */
+function _syncGreeting(){
+  const eye=document.getElementById('today-eyebrow');
+  if(!eye)return;
+  const g=_greeting();
+  if(eye.textContent!==g)eye.textContent=g;
+}
+setInterval(_syncGreeting,60000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)_syncGreeting();});
 function _shortName(n){return n.length>28?n.slice(0,26)+'…':n;}
 function renderTodayCard(){
   const head=document.getElementById('today-headline');
@@ -6047,9 +6062,13 @@ function openTimer(mid,n,year){
   var mins=(lk.mins!=null)?lk.mins:p.mins;          // Madas papers vary 2h/3h per letter
   var label=(mid.indexOf('madas')===0)?('Paper '+year):year;
   timerState.mid=mid;timerState.n=n;timerState.year=year;
-  timerState.total=mins*60;timerState.remaining=mins*60;timerState.running=true;
+  /* Opens paused. It used to start counting down the instant the overlay
+     appeared, which charged you for the time spent finding a pen, opening the
+     PDF and reading the front page — so a timed attempt was never actually the
+     paper's length. You start it when you start the paper. */
+  timerState.total=mins*60;timerState.remaining=mins*60;timerState.running=false;
   document.getElementById('timer-paper').textContent=ppModuleById(mid).name+' · '+p.name+' · '+label;
-  document.getElementById('timer-toggle').textContent='Pause';
+  document.getElementById('timer-toggle').textContent='Start';
   timerRender();
   if(timerState.interval)clearInterval(timerState.interval);
   timerState.interval=setInterval(timerTick,1000);
@@ -6068,13 +6087,20 @@ function timerRender(){
   disp.classList.toggle('low',r<=300&&r>0);
   document.getElementById('timer-bar-fill').style.width=(timerState.total?(timerState.remaining/timerState.total*100):0)+'%';
 }
+/* 'Start' until the clock has actually moved, 'Resume' after — a paused timer
+   still reading the full duration has not been started yet, and calling that
+   'Resume' invites you to think it has been running. */
+function timerLabel(){
+  if(timerState.running)return'Pause';
+  return timerState.remaining===timerState.total?'Start':'Resume';
+}
 function timerToggle(){
   timerState.running=!timerState.running;
-  document.getElementById('timer-toggle').textContent=timerState.running?'Pause':'Resume';
+  document.getElementById('timer-toggle').textContent=timerLabel();
 }
 function timerReset(){
-  timerState.remaining=timerState.total;timerState.running=true;
-  document.getElementById('timer-toggle').textContent='Pause';timerRender();
+  timerState.remaining=timerState.total;timerState.running=false;
+  document.getElementById('timer-toggle').textContent=timerLabel();timerRender();
 }
 function timerClose(){
   if(timerState.interval)clearInterval(timerState.interval);
