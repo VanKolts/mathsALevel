@@ -101,6 +101,16 @@ Three knock-on details, each of which breaks if you only widen the rail:
 
 > **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` is still orphaned partly because there were two places to wire a tab up and only one got done. Anything nav-shaped now has exactly one home.
 
+**There are no emoji in the app.** All 56 were removed on 2026-08-17 — 52 written as literal characters plus **4 hidden as HTML numeric entities** (`&#128214;` and friends), which a Unicode scan of the source cannot see because they only become pictographs once the browser parses them. Each left a placeholder naming the icon that belongs there:
+
+```html
+<i class="ico" data-icon="camera" aria-hidden="true"></i>
+```
+
+They render as nothing, so the UI looks finished; `?icons` on the URL outlines every one in place. A handful marked `ico-live` sit where the emoji *was* the control — the favourite heart, the note marker — and draw a neutral box instead, because rendering nothing would delete the affordance; those carry `data-state="on|off"`. `ico(name, extra, state)` generates the markup for the JS-built ones, and `lnk()` on paper cards now takes an icon **name** rather than a glyph. **[`docs/icon-placeholders.md`](docs/icon-placeholders.md) lists all 48 sites** and is generated from the file, so it cannot drift.
+
+Kept deliberately, because they are text glyphs the UI depends on rather than decoration: `✕` close, `✓` tick, `×` attempt count, `＋` add, `ƒ` formula sheet.
+
 **Icons.** A 24×24 grid throughout, rendered at 28px, painted `var(--muted)` and switched to the `#m-rainbow` gradient when active. **All three page tabs are now filled shapes that morph on selection** (`.ic-fill`): a rhombus for Checklist, a disc for Mistakes, a slab for Past Papers. The three tool icons (gear, bar chart, 2×2 grid) are still stroked line-art, so the set is mid-migration.
 
 Selecting a tab **resolves the icon into its detail** rather than swapping one glyph for another: the rhombus opens into a ring with a dot at its centre, the disc has an X cut out of it (each arm growing from the centre outward along its own axis), the slab opens a hole and becomes a page. Every icon is built from the same five parts:

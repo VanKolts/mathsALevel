@@ -45,8 +45,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <!--            CHECKLIST TAB             -->
 <div class="page active" id="page-checklist">
   <div class="cl-quick">
-    <button class="cl-quick-btn js-open-resources"><span class="cqi">📚</span> Resources</button>
-    <button class="cl-quick-btn" id="open-planner-btn"><span class="cqi">📅</span> Revision plan</button>
+    <button class="cl-quick-btn js-open-resources"><span class="cqi"><i class="ico" data-icon="resources" aria-hidden="true"></i></span> Resources</button>
+    <button class="cl-quick-btn" id="open-planner-btn"><span class="cqi"><i class="ico" data-icon="calendar" aria-hidden="true"></i></span> Revision plan</button>
   </div>
   <div class="review-panel">
     <div class="today-card" id="today-card">
@@ -86,7 +86,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <span class="search-icon">⌕</span>
         <input class="search-input" type="text" id="search-input" placeholder="Search topics…"/>
       </div>
-      <button class="rand-btn" id="open-random-btn">🎲  Random</button>
+      <button class="rand-btn" id="open-random-btn"><i class="ico" data-icon="shuffle" aria-hidden="true"></i>  Random</button>
     </div>
   </div>
   <main>
@@ -111,7 +111,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <div class="legend-item"><span class="sr-badge due">Due today</span> Due for review today</div>
         <div class="legend-item"><span class="sr-badge upcoming">12 Aug</span> Next scheduled review</div>
         <div class="legend-item"><span class="sr-badge done">Mastered</span> Long-term recall reached</div>
-        <div class="legend-item"><span style="font-size:13px">📝</span> A note you saved on a topic</div>
+        <div class="legend-item"><span style="font-size:13px"><i class="ico" data-icon="note" aria-hidden="true"></i></span> A note you saved on a topic</div>
         <div class="legend-item">Tip: click a topic to attempt a question, then rate your recall 1–5.</div>
       </div>
     </details>
@@ -134,9 +134,9 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="fav-strip-title">Favourites</div>
       <div class="fav-grid" id="fav-grid"><div class="fav-empty" id="fav-empty">No favourites yet — click the star on any resource below.</div></div>
     </div>
-    <div class="res-cat-lbl">📖  Learning — for working through topics from scratch</div>
+    <div class="res-cat-lbl"><i class="ico" data-icon="book" aria-hidden="true"></i>  Learning — for working through topics from scratch</div>
     <div class="res-grid" id="res-learn"></div>
-    <div class="res-cat-lbl">🔁  Revision — for going back through and solidifying topics</div>
+    <div class="res-cat-lbl"><i class="ico" data-icon="repeat" aria-hidden="true"></i>  Revision — for going back through and solidifying topics</div>
     <div class="res-grid" id="res-revise"></div>
     <div class="res-cat-lbl">Practice — for drilling exam questions</div>
         <div class="res-grid" id="res-practice"></div>
@@ -151,7 +151,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <!-- Re-attempt loop: a random detailed mistake with a photo, surfaced to redo -->
     <div class="reattempt-card" id="m-reattempt" style="display:none">
       <div class="reattempt-hdr">
-        <span class="reattempt-eyebrow">🔁 Re-attempt this</span>
+        <span class="reattempt-eyebrow"><i class="ico" data-icon="repeat" aria-hidden="true"></i> Re-attempt this</span>
         <button class="reattempt-shuffle" id="m-reattempt-shuffle" title="Show another">Shuffle ⤿</button>
       </div>
       <div class="reattempt-topic" id="m-reattempt-topic"></div>
@@ -163,7 +163,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <div class="reattempt-ans-text" id="m-reattempt-ans-text"></div>
         <div class="reattempt-ans-lbl">What went wrong last time</div>
         <div class="reattempt-ans-text" id="m-reattempt-wrong"></div>
-        <button class="reattempt-ai" id="m-reattempt-ai">✨ Explain with AI</button>
+        <button class="reattempt-ai" id="m-reattempt-ai"><i class="ico" data-icon="sparkle" aria-hidden="true"></i> Explain with AI</button>
         <div class="reattempt-ai-out" id="m-reattempt-ai-out"></div>
       </div>
     </div>
@@ -172,8 +172,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div class="mistake-form">
       <div class="m-mode-seg" id="m-mode-seg">
         <span class="m-mode-pill" id="m-mode-pill"></span>
-        <button class="m-mode-btn active" id="m-mode-quick" data-mode="quick">⚡ Quick log</button>
-        <button class="m-mode-btn" id="m-mode-detailed" data-mode="detailed">📸 Detailed log</button>
+        <button class="m-mode-btn active" id="m-mode-quick" data-mode="quick"><i class="ico" data-icon="bolt" aria-hidden="true"></i> Quick log</button>
+        <button class="m-mode-btn" id="m-mode-detailed" data-mode="detailed"><i class="ico" data-icon="camera" aria-hidden="true"></i> Detailed log</button>
       </div>
       <div class="m-mode-hint" id="m-mode-hint">A fast note — just the topic and what went wrong.</div>
       <div class="form-row">
@@ -199,7 +199,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <div class="form-group">
           <label class="form-lbl">The question</label>
           <textarea class="form-textarea" id="m-question" placeholder="Type the question — or just snap a photo below"></textarea>
-          <div class="img-upload-area" id="img-upload-area" style="margin-top:6px">📷  Add a photo of the question</div>
+          <div class="img-upload-area" id="img-upload-area" style="margin-top:6px"><i class="ico" data-icon="camera" aria-hidden="true"></i>  Add a photo of the question</div>
           <input type="file" id="img-file-input" accept="image/*" style="display:none"/>
           <img id="img-preview" class="img-preview" style="display:none;margin-top:6px"/>
           <button id="m-img-clear" type="button" style="display:none;font-size:11px;background:transparent;border:none;color:var(--dim);cursor:pointer;margin-top:2px;">Remove photo</button>
@@ -299,10 +299,10 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div class="tab-sec-title">Past Papers</div>
     <div class="pp-toolbar">
       <button class="pp-tool-btn" id="pp-formula-btn"><span class="ic">&fnof;</span> Formula Sheet</button>
-      <button class="pp-tool-btn" id="pp-gloss-btn"><span class="ic">&#128214;</span> Glossary</button>
+      <button class="pp-tool-btn" id="pp-gloss-btn"><span class="ic"><i class="ico" data-icon="book" aria-hidden="true"></i></span> Glossary</button>
       <button class="pp-tool-btn accent" id="pp-log-btn"><span class="ic">+</span> Log a paper</button>
-      <button class="pp-tool-btn" id="pp-perf-btn"><span class="ic">&#128200;</span> Performance</button>
-      <button class="pp-tool-btn" id="pp-gb-btn"><span class="ic">&#127891;</span> Grade Boundaries</button>
+      <button class="pp-tool-btn" id="pp-perf-btn"><span class="ic"><i class="ico" data-icon="chart" aria-hidden="true"></i></span> Performance</button>
+      <button class="pp-tool-btn" id="pp-gb-btn"><span class="ic"><i class="ico" data-icon="graduation" aria-hidden="true"></i></span> Grade Boundaries</button>
     </div>
     <div class="pp-type-seg" id="pp-type-seg">
       <span class="pp-pill" id="pp-pill"></span>
@@ -337,11 +337,11 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <div class="modal-lbl">Date studied / reviewed</div>
         <input type="date" class="modal-date-input" id="modal-date"/>
       </div>
-      <a class="modal-practice" id="modal-practice" target="_blank" rel="noopener">Worksheets on PMT ↗</a>
+      <a class="modal-practice" id="modal-practice" target="_blank" rel="noopener">Worksheets on PMT <i class="ico" data-icon="external" aria-hidden="true"></i></a>
     </div>
     <div class="pq-panel" id="pq-panel">
       <div class="pq-head">
-        <span class="pq-title">✨ Practice question</span>
+        <span class="pq-title"><i class="ico" data-icon="sparkle" aria-hidden="true"></i> Practice question</span>
         <div class="pq-diff" id="pq-diff">
           <button class="pq-diff-btn" data-d="easier" type="button">Easier</button>
           <button class="pq-diff-btn on" data-d="standard" type="button">Standard</button>
@@ -383,7 +383,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <!-- RANDOM MODAL -->
 <div class="modal-overlay" id="random-overlay">
   <div class="modal rand-modal">
-    <div class="modal-title">🎲 Random Topic Picker</div>
+    <div class="modal-title"><i class="ico" data-icon="shuffle" aria-hidden="true"></i> Random Topic Picker</div>
     <div class="rand-filters">
       <div class="rg"><div class="rg-lbl">Year</div><div class="rchips" id="ry-chips"><button class="rchip active" data-val="any">Any</button><button class="rchip" data-val="y1">Y1</button><button class="rchip" data-val="y2">Y2</button><button class="rchip" data-val="fm">FM</button></div></div>
       <div class="rg"><div class="rg-lbl">Status</div><div class="rchips" id="rs-chips"><button class="rchip active" data-val="any">Any</button><button class="rchip" data-val="notstudied">Not started</button><button class="rchip" data-val="due">Due</button><button class="rchip" data-val="studied">Studied</button></div></div>
@@ -423,7 +423,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     </div>
     <div class="stats-body">
       <div class="gx-searchwrap">
-        <span class="gx-search-ic" aria-hidden="true">&#128269;</span>
+        <span class="gx-search-ic" aria-hidden="true"><i class="ico" data-icon="search" aria-hidden="true"></i></span>
         <input type="search" id="gx-search" class="gx-search" placeholder="Search terms, definitions, examples&hellip;" autocomplete="off" spellcheck="false">
         <button class="gx-search-clear" id="gx-search-clear" aria-label="Clear search" style="display:none;">&#10005;</button>
       </div>
@@ -573,8 +573,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-          <button class="settings-btn" id="sync-push-btn">⬆ Push this device → cloud</button>
-          <button class="settings-btn" id="sync-pull-btn">⬇ Pull cloud → this device</button>
+          <button class="settings-btn" id="sync-push-btn"><i class="ico" data-icon="upload" aria-hidden="true"></i> Push this device → cloud</button>
+          <button class="settings-btn" id="sync-pull-btn"><i class="ico" data-icon="download" aria-hidden="true"></i> Pull cloud → this device</button>
         </div>
         <div class="settings-row-sub" id="sync-msg" style="margin-top:8px"></div>
       </div>
@@ -705,7 +705,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div id="tutor-main" style="display:none;">
         <input type="file" id="tutor-file" accept="image/*" capture="environment" style="display:none">
         <div class="tutor-uploader" id="tutor-uploader">
-          <span class="tutor-upload-ico">📷</span>
+          <span class="tutor-upload-ico"><i class="ico" data-icon="camera" aria-hidden="true"></i></span>
           Tap to upload or photograph a question
         </div>
         <textarea class="tutor-q" id="tutor-q" placeholder="Optional: add a note, e.g. 'I'm stuck on part (b)' or type the question if you have no photo."></textarea>
@@ -812,7 +812,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <div class="celebrate-overlay" id="celebrate-overlay">
   <div class="celebrate-card">
     <div class="celebrate-confetti" id="celebrate-confetti"></div>
-    <div class="celebrate-emoji">🎉</div>
+    <div class="celebrate-emoji"><i class="ico" data-icon="celebrate" aria-hidden="true"></i></div>
     <div class="celebrate-title">Topic mastered</div>
     <div class="celebrate-name" id="celebrate-name"></div>
     <div class="celebrate-sub">Long-term recall reached — it'll only come back occasionally from here.</div>
@@ -825,7 +825,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <div class="onboard-dots" id="onboard-dots"><span class="ob-dot active"></span><span class="ob-dot"></span><span class="ob-dot"></span></div>
 
     <div class="onboard-step" id="onboard-step-1">
-      <div class="onboard-emoji">👋</div>
+      <div class="onboard-emoji"><i class="ico" data-icon="wave" aria-hidden="true"></i></div>
       <div class="onboard-title">Welcome to your maths hub</div>
       <div class="onboard-body">This isn't a notes app — it's built around how memory actually works. You study a topic, try a question, and rate how it went. The hub then schedules each topic to come back <b>right before you'd forget it</b>, so revision stays little-and-often instead of one big panic.</div>
       <div class="onboard-field">
@@ -835,7 +835,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     </div>
 
     <div class="onboard-step" id="onboard-step-2" style="display:none">
-      <div class="onboard-emoji">📍</div>
+      <div class="onboard-emoji"><i class="ico" data-icon="pin" aria-hidden="true"></i></div>
       <div class="onboard-title">Where are you in the course?</div>
       <div class="onboard-body">This just sets your starting view — you can change it anytime with the filters.</div>
       <div class="onboard-choices" id="onboard-choices">
@@ -846,7 +846,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     </div>
 
     <div class="onboard-step" id="onboard-step-3" style="display:none">
-      <div class="onboard-emoji">🚀</div>
+      <div class="onboard-emoji"><i class="ico" data-icon="rocket" aria-hidden="true"></i></div>
       <div class="onboard-title">Let's do one now</div>
       <div class="onboard-body">The hardest part is starting. Try a single topic — attempt a question with no notes, then rate your recall 1–5. That's the whole loop, and you'll have your first review scheduled.</div>
       <div class="onboard-tip">Tip: rating honestly matters more than rating high. The schedule only works if it knows the truth.</div>
@@ -909,7 +909,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         </div>
         <div class="form-group">
           <label class="form-lbl">Image (optional)</label>
-          <div class="img-upload-area" id="em-img-upload-area">📷  Click or drop image</div>
+          <div class="img-upload-area" id="em-img-upload-area"><i class="ico" data-icon="camera" aria-hidden="true"></i>  Click or drop image</div>
           <input type="file" id="em-img-file-input" accept="image/*" style="display:none"/>
           <img id="em-img-preview" class="img-preview" style="display:none;margin-top:6px;"/>
           <button id="em-img-clear" style="display:none;font-size:11px;background:transparent;border:none;color:var(--dim);cursor:pointer;margin-top:2px;">Remove image</button>
@@ -1051,10 +1051,10 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     </div>
     <div class="stats-body">
       <div class="more-grid">
-        <button class="more-item" data-act="resources"><span class="more-ico">📚</span><span class="more-name">Resources</span><span class="more-sub">Hand-picked sites for learning and practice</span></button>
-        <button class="more-item" data-act="planner"><span class="more-ico">📅</span><span class="more-name">Revision plan</span><span class="more-sub">Exam dates per paper, and the plan they drive</span></button>
-        <button class="more-item" data-act="focus"><span class="more-ico">🍅</span><span class="more-name">Focus timer</span><span class="more-sub">Timed study sessions with your own presets</span></button>
-        <button class="more-item" data-act="tutor"><span class="more-ico">✨</span><span class="more-name">AI Tutor</span><span class="more-sub">Photograph a question, get a worked walkthrough</span></button>
+        <button class="more-item" data-act="resources"><span class="more-ico"><i class="ico" data-icon="resources" aria-hidden="true"></i></span><span class="more-name">Resources</span><span class="more-sub">Hand-picked sites for learning and practice</span></button>
+        <button class="more-item" data-act="planner"><span class="more-ico"><i class="ico" data-icon="calendar" aria-hidden="true"></i></span><span class="more-name">Revision plan</span><span class="more-sub">Exam dates per paper, and the plan they drive</span></button>
+        <button class="more-item" data-act="focus"><span class="more-ico"><i class="ico" data-icon="pomodoro" aria-hidden="true"></i></span><span class="more-name">Focus timer</span><span class="more-sub">Timed study sessions with your own presets</span></button>
+        <button class="more-item" data-act="tutor"><span class="more-ico"><i class="ico" data-icon="sparkle" aria-hidden="true"></i></span><span class="more-name">AI Tutor</span><span class="more-sub">Photograph a question, get a worked walkthrough</span></button>
       </div>
     </div>
   </div>
@@ -1132,6 +1132,17 @@ const MISTAKE_SEVERITY = {
   'Calculation error':0.45, 'Transcription slip':0.40, 'Misread question':0.50,
   'Ran out of time':0.40, 'Silly mistake':0.30
 };
+/* Placeholder for an icon that has not been drawn yet. Every emoji removed on 2026-08-17
+   left one of these naming what belongs there. Renders as nothing; add ?icons to the URL to
+   outline them all in place. See docs/icon-placeholders.md. */
+function ico(name,extra,state){return '<i class="ico'+(extra?' '+extra:'')+'" data-icon="'+name+'"'+(state?' data-state="'+state+'"':'')+' aria-hidden="true"></i>';}
+(function(){
+  try{
+    if(location.search.indexOf('icons')>=0||localStorage.getItem('msh-show-icons')==='1')
+      document.documentElement.setAttribute('data-show-icons','');
+  }catch(e){}
+})();
+
 const SEV_COLORS=['','#34d399','#a3e635','#fbbf24','#fb923c','#f87171'];
 const SEV_LABELS=['','Minor','Low','Moderate','High','Critical'];
 function sevPips(n,containerId){
@@ -2154,7 +2165,7 @@ function pomoRender(){
   document.getElementById('pomo-toggle').textContent=pomo.running?'Pause':(pomo.remaining<pomo.total?'Resume':'Start');
   document.getElementById('pomo-bar-fill').style.width=(pomo.total?(1-pomo.remaining/pomo.total)*100:0)+'%';
   var r=document.getElementById('pomo-rounds');
-  r.textContent=pomo.rounds>0?('🍅 '+pomo.rounds+' focus session'+(pomo.rounds===1?'':'s')+' done'):'';
+  r.textContent=pomo.rounds>0?(''+pomo.rounds+' focus session'+(pomo.rounds===1?'':'s')+' done'):'';
   renderPomoPresets();
   updateFocusBtn();
 }
@@ -2170,7 +2181,7 @@ function pomoSetCustom(work,rest,saveLabel){
   if(saveLabel){
     var fav={id:'c'+Date.now(),label:'Custom',focus:work,brk:rest};
     pomoFavs.push(fav); savePomoFavs(); pomoApplyPreset(fav);
-    if(typeof toast==='function')toast('Saved '+work+'/'+rest+' preset ⭐');
+    if(typeof toast==='function')toast('Saved '+work+'/'+rest+' preset ');
   } else {
     clearInterval(pomo.timer); pomo.running=false;
     pomo.presetId='custom'; pomo.focusLen=work*60; pomo.breakLen=rest*60;
@@ -2184,7 +2195,7 @@ function pomoComplete(){
   var brkMin=Math.round(pomo.breakLen/60);
   if(pomo.mode==='focus'){
     pomo.rounds++;
-    if(typeof toast==='function')toast('Focus session done 🍅 — take a '+brkMin+'-min break, then log what you studied');
+    if(typeof toast==='function')toast('Focus session done — take a '+brkMin+'-min break, then log what you studied');
     pomo.mode='break'; pomo.total=pomo.breakLen; pomo.remaining=pomo.breakLen;
   } else {
     if(typeof toast==='function')toast('Break over — ready for another focus session?');
@@ -2226,7 +2237,7 @@ function updateTutorKeyStatus(){
 }
 function openTutor(){ updateTutorKeyStatus(); var inp=document.getElementById('tutor-key-input'); if(inp)inp.value=loadGeminiKey(); document.getElementById('tutor-overlay').classList.add('open'); }
 function closeTutor(){ document.getElementById('tutor-overlay').classList.remove('open'); }
-function tutorResetUploader(){ var up=document.getElementById('tutor-uploader'); if(!up)return; up.classList.remove('has'); up.innerHTML='<span class="tutor-upload-ico">📷</span>Tap to upload or photograph a question'; }
+function tutorResetUploader(){ var up=document.getElementById('tutor-uploader'); if(!up)return; up.classList.remove('has'); up.innerHTML='<span class="tutor-upload-ico"><i class="ico" data-icon="camera" aria-hidden="true"></i></span>Tap to upload or photograph a question'; }
 function tutorClearAll(){ tutorImg=null; document.getElementById('tutor-q').value=''; document.getElementById('tutor-result').innerHTML=''; document.getElementById('tutor-file').value=''; tutorResetUploader(); }
 function tutorHandleFile(file){
   if(!file)return;
@@ -2343,7 +2354,7 @@ function renderTutorTopic(topic){
   box.innerHTML='<div class="tutor-topic-lbl">Topic assessed</div><div class="tutor-topic-name"></div><div class="tutor-topic-actions"></div>';
   box.querySelector('.tutor-topic-name').textContent=topic;
   var acts=box.querySelector('.tutor-topic-actions');
-  var b1=document.createElement('button'); b1.className='tutor-topic-btn'; b1.textContent='📖 Practise & log attempt';
+  var b1=document.createElement('button'); b1.className='tutor-topic-btn'; b1.textContent='Practise & log attempt';
   b1.addEventListener('click',function(){ tutorGoPractise(topic); });
   var b2=document.createElement('button'); b2.className='tutor-topic-btn alt'; b2.textContent='✕ Log a mistake here';
   b2.addEventListener('click',function(){ tutorLogMistake(topic); });
@@ -3647,14 +3658,14 @@ function renderSyncCard(){
   var el=document.getElementById('sync-status');
   if(el){
     function ago(t){ if(!t)return 'not yet'; var s=Math.round((Date.now()-t)/1000); if(s<60)return s+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; return Math.round(s/3600)+'h ago'; }
-    var line=(s.online?'🟢 Online':'🔴 Offline')
+    var line=(s.online?'Online':'Offline')
       +' · last saved to cloud '+ago(s.lastSyncAt)
       +' · last checked '+ago(s.lastPullAt)
-      +(s.pending?' · ⏳ change waiting to save':'')
+      +(s.pending?' · change waiting to save':'')
       +(s.persistence?' · offline cache on':'')
       +'\nexam date: '+s.examDate+' · device date: '+s.deviceDate+' · these MUST match on both devices'
       +'\n'+Math.round(s.localBytes/1024)+' KB · '+s.build
-      +(s.lastError?(' · ⚠ '+s.lastError):'');
+      +(s.lastError?(' · '+s.lastError):'');
     el.textContent=line; el.style.whiteSpace='pre-line';
   }
 }
@@ -3836,7 +3847,7 @@ function renderPlanner(){
   var focusPool=[];
   (upcoming.length?upcoming:papers).slice(0,2).forEach(function(p){ p.comps.forEach(function(c){ (topicsByComp[c]||[]).forEach(function(n){ focusPool.push(n); }); }); });
   focusPool=Array.from(new Set(focusPool)).map(function(n){return {n:n,s:_weakScore(n)};}).filter(function(x){return x.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,5);
-  if(focusPool.length) html+='<div class="plan-today"><div class="plan-today-hd">🎯 Today\'s focus</div><div class="plan-today-list">'+focusPool.map(function(x){return '• '+x.n;}).join('<br>')+'</div></div>';
+  if(focusPool.length) html+='<div class="plan-today"><div class="plan-today-hd"><i class="ico" data-icon="target" aria-hidden="true"></i> Today\'s focus</div><div class="plan-today-list">'+focusPool.map(function(x){return '• '+x.n;}).join('<br>')+'</div></div>';
   papers.forEach(function(p){
     var d=daysDiff(td,p.date), passed=d<0;
     var cd=passed?'done':(d===0?'today':d+' days');
@@ -3854,7 +3865,7 @@ function renderPlanner(){
       html+='<div class="plan-topic"><span class="plan-topic-dot" style="background:'+col+'"></span>'+x.n+'<span class="plan-topic-tag" style="color:'+col+';background:var(--surface3)">'+tag+'</span></div>';
     });
     if(focus.length>6) html+='<div class="plan-more">+'+(focus.length-6)+' more to revise</div>';
-    if(!focus.length) html+='<div class="plan-more">All caught up for this paper 🎉</div>';
+    if(!focus.length) html+='<div class="plan-more">All caught up for this paper <i class="ico" data-icon="celebrate" aria-hidden="true"></i></div>';
     html+='</div>';
   });
   body.innerHTML=html;
@@ -4192,7 +4203,7 @@ function renderPQ(){
     var g=document.getElementById('pq-go-settings'); if(g)g.addEventListener('click',function(){ closeModal(); if(typeof openSettings==='function')openSettings(); });
     return;
   }
-  body.innerHTML='<button class="pq-gen-btn" id="pq-gen" type="button">✨ Generate a practice question</button>';
+  body.innerHTML='<button class="pq-gen-btn" id="pq-gen" type="button"><i class="ico" data-icon="sparkle" aria-hidden="true"></i> Generate a practice question</button>';
   document.getElementById('pq-gen').addEventListener('click',pqGenerate);
 }
 function pqParse(raw){
@@ -4635,7 +4646,7 @@ function buildClusterCard(c,vis,openIds){
     right.appendChild(pip);
 
     if(notes[t.name]){
-      const ni=document.createElement('span');ni.className='note-indicator';ni.textContent='📝';
+      const ni=document.createElement('span');ni.className='note-indicator';ni.innerHTML=ico('note','ico-live');
       ni.title='Note: '+notes[t.name];
       right.appendChild(ni);
     }
@@ -4706,7 +4717,7 @@ function renderResources(){
       const nm=document.createElement('div');nm.className='fav-card-name';
       if(res.url){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.textContent=res.name;nm.appendChild(a);}
       else{nm.textContent=res.name;}
-      const starBtn=document.createElement('button');starBtn.className='fav-star-btn';starBtn.innerHTML='♥';
+      const starBtn=document.createElement('button');starBtn.className='fav-star-btn';starBtn.innerHTML=ico('favourite','ico-live','on');
       starBtn.title='Remove from favourites';starBtn.setAttribute('aria-label','Remove '+res.name+' from favourites');
       starBtn.addEventListener('click',()=>{favourites.delete(rid);mhTombstone('favs',rid);saveState();renderResources();});
       card.append(nm,starBtn);favGrid.appendChild(card);
@@ -4734,7 +4745,7 @@ function renderResources(){
 
       const starBtn=document.createElement('button');
       starBtn.className='star-btn'+(isFav?' starred':'');
-      starBtn.innerHTML=isFav?'♥':'♡';
+      starBtn.innerHTML=ico('favourite','ico-live',isFav?'on':'off');
       starBtn.title=isFav?'Remove from favourites':'Add to favourites';
       starBtn.setAttribute('aria-label',(isFav?'Remove ':'Add ')+res.name+(isFav?' from favourites':' to favourites'));
       starBtn.addEventListener('click',()=>{
@@ -5118,9 +5129,9 @@ function renderLeaks(){
     var avgGap=Math.round(gaps.reduce(function(s,x){return s+x;},0)/gaps.length)||11;
     var jumps=Math.max(1,Math.round(top3Lost/avgGap));
     html+='<div class="leak-head"><div class="leak-head-big">You’ve dropped <b>'+totalLost+'</b> marks across your logged papers</div>'+
-      '<div class="leak-head-sub">Your top 3 leaks alone are <b>'+top3Lost+' marks</b> — roughly <b>'+jumps+' grade boundar'+(jumps>1?'ies':'y')+'</b>’ worth on a paper. Plug those first. 🔧</div></div>';
+      '<div class="leak-head-sub">Your top 3 leaks alone are <b>'+top3Lost+' marks</b> — roughly <b>'+jumps+' grade boundar'+(jumps>1?'ies':'y')+'</b>’ worth on a paper. Plug those first. <i class="ico" data-icon="wrench" aria-hidden="true"></i></div></div>';
   } else {
-    html+='<div class="leak-head leak-head-empty"><div class="leak-head-sub">💡 Log a past paper <b>question-by-question</b> to see exact marks lost. For now these priorities come from your mistakes + how often each topic appears in 9MA0 exams.</div></div>';
+    html+='<div class="leak-head leak-head-empty"><div class="leak-head-sub"><i class="ico" data-icon="tip" aria-hidden="true"></i> Log a past paper <b>question-by-question</b> to see exact marks lost. For now these priorities come from your mistakes + how often each topic appears in 9MA0 exams.</div></div>';
   }
   html+='<div class="leak-sort"><span class="leak-sort-lbl">Sort</span>'+
     '<button class="leak-sort-btn'+(leakSort==='lost'?' on':'')+'" data-s="lost">Marks lost</button>'+
@@ -5727,18 +5738,19 @@ function ppPaperCard(m,p,year){
   }
   top.append(left,status);card.appendChild(top);
   var acts=document.createElement('div');acts.className='pp-paper-actions';
-  function lnk(href,icon,label){if(!href)return;var a=document.createElement('a');a.className='pp-act';a.href=href;a.target='_blank';a.rel='noopener';a.innerHTML='<span>'+icon+'</span>'+label;acts.appendChild(a);}
+  // `icon` is now an icon *name* for ico(), not a glyph — see docs/icon-placeholders.md.
+  function lnk(href,icon,label){if(!href)return;var a=document.createElement('a');a.className='pp-act';a.href=href;a.target='_blank';a.rel='noopener';a.innerHTML='<span>'+ico(icon)+'</span>'+label;acts.appendChild(a);}
   if(links.qp2){ // paper split into Statistics + Mechanics halves on PMT
-    lnk(links.qp,'📄','QP (Stats)');
-    lnk(links.qp2,'📄','QP (Mech)');
-    lnk(links.ms,'📋','MS (Stats)');
-    lnk(links.ms2,'📋','MS (Mech)');
+    lnk(links.qp,'document','QP (Stats)');
+    lnk(links.qp2,'document','QP (Mech)');
+    lnk(links.ms,'clipboard','MS (Stats)');
+    lnk(links.ms2,'clipboard','MS (Mech)');
   }else{
-    lnk(links.qp,'📄','Question paper');
-    lnk(links.ms,'📋','Mark scheme');
+    lnk(links.qp,'document','Question paper');
+    lnk(links.ms,'clipboard','Mark scheme');
   }
-  if(links.sol)lnk(links.sol,'💡','Worked solutions');
-  var tb=document.createElement('button');tb.className='pp-act timer';tb.innerHTML='<span>⏱</span>Timer';
+  if(links.sol)lnk(links.sol,'tip','Worked solutions');
+  var tb=document.createElement('button');tb.className='pp-act timer';tb.innerHTML='<span><i class="ico" data-icon="timer" aria-hidden="true"></i></span>Timer';
   tb.addEventListener('click',function(){openTimer(m.id,p.n,year);});
   acts.appendChild(tb);
   var lg=document.createElement('button');lg.className='pp-act log';lg.innerHTML='<span>＋</span>Log result';
@@ -5958,7 +5970,7 @@ function renderPlogBreakdown(){
   var note=document.getElementById('plog-bd-note'), list=document.getElementById('plog-bd-list');
   list.innerHTML='';
   if(!qs){
-    note.innerHTML='⚠ Per-question data isn\'t available for this paper yet. Switch this off to log a total, or choose a paper that has breakdown data.';
+    note.innerHTML='<i class="ico" data-icon="warning" aria-hidden="true"></i> Per-question data isn\'t available for this paper yet. Switch this off to log a total, or choose a paper that has breakdown data.';
     document.getElementById('plog-bd-total').textContent=''; return;
   }
   note.textContent='Type the marks you scored on each question — the max is filled in for you. Leave blank if you skipped it.';

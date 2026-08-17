@@ -1112,6 +1112,29 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
    so the scale has to be lifted clear of it or the digits sit on the bar. */
 .sspring-bar .sspring-nums{bottom:calc(50% + 18px);}
 
+/* ── Icon placeholders ───────────────────────────────────────────────────
+   Every emoji removed on 2026-08-17 left one of these behind, naming the icon
+   that belongs there: <i class="ico" data-icon="camera"></i>. They render as
+   nothing, so the app is emoji-free today, and they are findable three ways:
+
+     grep 'data-icon' index.html
+     document.querySelectorAll('.ico')            — in the console
+     ?icons  on the URL                            — outlines every one in place
+
+   docs/icon-placeholders.md lists all of them with the emoji each replaced. */
+.ico{display:none;}
+html[data-show-icons] .ico{
+  display:inline-block;width:1em;height:1em;vertical-align:-.125em;margin-right:.15em;
+  border:1px dashed currentColor;border-radius:3px;opacity:.6;}
+
+/* A few placeholders sit where the emoji WAS the control — the favourite heart, the
+   note marker. Those cannot render as nothing without removing the affordance, so
+   they draw a neutral box until a real icon replaces them. */
+.ico.ico-live{
+  display:inline-block;width:.85em;height:.85em;vertical-align:-.05em;
+  border:1.5px solid currentColor;border-radius:3px;opacity:.7;}
+.ico.ico-live[data-state="on"]{background:currentColor;opacity:.9;}
+
 /* Spring slider overlay */
 .sspring-wrap{position:relative;display:block;}
 .sspring-has-nums{margin-top:20px;}
