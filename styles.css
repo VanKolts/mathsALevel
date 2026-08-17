@@ -917,7 +917,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
      height rather than a thin line inside a tall invisible box. 34px still clears SC 2.5.8
      comfortably while stopping short of the 40px slab that a full-height fill would give. */
   .rating-slider{height:34px;background-size:100% 100%;}
-  .sspring-bar .sspring-thumb{width:26px;height:27px;border-radius:6px;}
+  .sspring-bar .sspring-thumb{width:26px;height:30px;border-radius:6px;}   /* 34px track */
   .sspring-bar .sspring-nums{bottom:calc(50% + 22px);}
   /* Past-papers type toggle scrolls sideways when it has many tabs (AS/A-Level/FM/Madas) */
   .pp-type-seg{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -1091,8 +1091,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
    Both use the app's own spectrum. Severity previously had its own green->red
    ramp, which is the one thing that stopped them looking like the same control.  */
 .rating-slider{background-size:100% 100%;border-radius:var(--r-sm);}
+/* A range input is inline-level, so the wrapper gains a line box with descender space under
+   it and ends up taller than the track. The thumb is positioned against the *wrapper*, so
+   top:50% then lands ~3.5px below the middle of the bar — it overhung the bottom edge by
+   half a pixel. Making the input a block collapses that space and top:50% becomes exact.
+   Scoped to .sspring-bar: the round-knob sliders still carry a +2px nudge that compensates
+   for the very same gap, and would go off-centre the other way. */
+.sspring-bar input[type=range]{display:block;}
 .sspring-bar .sspring-thumb{
-  top:50%;width:22px;height:20px;border-radius:5px;
+  top:50%;width:22px;height:22px;border-radius:5px;
   background:rgba(255,255,255,.55);
   border:1px solid rgba(255,255,255,.72);
   box-shadow:0 1px 4px rgba(0,0,0,.22);
