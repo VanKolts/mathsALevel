@@ -1177,7 +1177,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .toast{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;font-size:var(--fs-sm);color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,.35);opacity:0;transform:translateX(10px);transition:opacity var(--t-base),transform var(--t-base);pointer-events:none;white-space:nowrap;font-family:'Inter',sans-serif;}
 .toast.show{opacity:1;transform:translateX(0);}
 /* ── VISUAL EXTRAS ──────────────────────────────────────── */
-html{scroll-behavior:smooth;}
+/* Always reserve the scrollbar's width, even when the page is short enough not to need one.
+   Without this, any content change that crosses the "does this page scroll?" line resizes the
+   viewport: switching Past Papers to Old Spec made the document taller than the window, the
+   scrollbar appeared, clientWidth went 1280 -> 1265, and the entire layout jumped 15px left —
+   then jumped back on the way out. That is the side-to-side glitch on the module toggle, and
+   it is not specific to Past Papers; every page that grows or shrinks past the window height
+   had it. Reserving the gutter costs 15px of width once and nothing ever moves again.
+
+   Overlay-scrollbar systems (macOS with "show scroll bars: when scrolling") never had the
+   problem, which is why it only shows up on some machines. */
+html{scroll-behavior:smooth;scrollbar-gutter:stable;}
+/* scrollbar-gutter is Safari 18.2+; older engines get the blunt version, which reserves the
+   same space by always showing the track. */
+@supports not (scrollbar-gutter: stable){
+  html{overflow-y:scroll;}
+}
 ::selection{background:rgba(var(--accent-rgb),.22);color:var(--text);}
 /* ── COLOUR SCHEME THEMES ───────────────────────────────────── */
 [data-theme="rose-light"]{
