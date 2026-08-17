@@ -958,7 +958,26 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   <span class="m-nav-pill" id="m-nav-pill"></span>
   <div class="m-nav-group">
     <button class="m-nav-btn active" data-tab="checklist" aria-label="Checklist">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="10.7" x2="20" y2="10.7"/><line x1="4" y1="15.4" x2="20" y2="15.4"/><line x1="4" y1="20.1" x2="13.5" y2="20.1"/></svg>
+      <!-- Solid rhombus that opens into a ring with a dot at its centre. The
+           rhombus is a square rotated 45deg rather than a <path>, so its corner
+           rounding is one `rx` rather than eight bezier handles. -->
+      <svg class="ic-fill" viewBox="0 0 24 24" aria-hidden="true">
+        <mask id="ic-check-sil" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <rect x="3.515" y="3.515" width="16.97" height="16.97" rx="1.3" transform="rotate(45 12 12)" fill="#fff"/>
+        </mask>
+        <mask id="ic-check-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <rect x="3.515" y="3.515" width="16.97" height="16.97" rx="1.3" transform="rotate(45 12 12)" fill="#fff"/>
+          <rect class="ic-mv ic-rh-hole" x="6.54" y="6.54" width="10.92" height="10.92" rx="0.5" fill="#000"/>
+          <circle cx="12" cy="12" r="2.57" fill="#fff"/>
+        </mask>
+        <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-check-sil)"/>
+        <g mask="url(#ic-check-cut)">
+          <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
+          <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>
+        </g>
+      </svg>
       <span class="m-nav-badge" id="m-nav-badge"></span>
     </button>
     <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
@@ -967,13 +986,21 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
            that works on any background. It grows from the centre outward along each
            arm's own axis when this tab becomes active. -->
       <svg class="ic-fill" viewBox="0 0 24 24" aria-hidden="true">
-        <mask id="ic-mistakes" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+        <mask id="ic-miss-sil" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <circle cx="12" cy="12" r="11" fill="#fff"/>
+        </mask>
+        <mask id="ic-miss-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
           <rect x="0" y="0" width="24" height="24" fill="#000"/>
           <circle cx="12" cy="12" r="11" fill="#fff"/>
           <rect class="ic-mv ic-xa" x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="#000"/>
           <rect class="ic-mv ic-xb" x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="#000"/>
         </mask>
-        <circle class="ic-shape" cx="12" cy="12" r="11" mask="url(#ic-mistakes)"/>
+        <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-miss-sil)"/>
+        <g mask="url(#ic-miss-cut)">
+          <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
+          <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>
+        </g>
       </svg>
     </button>
     <button class="m-nav-btn" data-tab="papers" aria-label="Past Papers">
@@ -981,12 +1008,20 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
            from the centre, so the outer edge never moves — animating stroke-width
            instead would shrink the silhouette as it thins. -->
       <svg class="ic-fill" viewBox="0 0 24 24" aria-hidden="true">
-        <mask id="ic-papers" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+        <mask id="ic-paper-sil" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <rect x="2" y="0.5" width="20" height="23" rx="2.2" fill="#fff"/>
+        </mask>
+        <mask id="ic-paper-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
           <rect x="0" y="0" width="24" height="24" fill="#000"/>
           <rect x="2" y="0.5" width="20" height="23" rx="2.2" fill="#fff"/>
           <rect class="ic-mv ic-hole" x="5" y="3.5" width="14" height="17" rx="1" fill="#000"/>
         </mask>
-        <rect class="ic-shape" x="2" y="0.5" width="20" height="23" rx="2.2" mask="url(#ic-papers)"/>
+        <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
+        <g mask="url(#ic-paper-cut)">
+          <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
+          <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>
+        </g>
       </svg>
     </button>
   </div>
@@ -3138,9 +3173,26 @@ function switchTab(tab){
   setTimeout(positionMNavPill,300);
   // Keep the nav highlight in sync with every tab change (wrap the existing fn)
   var _origSwitch=switchTab;
+  var FLOW_MS=400;   // keep in step with the .ic-paint transition in styles.css
   switchTab=function(t){
     var oi=TAB_ORDER.indexOf(activeTab), ni=TAB_ORDER.indexOf(t);
-    if(ni>=0&&oi>=0&&ni!==oi){ document.body.classList.toggle('mtab-fwd',ni>oi); document.body.classList.toggle('mtab-back',ni<oi); }
+    if(ni>=0&&oi>=0&&ni!==oi){
+      document.body.classList.toggle('mtab-fwd',ni>oi); document.body.classList.toggle('mtab-back',ni<oi);
+      /* Hand the rainbow over rather than switching it on. --nav-dir tells the
+         icons which way the pill is travelling, so the colour leaves the old
+         one and enters the new one from the same side — it reads as being
+         carried by the selector. The direction is already known here, so this
+         costs no new state. */
+      document.documentElement.style.setProperty('--nav-dir', ni>oi?1:-1);
+      var prev=document.querySelector('.m-nav-btn.active');
+      if(prev){
+        prev.classList.add('nav-leaving');
+        clearTimeout(prev._navLeaveT);
+        /* Dropping .nav-leaving also drops the transition, so it snaps back to
+           the entry side ready for next time — off-icon, so never seen. */
+        prev._navLeaveT=setTimeout(function(){ prev.classList.remove('nav-leaving'); }, FLOW_MS+40);
+      }
+    }
     _origSwitch(t); updateMNav();
   };
   updateMNav();

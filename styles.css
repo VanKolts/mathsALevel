@@ -55,8 +55,16 @@
      172px is set by the longest label ("Past Papers", ~84px at 14px/600) plus
      the icon (24), the gap (12) and the row padding (2x10) = 140px, leaving
      slack so nothing truncates. Labels are permanent rather than hover-revealed:
-     a tooltip you must hover to read is not a label, it is a quiz. */
-  --rail-w:172px;
+     a tooltip you must hover to read is not a label, it is a quiz.
+     Widened 172 -> 208 on 2026-08-17 with the icons at 28px and the label at
+     16px; the longest label now measures ~96px, so the slack is unchanged. */
+  --rail-w:208px;
+
+  /* The opaque stand-in for the rail's own background, painted inside an icon's
+     silhouette so its knockouts read as clean negative space. Without it the
+     holes are transparent and you see the selector pill's soft rainbow through
+     them. Matches --surface-glass at full opacity, per theme. */
+  --nav-plate:#220f19;   /* = rgba(36,16,26,.88) over #160b10 */
 
   /* Container caps. Lists get the wider one so a big monitor shows more rows;
      prose is pinned to a measure instead (see --prose below). */
@@ -108,65 +116,106 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 /* The pill is positioned in JS from the active icon's box, so it works in either axis. */
 .m-nav-pill{position:absolute;border-radius:var(--r-md);background:linear-gradient(160deg,var(--spectrum));
   opacity:0;pointer-events:none;z-index:0;
-  transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) var(--ease-spring),width var(--t-slow) ease,height var(--t-slow) ease,opacity var(--t-base);}
+  /* 400ms with only a hint of overshoot (1.08, was --ease-spring at 1.4 over
+     320ms). The old curve visibly bounced past the row and settled back; this
+     one arrives and stops. It also matches the icon colour-flow duration, so
+     the pill and the colour it carries move as one thing. */
+  transition:left .4s cubic-bezier(.32,1.08,.5,1),top .4s cubic-bezier(.32,1.08,.5,1),width .4s ease,height .4s ease,opacity var(--t-base);}
 /* A full-width row: icon, then label, left-aligned. The button is the whole row
    rather than a 44px square, so the pill, the hover state and the click target
    all cover the label too — a label you can read but not click is a trap. */
-.m-nav-btn{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-start;gap:12px;
-  width:100%;height:var(--tap);padding:0 10px;background:none;border:none;border-radius:var(--r-md);
+.m-nav-btn{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-start;gap:14px;
+  width:100%;height:52px;padding:0 12px;background:none;border:none;border-radius:var(--r-md);
   cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast);}
 .m-nav-btn:active{transform:scale(.92);}
-.m-nav-btn svg{width:24px;height:24px;flex-shrink:0;fill:none;stroke:var(--muted);stroke-width:1.85;
+.m-nav-btn svg{width:28px;height:28px;flex-shrink:0;fill:none;stroke:var(--muted);stroke-width:1.85;
   stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
 .m-nav-btn:hover svg{stroke:var(--text);}
 .m-nav-btn.active svg{stroke:url(#m-rainbow);}
 
-/* ── Filled icons (Mistakes, Past Papers) ────────────────────────────────
-   These are solid shapes rather than strokes, so they opt out of the stroke
-   rules above with .ic-fill and paint the same tokens as fill instead. The
-   silhouette lives in a <mask>; the knockout inside it is what animates, so
-   selecting a tab resolves the icon into its detail rather than swapping it.
+/* ── Filled icons (all three page tabs) ──────────────────────────────────
+   Solid shapes rather than strokes, so they opt out of the stroke rules above
+   with .ic-fill. Each icon is built the same way:
 
-   Only `transform` is animated — never the `d` attribute, which WebKit cannot
-   animate at all. transform-origin is in user units with transform-box left at
-   its default, so this needs no `fill-box` support either.
+     mask #…-sil   the outer silhouette only
+     mask #…-cut   the silhouette *minus* the knockout that animates
+     .ic-plate     full-bleed rect through -sil  → opaque background inside the shape
+     .ic-base      full-bleed rect through -cut  → the muted colour
+     .ic-rain      full-bleed rect through -cut  → the rainbow, which slides in
 
-   The mask's own children keep their fill="#000"/"#fff" presentation
+   **Every painted element is a full-bleed rect clipped by a mask, never the
+   shape itself.** Masking a circle with a mask containing that same circle
+   multiplies two antialiased edges together, so the rim renders at roughly the
+   square of its proper alpha — which is exactly the "slightly blurry border"
+   on the unselected icons. One antialiased edge, from the mask alone, is crisp.
+
+   Only `transform` is animated — never `d`, which WebKit cannot animate at all.
+   transform-origin is in user units with transform-box left at its default, so
+   no `fill-box` support is needed either.
+
+   The masks' own children keep their fill="#000"/"#fff" presentation
    attributes: those outrank the inherited fill:none from the rule above,
    because inheritance is the weakest step in the cascade. Do not move those
-   fills into CSS or the masks will invert.                                  */
-.m-nav-btn svg.ic-fill .ic-shape{fill:var(--muted);stroke:none;transition:fill var(--t-base);}
-.m-nav-btn:hover svg.ic-fill .ic-shape{fill:var(--text);}
-.m-nav-btn.active svg.ic-fill .ic-shape,
-.m-nav-btn.active:hover svg.ic-fill .ic-shape{fill:url(#m-rainbow);stroke:none;}
-/* 240ms with a 60ms delay: the shape settles just as the pill lands, so the
-   pill reads as pushing the icon into focus. Deliberately NOT the pill's
-   spring — overshoot on a 24px geometry reads as a wobble, not a spring. */
-.ic-mv{transition:transform 240ms cubic-bezier(.2,0,0,1) 60ms;}
-.ic-xa,.ic-xb,.ic-hole{transform-origin:12px 12px;}
+   fills into CSS or every mask inverts.                                      */
+.m-nav-btn svg.ic-fill,.m-nav-btn:hover svg.ic-fill,.m-nav-btn.active svg.ic-fill{stroke:none;}
+/* The knockouts are holes, so without this you see the selector pill's soft
+   rainbow through them. Painting the silhouette's own background first makes
+   them read as clean negative space, exactly as drawn in the source SVG. */
+.ic-plate{fill:var(--nav-plate);}
+.ic-base{fill:var(--muted);transition:fill var(--t-base);}
+.m-nav-btn:hover .ic-base{fill:var(--text);}
+.ic-rain{fill:url(#m-rainbow);}
+
+/* Shape morph — 400ms ease-out, 180ms behind the pill so the icon resolves
+   just as the pill finishes arriving. Deliberately not the pill's curve:
+   overshoot on a 28px geometry reads as a wobble, not a spring. */
+.ic-mv{transition:transform 400ms cubic-bezier(.2,0,0,1) 180ms;}
+.ic-xa,.ic-xb,.ic-hole,.ic-rh-hole{transform-origin:12px 12px;}
 .ic-xa{transform:rotate(45deg) scaleX(0);}
 .ic-xb{transform:rotate(-45deg) scaleX(0);}
 .ic-hole{transform:scale(0);}
+.ic-rh-hole{transform:rotate(45deg) scale(0);}
 .m-nav-btn.active .ic-xa{transform:rotate(45deg) scaleX(1);}
 .m-nav-btn.active .ic-xb{transform:rotate(-45deg) scaleX(1);}
 .m-nav-btn.active .ic-hole{transform:scale(1);}
+.m-nav-btn.active .ic-rh-hole{transform:rotate(45deg) scale(1);}
+
+/* Colour flow — the rainbow layer slides in rather than switching on, and
+   --nav-dir (+1 down the rail, -1 up) makes it enter from the side the pill is
+   arriving from while the icon it just left releases its colour the same way.
+   The colour therefore travels with the selector instead of each icon
+   flickering on the spot. --nav-dir is set by switchTab(), which already
+   computes the direction for the page slide.
+
+   Only the two icons taking part in a hand-off may carry a transition. An idle
+   icon must not: its parked position depends on --nav-dir, so flipping that
+   would animate its rainbow straight across its own face — every icon in the
+   rail flashing on every tab change. Parked is off-icon either way, so
+   snapping there is invisible. */
+.ic-paint{transition:none;}
+.m-nav-btn.active .ic-paint,.m-nav-btn.nav-leaving .ic-paint{
+  transition:transform 400ms cubic-bezier(.2,0,0,1);}
+.ic-rain{transform:translateY(calc(-30px * var(--nav-dir,1)));}
+.m-nav-btn.active .ic-rain{transform:translateY(0);}
+.m-nav-btn.nav-leaving .ic-rain{transform:translateY(calc(30px * var(--nav-dir,1)));}
 /* Same element in both orientations: inline text on the rail, caption under the
    icon on the bottom bar (restyled in the mobile query). It was a hover tooltip
    on the rail until 2026-08-17; permanently visible is the point of widening. */
 .m-nav-lbl{position:static;transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  font-family:'Inter',sans-serif;font-size:var(--fs-sm);font-weight:600;color:var(--muted);
+  font-family:'Inter',sans-serif;font-size:var(--fs-base);font-weight:600;color:var(--muted);
   background:none;border:none;border-radius:0;padding:0;line-height:1;opacity:1;
   pointer-events:none;box-shadow:none;transition:color var(--t-base);}
 .m-nav-btn:hover .m-nav-lbl,.m-nav-btn:focus-visible .m-nav-lbl,.m-nav-btn.active .m-nav-lbl{color:var(--text);}
-/* Anchored to the icon's top-right corner, not the row's: the row is now 172px
-   wide, so right:7px would float the dot off in the whitespace past the label. */
-.m-nav-badge{position:absolute;top:7px;left:28px;right:auto;width:9px;height:9px;border-radius:50%;
+/* Anchored to the icon's top-right corner, not the row's: the row is now 208px
+   wide, so right:7px would float the dot off in the whitespace past the label.
+   Row 52 tall with a 28px icon at 12px padding puts that corner at (36, 12). */
+.m-nav-badge{position:absolute;top:11px;left:32px;right:auto;width:9px;height:9px;border-radius:50%;
   background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
 .m-nav-badge.show{display:block;}
 /* A running Focus timer used to count down in the tab bar. It lives in the Tools overlay
    now, so the Tools icon carries the state instead — otherwise it vanishes when you close it. */
 .m-nav-btn.rail-live svg{stroke:url(#m-rainbow);}
-.m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:6px;left:29px;right:auto;
+.m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:11px;left:33px;right:auto;
   width:8px;height:8px;border-radius:50%;border:1.5px solid var(--surface-glass);}
 .m-nav-btn.rail-live::after{background:var(--overdue);animation:rail-pulse 1.9s var(--ease) infinite;}
 .m-nav-btn.rail-paused::after{background:var(--muted);}
@@ -777,6 +826,13 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .m-nav-btn svg{width:26px;height:26px;}
   .m-nav-btn:hover svg{stroke:var(--muted);}
   .m-nav-btn.active:hover svg{stroke:url(#m-rainbow);}
+  .m-nav-btn:hover .ic-base{fill:var(--muted);}          /* hover is meaningless on touch */
+  .m-nav-btn.active:hover .ic-base{fill:var(--muted);}
+  /* The bar runs left-to-right down here, so the colour has to travel along X.
+     Same --nav-dir, same hand-off — only the axis changes. */
+  .ic-rain{transform:translateX(calc(-30px * var(--nav-dir,1)));}
+  .m-nav-btn.active .ic-rain{transform:translateX(0);}
+  .m-nav-btn.nav-leaving .ic-rain{transform:translateX(calc(30px * var(--nav-dir,1)));}
   /* Icons are centred in a column down here, so the dot goes back to the icon's
      corner measured from the centre — the rail's fixed 28px offset is wrong. */
   .m-nav-badge{top:6px;right:auto;left:calc(50% + 8px);}
@@ -1101,7 +1157,7 @@ html{scroll-behavior:smooth;}
   --grad:linear-gradient(135deg,#e11d48,#ea580c);
   --glow:0 0 20px rgba(225,29,72,.1);
   --accent-rgb:225,29,72;--accent2-rgb:234,88,12;
-  --surface-glass:rgba(255,255,255,.92);--bg-top:#ffffff;--tab-active:#e11d48;
+  --surface-glass:rgba(255,255,255,.92);--nav-plate:#ffffff;--bg-top:#ffffff;--tab-active:#e11d48;
 }
 [data-theme="pure-white"]{
   --bg:#ffffff;--surface:#f2f2f2;--surface2:#e8e8e8;--surface3:#dddddd;
@@ -1122,7 +1178,7 @@ html{scroll-behavior:smooth;}
   --grad:linear-gradient(135deg,var(--spectrum));
   --glow:0 0 20px rgba(225,29,72,.12);
   --accent-rgb:190,23,65;--accent2-rgb:3,105,161;
-  --surface-glass:rgba(255,255,255,.92);--bg-top:#ffffff;--tab-active:#000000;
+  --surface-glass:rgba(255,255,255,.92);--nav-plate:#ffffff;--bg-top:#ffffff;--tab-active:#000000;
 }
 
 /* ── THEME PICKER UI ────────────────────────────────────────── */
