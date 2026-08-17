@@ -962,10 +962,32 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <span class="m-nav-badge" id="m-nav-badge"></span>
     </button>
     <button class="m-nav-btn" data-tab="mistakes" aria-label="Mistakes">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>
+      <!-- The X is a hole cut out of the disc, not a grey X drawn on top: the rail is
+           translucent glass over scrolling content, so a knockout is the only version
+           that works on any background. It grows from the centre outward along each
+           arm's own axis when this tab becomes active. -->
+      <svg class="ic-fill" viewBox="0 0 24 24" aria-hidden="true">
+        <mask id="ic-mistakes" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <circle cx="12" cy="12" r="11" fill="#fff"/>
+          <rect class="ic-mv ic-xa" x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="#000"/>
+          <rect class="ic-mv ic-xb" x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="#000"/>
+        </mask>
+        <circle class="ic-shape" cx="12" cy="12" r="11" mask="url(#ic-mistakes)"/>
+      </svg>
     </button>
     <button class="m-nav-btn" data-tab="papers" aria-label="Past Papers">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(-9 12 12)"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></g></svg>
+      <!-- Filled slab that hollows out into a page when active. The hole scales open
+           from the centre, so the outer edge never moves — animating stroke-width
+           instead would shrink the silhouette as it thins. -->
+      <svg class="ic-fill" viewBox="0 0 24 24" aria-hidden="true">
+        <mask id="ic-papers" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect x="0" y="0" width="24" height="24" fill="#000"/>
+          <rect x="2" y="0.5" width="20" height="23" rx="2.2" fill="#fff"/>
+          <rect class="ic-mv ic-hole" x="5" y="3.5" width="14" height="17" rx="1" fill="#000"/>
+        </mask>
+        <rect class="ic-shape" x="2" y="0.5" width="20" height="23" rx="2.2" mask="url(#ic-papers)"/>
+      </svg>
     </button>
   </div>
   <span class="rail-sep" aria-hidden="true"></span>

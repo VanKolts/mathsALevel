@@ -120,6 +120,36 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
   stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
 .m-nav-btn:hover svg{stroke:var(--text);}
 .m-nav-btn.active svg{stroke:url(#m-rainbow);}
+
+/* ── Filled icons (Mistakes, Past Papers) ────────────────────────────────
+   These are solid shapes rather than strokes, so they opt out of the stroke
+   rules above with .ic-fill and paint the same tokens as fill instead. The
+   silhouette lives in a <mask>; the knockout inside it is what animates, so
+   selecting a tab resolves the icon into its detail rather than swapping it.
+
+   Only `transform` is animated — never the `d` attribute, which WebKit cannot
+   animate at all. transform-origin is in user units with transform-box left at
+   its default, so this needs no `fill-box` support either.
+
+   The mask's own children keep their fill="#000"/"#fff" presentation
+   attributes: those outrank the inherited fill:none from the rule above,
+   because inheritance is the weakest step in the cascade. Do not move those
+   fills into CSS or the masks will invert.                                  */
+.m-nav-btn svg.ic-fill .ic-shape{fill:var(--muted);stroke:none;transition:fill var(--t-base);}
+.m-nav-btn:hover svg.ic-fill .ic-shape{fill:var(--text);}
+.m-nav-btn.active svg.ic-fill .ic-shape,
+.m-nav-btn.active:hover svg.ic-fill .ic-shape{fill:url(#m-rainbow);stroke:none;}
+/* 240ms with a 60ms delay: the shape settles just as the pill lands, so the
+   pill reads as pushing the icon into focus. Deliberately NOT the pill's
+   spring — overshoot on a 24px geometry reads as a wobble, not a spring. */
+.ic-mv{transition:transform 240ms cubic-bezier(.2,0,0,1) 60ms;}
+.ic-xa,.ic-xb,.ic-hole{transform-origin:12px 12px;}
+.ic-xa{transform:rotate(45deg) scaleX(0);}
+.ic-xb{transform:rotate(-45deg) scaleX(0);}
+.ic-hole{transform:scale(0);}
+.m-nav-btn.active .ic-xa{transform:rotate(45deg) scaleX(1);}
+.m-nav-btn.active .ic-xb{transform:rotate(-45deg) scaleX(1);}
+.m-nav-btn.active .ic-hole{transform:scale(1);}
 /* Same element in both orientations: inline text on the rail, caption under the
    icon on the bottom bar (restyled in the mobile query). It was a hover tooltip
    on the rail until 2026-08-17; permanently visible is the point of widening. */
