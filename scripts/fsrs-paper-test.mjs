@@ -23,16 +23,25 @@ const grabBlock = n => {
   if(!m) throw new Error(`could not extract const ${n}`); return m[0];
 };
 
+function grabVar(name){
+  const re = new RegExp(`^var ${name}\\s*=[^\\n]*$`, 'm');
+  const m = html.match(re);
+  if(!m) throw new Error(`could not extract var ${name} from index.html`);
+  return m[0];
+}
+
 const source = [
   grabConst('FSRS_W'), grabConst('DECAY'), grabConst('FACTOR'), grabConst('DIFF_D_SEED'),
   grabConst('MAX_INTERVAL'), grabBlock('MISTAKE_EVIDENCE'), grabConst('MISTAKE_EVIDENCE_DEFAULT'),
   grabConst('EV_PAPER'),
+  grabVar('_dayCache'), grabFn('_dayMs'),   // one line, declares _dayCacheN too
   grabFn('clamp'), grabFn('daysDiff'), grabFn('forgetting'), grabFn('ratingEase'),
   grabFn('initialStability'), grabFn('initialDifficulty'), grabFn('nextDifficulty'),
   grabFn('stabilityAfterRecall'), grabFn('stabilityAfterLapse'),
   grabFn('applyReview'), grabFn('applyMistake'), grabFn('paperRating'), grabFn('applyPaper'),
   grabFn('buildTimeline'), grabFn('replayTimeline'),
   'var allTopics=[{name:"T",diff:2}];',
+  'function topicByName(n){ return allTopics.find(function(t){return t.name===n;}); }',
 ].join('\n');
 
 const ctx = vm.createContext({ Math, Date, isFinite, parseInt });

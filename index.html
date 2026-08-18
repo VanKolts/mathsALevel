@@ -275,25 +275,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   </div>
 </div>
 
-<!--            PROGRESS TAB             -->
-<div class="page" id="page-progress">
-  <div class="tab-content">
-    <div class="tab-sec-title">Overview</div>
-    <div class="ptab-legend">
-      <span><div class="ptab-ldot" style="background:var(--accent)"></div> Studied</span>
-      <span><div class="ptab-ldot" style="background:var(--y1);opacity:.6"></div> Mastered</span>
-    </div>
-    <div class="ptab-chart" id="ptab-chart"></div>
-    <div class="tab-sec-title">All Topics Completed</div>
-    <div class="prog-donut-wrap" id="prog-donut-wrap">
-      <canvas id="prog-donut" width="190" height="190"></canvas>
-      <div class="pie-legend" id="prog-donut-legend"></div>
-    </div>
-    <div class="prog-details" id="prog-details"></div>
-    <div class="prog-empty" id="prog-empty" style="display:none">No topics studied yet. Go to the Checklist tab!</div>
-  </div>
-</div>
-
 <!--            PAST PAPERS TAB             -->
 <div class="page" id="page-papers">
   <div class="tab-content">
@@ -599,9 +580,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     <button class="modal-btn" id="timer-close" style="margin-top:2px;">Close</button>
   </div>
 </div>
-
-<!-- SETTINGS TAB (content moved to overlay) -->
-<div class="page" id="page-settings"></div>
 
 <!-- SETTINGS OVERLAY -->
 <div class="stats-overlay" id="settings-overlay">
@@ -1304,6 +1282,14 @@ const FM_OPTIONAL_IDS = ['fp1','fs1','fm1','d1'];
 
 // flat list (carries qual + component for grouping/filtering)
 const allTopics = clusters.flatMap(c => c.topics.map((name,i)=>({name,lvl:c.lvls[i],diff:c.diff[i],clusterId:c.id,qual:c.qual,component:c.component})));
+/* Topic name -> topic record. Every lookup used to be `allTopics.find(t=>t.name===name)`, a
+   linear scan of 315 entries, and the scheduler runs one per topic per render through
+   examDateForTopic(): 517 scans on a full Checklist draw, ~163k string comparisons. The names
+   are the app's primary key and the array never changes after load, so index it once.
+   Use topicByName() rather than the map directly — it returns undefined for unknown names,
+   which is what `.find()` did and what every call site already handles. */
+const TOPIC_BY_NAME = (function(){ const m=Object.create(null); for(const t of allTopics) if(!(t.name in m)) m[t.name]=t; return m; })();
+function topicByName(name){ return TOPIC_BY_NAME[name]; }
 
 // ── Qualification track + exam papers ─────────────────────────────
 // The student picks ONE track; the app auto-adjusts which modules, year
@@ -1336,7 +1322,17 @@ const TRACKS = [
 ];
 function getTrack(){ try{var v=localStorage.getItem('alevel-track'); if(v)return v;}catch(e){} return (typeof fmOptions!=='undefined'&&fmOptions.size>0)?'fm':'alevel'; }
 function setTrack(v){ try{localStorage.setItem('alevel-track',v);}catch(e){} }
-function getPaperDates(){ try{return JSON.parse(localStorage.getItem('alevel-paper-dates-v1')||'{}');}catch(e){return {};} }
+/* Parsed once per distinct raw value. paperDate() calls this for every paper and
+   activePapers() calls paperDate() for every paper, so a Checklist render used to run
+   hundreds of JSON.parse calls over the same unchanged string. Keying the cache on the raw
+   text rather than on an invalidation call means it cannot go stale: a write by any path —
+   the settings form, the exam modal, a sync pull — changes the string and forces a reparse. */
+var _pdRaw=null, _pdVal={};
+function getPaperDates(){
+  var raw; try{ raw=localStorage.getItem('alevel-paper-dates-v1')||'{}'; }catch(e){ return {}; }
+  if(raw!==_pdRaw){ try{ _pdVal=JSON.parse(raw); }catch(e){ _pdVal={}; } _pdRaw=raw; }
+  return _pdVal;
+}
 function setPaperDateOverride(id,v){ var d=getPaperDates(); if(v)d[id]=v; else delete d[id]; try{localStorage.setItem('alevel-paper-dates-v1',JSON.stringify(d));}catch(e){} }
 // Date priority: student override > yearly-refreshed exam-dates.json > embedded default.
 var _examDatesRemote=null, _examDatesSeries='';
@@ -1344,24 +1340,50 @@ function paperDate(p){ var d=getPaperDates(); if(d[p.id])return d[p.id]; if(_exa
 function paperDefaultDate(p){ if(_examDatesRemote&&_examDatesRemote[p.id])return _examDatesRemote[p.id]; return p.date; }
 function loadRemoteExamDates(){
   try{ fetch('exam-dates.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
-    if(j&&j.papers){ _examDatesRemote=j.papers; _examDatesSeries=j.series||'';
+    if(j&&j.papers){ _examDatesRemote=j.papers; _examDatesSeries=j.series||''; _apRemoteV++;
       if(typeof renderAll==='function')try{renderAll();}catch(e){}
       if(typeof updateDueBadge==='function')try{updateDueBadge();}catch(e){} }
   }).catch(function(){}); }catch(e){}
 }
-// Papers active for the current track (+ chosen FM options), soonest first.
+/* Everything activePapers() depends on, as one cheap string. Built from raw reads only —
+   no JSON.parse, no allocation beyond the join — so it is safe to compute on every call and
+   the caches below invalidate themselves the moment any input changes. _examDatesRemote is
+   covered by a counter it bumps when the fetch lands, since it is an object, not a string. */
+var _apRemoteV=0;
+function _examSig(){
+  var raw=''; try{ raw=localStorage.getItem('alevel-paper-dates-v1')||''; }catch(e){}
+  var fm=''; try{ fm=(typeof fmOptions!=='undefined')?Array.from(fmOptions).sort().join(','):''; }catch(e){}
+  return getTrack()+'|'+raw+'|'+fm+'|'+_apRemoteV;
+}
+/* Papers active for the current track (+ chosen FM options), soonest first.
+   Memoised: examDateForTopic() runs once per topic per render, so this was rebuilt, remapped
+   and re-sorted 517 times on a full Checklist draw — for a list that changes only when the
+   student edits their exam dates. Returns a frozen array; callers must not mutate it. */
+var _apSig=null, _apVal=null;
 function activePapers(){
+  var sig=_examSig();
+  if(sig===_apSig && _apVal) return _apVal;
   var tr=getTrack(), out=[];
   if(tr==='as'){ out=EXAM_PAPERS.as.slice(); }
   else { out=EXAM_PAPERS.alevel.slice();
     if(tr==='fm') EXAM_PAPERS.fm.forEach(function(p){ if(!p.opt||(typeof fmOptions!=='undefined'&&fmOptions.has(p.opt))) out.push(p); });
   }
-  return out.map(function(p){ return {id:p.id,name:p.name,comps:p.comps,opt:p.opt,date:paperDate(p),deflt:p.date}; })
-            .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+  _apVal=Object.freeze(out.map(function(p){ return {id:p.id,name:p.name,comps:p.comps,opt:p.opt,date:paperDate(p),deflt:p.date}; })
+            .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; }));
+  _apSig=sig; return _apVal;
 }
-// Earliest active paper date assessing a component.
-function examDateForComponent(comp){ if(getExamOff())return ''; var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; }); return best; }
-function examDateForTopic(name){ if(getExamOff())return ''; var t=allTopics.find(function(x){return x.name===name;}); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
+// Earliest active paper date assessing a component. Memoised on the same signature: there are
+// only a handful of distinct components, but targetRetention() asks once per topic per render.
+var _edcSig=null, _edcVal=null;
+function examDateForComponent(comp){
+  if(getExamOff())return '';
+  var sig=_examSig();
+  if(sig!==_edcSig){ _edcVal=Object.create(null); _edcSig=sig; }
+  var hit=_edcVal[comp]; if(hit!==undefined) return hit;
+  var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; });
+  _edcVal[comp]=best; return best;
+}
+function examDateForTopic(name){ if(getExamOff())return ''; var t=topicByName(name); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
 
 // A component is active only if it belongs to the student's track.
 function isComponentActive(qual,component){
@@ -2477,10 +2499,47 @@ updateTutorKeyStatus();
    It also disagreed with daysDiff/addDays, which parse at local noon precisely to stay clear
    of DST. Every date the app stores is a local calendar day, so it is derived locally. */
 function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function today(){return ymd(new Date());}
-function addDays(d,n){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return ymd(x);}
-function daysDiff(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
-function fmtDate(d){return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
+/* ---- date helpers: measured, because they dominate every render ----
+   Every date in the app is a 'YYYY-MM-DD' string parsed at local *noon* (deliberately, to stay
+   clear of DST — see below), and the same few hundred strings recur across every topic row. A
+   Checklist draw called today() 3,439 times, daysDiff() 957 and fmtDate() 141. The three caches
+   here are all keyed on the date string itself, so they cannot answer for a date they were not
+   asked about; only the today() one is time-sensitive, and it is bounded to a second. */
+var _dayCache=Object.create(null), _dayCacheN=0;
+/* One Date parse per distinct day string. Returns NaN for a malformed date, exactly as the
+   inline `new Date(...)` did, and caches that too — validRec() depends on the NaN. */
+function _dayMs(d){
+  const hit=_dayCache[d]; if(hit!==undefined) return hit;
+  if(_dayCacheN>4000){ _dayCache=Object.create(null); _dayCacheN=0; }   // bound it; keys are unbounded in principle
+  _dayCacheN++;
+  return (_dayCache[d]=new Date(d+'T12:00:00').getTime());
+}
+/* today() is read thousands of times per render and allocates a Date plus three strings each
+   time. Date.now() is orders of magnitude cheaper than that, so re-derive at most once a
+   second: within a single render the answer is computed once, and the day can never be stale
+   by more than a second at midnight. */
+var _todayVal='', _todayAt=0;
+function today(){
+  const t=Date.now();
+  if(_todayVal && t-_todayAt<1000) return _todayVal;
+  _todayAt=t; return (_todayVal=ymd(new Date()));
+}
+function addDays(d,n){const x=new Date(_dayMs(d));x.setDate(x.getDate()+n);return ymd(x);}
+// Noon anchoring keeps the difference within an hour of a whole number of days, so the round
+// absorbs the 23h/25h DST days rather than dropping or gaining one.
+function daysDiff(a,b){return Math.round((_dayMs(b)-_dayMs(a))/86400000);}
+/* toLocaleDateString with an options object builds a fresh Intl.DateTimeFormat on every call.
+   Measured here at 37.9us against 0.55us for a shared formatter — a 69x difference, and at 141
+   calls per Checklist render that was ~5ms of a ~14ms draw. MDN recommends reusing a formatter
+   when formatting many dates; the result cache on top makes repeated due dates free. */
+const _DTF_SHORT=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'});
+var _fmtCache=Object.create(null), _fmtCacheN=0;
+function fmtDate(d){
+  const hit=_fmtCache[d]; if(hit!==undefined) return hit;
+  if(_fmtCacheN>4000){ _fmtCache=Object.create(null); _fmtCacheN=0; }
+  _fmtCacheN++;
+  return (_fmtCache[d]=_DTF_SHORT.format(new Date(_dayMs(d))));
+}
 
 //                                                           
 // SPACED REPETITION ENGINE
@@ -2566,7 +2625,7 @@ const TOPIC_PMT_OVERRIDE = (function(){
 })();
 function practiceLinkFor(name){
   if(TOPIC_PMT_OVERRIDE[name]) return TOPIC_PMT_OVERRIDE[name];
-  const t=allTopics.find(x=>x.name===name);
+  const t=topicByName(name);
   if(t && PRACTICE_LINKS[t.clusterId]) return PRACTICE_LINKS[t.clusterId];
   return PRACTICE_FALLBACK;
 }
@@ -2583,7 +2642,7 @@ function setExamOff(v){ try{ if(v){ localStorage.setItem('alevel-exam-off','1');
 function forgetting(t,S){ return Math.pow(1 + FACTOR*t/Math.max(0.01,S), DECAY); }
 function intervalForRetention(S,R){ return (S/FACTOR)*(Math.pow(R,1/DECAY)-1); }
 function safeInterval(x){ if(!isFinite(x)) return 1; return clamp(Math.round(x),1,MAX_INTERVAL); }
-function validRec(r){ return !!(r && isFinite(r.S) && r.S>0 && typeof r.last==='string' && !isNaN(new Date(r.last+'T12:00:00').getTime())); }
+function validRec(r){ return !!(r && isFinite(r.S) && r.S>0 && typeof r.last==='string' && !isNaN(_dayMs(r.last))); }
 
 /* ---- recency-decayed, severity-weighted mistake load for a topic ----
    Memoised per (topic, day). This is the hottest function in the app: targetRetention() calls
@@ -2851,7 +2910,7 @@ function buildTimeline(reviewLog,mistakeEvents,paperEvents){
   return kept;
 }
 function replayTimeline(name,reviewLog,mistakeEvents,paperEvents){
-  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const topic=topicByName(name); const tdiff=topic?topic.diff:2;
   let rec=null;
   for(const e of buildTimeline(reviewLog,mistakeEvents,paperEvents)){
     if(e.kind===EV_REVIEW){ let g=parseInt(e.grade,10); if(!(g>=1&&g<=5))g=3; rec=applyReview(rec,g,e.date,tdiff); }
@@ -2878,7 +2937,7 @@ function evidenceQuality(name){
    This is the whole model in one object, which is the point. */
 function memoryCurve(name){
   const base=sr[name]; if(!validRec(base)) return null;
-  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const topic=topicByName(name); const tdiff=topic?topic.diff:2;
   const evs=buildTimeline(base.log,mistakeEventsByTopic()[name],paperEventsByTopic()[name]);
   if(!evs.length) return null;
   const start=evs[0].date, td=today(), due=dueDateFor(name);
@@ -2926,7 +2985,7 @@ function memoryCurve(name){
    the A-level market can point at a specific error and say "that is why this is due". */
 function evidenceTrail(name){
   const base=sr[name]; if(!validRec(base)) return [];
-  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const topic=topicByName(name); const tdiff=topic?topic.diff:2;
   const evs=buildTimeline(base.log,mistakeEventsByTopic()[name],paperEventsByTopic()[name]);
   const out=[]; let rec=null;
   for(const e of evs){
@@ -3010,7 +3069,7 @@ function memoryFor(name){
 
 // ---- simulate the result of a grade (for the modal's per-grade forecast) ----
 function simulateGrade(name,dateVal,g){
-  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const topic=topicByName(name); const tdiff=topic?topic.diff:2;
   const next=applyReview(memoryFor(name),g,dateVal,tdiff);
   const ivl=safeInterval(intervalForRetention(next.S,targetRetention(name)));
   return {S:next.S,D:next.D,ivl,date:addDays(dateVal,ivl)};
@@ -3019,7 +3078,7 @@ function simulateGrade(name,dateVal,g){
 // ---- commit a study / self-test event ----
 function saveTopicStudied(name,dateVal,gradeKey){
   let g=parseInt(gradeKey,10); if(!(g>=1&&g<=5)) g=3;
-  const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+  const topic=topicByName(name); const tdiff=topic?topic.diff:2;
   let rec=sr[name];
   const wasMastered = !!(rec && rec.S>=MASTERY_STABILITY);
   mhUntombstone('sr',name);   // studying a previously-reset topic revives it
@@ -3039,7 +3098,7 @@ function saveTopicStudied(name,dateVal,gradeKey){
 function migrateV4(old){
   Object.keys(old).forEach(name=>{
     const o=old[name]; if(!o||typeof o!=='object') return;
-    const topic=allTopics.find(t=>t.name===name); const tdiff=topic?topic.diff:2;
+    const topic=topicByName(name); const tdiff=topic?topic.diff:2;
     const stage=Math.min(o.stage||0, BASE_INTERVALS.length-1);
     const mult=o.personalMult||0.9;
     let S=Math.max(1,(BASE_INTERVALS[stage]||1)*mult);
@@ -4057,7 +4116,7 @@ let modalTopic=null, selectedRating=null;
 function openModal(topicName,fromReviewPanel){
   modalTopic=topicName;selectedRating=null;
   const rec=sr[topicName];
-  const topicData=allTopics.find(t=>t.name===topicName);
+  const topicData=topicByName(topicName);
   const diff=topicData?topicData.diff:2;
   const diffClass='dl'+diff;
 
@@ -4094,7 +4153,7 @@ function renderMemDetails(){
   // every other number on screen is computed from. sr[] alone is reviews-only.
   const rec=memoryFor(modalTopic); const raw=sr[modalTopic]; const rows=[];
   if(!rec){
-    const t=allTopics.find(x=>x.name===modalTopic);
+    const t=topicByName(modalTopic);
     rows.push(['Status','Not started']);
     rows.push([plainLang?'Topic difficulty':'Intrinsic difficulty', DIFF_LABELS[t?t.diff:2]]);
     if(!plainLang) rows.push(['First study', 'Initialises this topic’s memory model']);
@@ -4359,7 +4418,7 @@ async function pqGenerate(){
   var topic=modalTopic; if(!topic) return;
   var key=loadGeminiKey(); if(!key){ renderPQ(); return; }
   var body=document.getElementById('pq-body'); if(!body) return;
-  var td=allTopics.find(function(t){return t.name===topic;});
+  var td=topicByName(topic);
   var base=td?td.diff:2;
   var diffWord = pqDiff==='easier'?'slightly easier than the typical exam standard for this topic (build confidence)':
                  pqDiff==='harder'?'more challenging — a harder, multi-step problem-solving question like the back end of a paper':
@@ -5746,7 +5805,7 @@ function renderPieChart(type){
     if(!mistakes.length){ps.innerHTML='<div class="pie-empty">No mistakes yet.</div>';return;}
     const counts={};
     activeClusters().forEach(c=>{counts[c.id]=0;});
-    mistakes.forEach(m=>{const t=allTopics.find(x=>x.name===m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
+    mistakes.forEach(m=>{const t=topicByName(m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
     const entries=activeClusters().map((c,i)=>({id:c.id,name:c.name,count:counts[c.id]||0,color:PIE_COLORS[i%PIE_COLORS.length]})).filter(e=>e.count>0);
     drawDonut(canvas,entries,legend);
   }
@@ -5782,62 +5841,6 @@ function drawDonut(canvas,entries,legendEl){
 //                                                           
 // PROGRESS TAB
 //                                                           
-function renderProgressTab(){
-  // Bar chart
-  const chart=document.getElementById('ptab-chart');chart.innerHTML='';
-  activeClusters().forEach(c=>{
-    const total=c.topics.length;
-    const studied=c.topics.filter(n=>sr[n]).length;
-    const mastered=c.topics.filter(n=>sr[n]&&sr[n].S>=MASTERY_STABILITY).length;
-    const pct=Math.round(studied/total*100);const mastPct=Math.round(mastered/total*100);
-    const row=document.createElement('div');row.className='ptab-row';
-    const nm=document.createElement('div');nm.className='ptab-name';nm.textContent=c.name;nm.title=c.name;
-    const track=document.createElement('div');track.className='ptab-track';
-    const mast=document.createElement('div');mast.className='ptab-mast';mast.style.width=mastPct+'%';mast.style.background='#34d399';
-    const fill=document.createElement('div');fill.className='ptab-fill';fill.style.width=pct+'%';fill.style.background=c.color;
-    track.append(mast,fill);
-    const pctEl=document.createElement('div');pctEl.className='ptab-pct';pctEl.textContent=pct+'%';
-    row.append(nm,track,pctEl);chart.appendChild(row);
-  });
-
-  // Donut for overall
-  const donutCanvas=document.getElementById('prog-donut');
-  const donutLegend=document.getElementById('prog-donut-legend');donutLegend.innerHTML='';
-  const donutCtx=donutCanvas.getContext('2d');donutCtx.clearRect(0,0,donutCanvas.width,donutCanvas.height);
-  const donutEntries=activeClusters().map((c,i)=>({id:c.id,name:c.name,count:c.topics.filter(n=>sr[n]).length,color:PIE_COLORS[i%PIE_COLORS.length]})).filter(e=>e.count>0);
-  if(donutEntries.length){drawDonut(donutCanvas,donutEntries,donutLegend);}
-  else{donutCtx.fillStyle='#445566';donutCtx.font='12px DM Sans,sans-serif';donutCtx.textAlign='center';donutCtx.fillText('No data yet',95,95);}
-
-  // Detailed list
-  const det=document.getElementById('prog-details');det.innerHTML='';
-  const progEmpty=document.getElementById('prog-empty');
-  const anyStudied=activeTopics().some(t=>sr[t.name]);
-  if(progEmpty)progEmpty.style.display=anyStudied?'none':'block';
-  if(!anyStudied)return;
-
-  activeClusters().forEach(c=>{
-    const studied=c.topics.map((name,i)=>({name,lvl:c.lvls[i]})).filter(t=>sr[t.name]);
-    if(!studied.length)return;
-    const block=document.createElement('div');block.className='prog-block';
-    const bhdr=document.createElement('div');bhdr.className='prog-block-hdr';
-    const bdot=document.createElement('div');bdot.className='pbhdot';bdot.style.background=c.color;
-    const bnm=document.createElement('div');bnm.className='pbhname';bnm.textContent=c.name;
-    const bct=document.createElement('div');bct.className='pbhct';bct.textContent=studied.length+'/'+c.topics.length;
-    bhdr.append(bdot,bnm,bct);block.appendChild(bhdr);
-    studied.forEach(t=>{
-      const rec=sr[t.name];if(!rec)return;
-      const status=statusFor(t.name);
-      const tr=document.createElement('div');tr.className='prog-topic-row';
-      const tnm=document.createElement('div');tnm.className='ptr-name';tnm.textContent=t.name;
-      const tdt=document.createElement('div');tdt.className='ptr-date';tdt.textContent=fmtDate(rec.last);
-      const tsb=document.createElement('span');tsb.className='ptr-stage';
-      if(status==='done'){tsb.textContent='Mastered';tsb.style.background='rgba(52,211,153,.14)';tsb.style.color='#34d399';}
-      else{const _si=strengthInfo(t.name);tsb.textContent=(_si.pct!=null?_si.pct+'%':'')+' recall';tsb.style.background='rgba(var(--accent-rgb),.12)';tsb.style.color='var(--accent)';}
-      tr.append(tnm,tdt,tsb);block.appendChild(tr);
-    });
-    det.appendChild(block);
-  });
-}
 
 //                                                           
 // PAST PAPERS TAB
@@ -6804,7 +6807,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   }
   function replayRecord(name,events){
     if(typeof applyReview!=='function'||typeof daysDiff!=='function')return null;
-    var topic=(typeof allTopics!=='undefined'&&allTopics&&allTopics.find)?allTopics.find(function(t){return t.name===name;}):null;
+    var topic=(typeof topicByName==='function')?topicByName(name):null;
     var tdiff=topic?topic.diff:2;
     // Steps through the same applyReview() the live path uses, so replay and live
     // agree by construction rather than by two implementations happening to match.
@@ -7045,7 +7048,7 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     pendingRefresh=false;
     var th=null; try{ th=localStorage.getItem('msh-theme'); }catch(e){}
     if(th&&typeof applyTheme==='function'){ try{ applyTheme(th); }catch(e){} }
-    ['renderAll','renderReviewPanel','renderMistakesTab','renderProgressTab','renderResources',
+    ['renderAll','renderReviewPanel','renderMistakesTab','renderResources',
      'renderSettings','updateDueBadge','syncExamInputs','applyPlainLang'
     ].forEach(function(fn){
       if(typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ console.warn('[cloud] '+fn+' failed',e); } }

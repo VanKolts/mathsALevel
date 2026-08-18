@@ -30,8 +30,16 @@ function grabConst(name){
   return m[0];
 }
 
+function grabVar(name){
+  const re = new RegExp(`^var ${name}\\s*=[^\\n]*$`, 'm');
+  const m = html.match(re);
+  if(!m) throw new Error(`could not extract var ${name} from index.html`);
+  return m[0];
+}
+
 const source = [
   grabConst('FSRS_W'), grabConst('DECAY'), grabConst('FACTOR'), grabConst('DIFF_D_SEED'),
+  grabVar('_dayCache'), grabFn('_dayMs'),   // one line, declares _dayCacheN too
   grabFn('clamp'), grabFn('daysDiff'), grabFn('forgetting'), grabFn('ratingEase'),
   grabFn('initialStability'), grabFn('initialDifficulty'), grabFn('nextDifficulty'),
   grabFn('stabilityAfterRecall'), grabFn('stabilityAfterLapse'),

@@ -25,22 +25,23 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 2. [The visual layer](#the-visual-layer)
 3. [The surfaces, feature by feature](#the-surfaces-feature-by-feature)
 4. [The spaced-repetition engine (deep dive)](#the-spaced-repetition-engine-deep-dive)
-5. [Data model & storage](#data-model--storage)
+5. [Where the render time actually goes](#where-the-render-time-actually-goes)
+6. [Data model & storage](#data-model--storage)
    - [Topic renames & the remap](#topic-renames--the-remap)
-6. [Cloud sync architecture](#cloud-sync-architecture)
-7. [The AI subsystem](#the-ai-subsystem)
-8. [Rendering & maths typesetting](#rendering--maths-typesetting)
-9. [Complete data & code reference](#complete-data--code-reference)
+7. [Cloud sync architecture](#cloud-sync-architecture)
+8. [The AI subsystem](#the-ai-subsystem)
+9. [Rendering & maths typesetting](#rendering--maths-typesetting)
+10. [Complete data & code reference](#complete-data--code-reference)
    - [9.1 Hard-coded data objects & their schemas](#91-hard-coded-data-objects--their-schemas)
    - [9.2 Topic taxonomy (full)](#92-topic-taxonomy-full)
    - [9.3 Past-paper coverage (full)](#93-past-paper-coverage-full)
    - [9.4 All tuning constants](#94-all-tuning-constants)
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
-10. [Editing, building & deploying](#editing-building--deploying)
+11. [Editing, building & deploying](#editing-building--deploying)
     - [Committing without being asked](#committing-without-being-asked)
-11. [Keeping the documentation in step](#keeping-the-documentation-in-step)
-12. [Known gaps & roadmap](#known-gaps--roadmap)
+12. [Keeping the documentation in step](#keeping-the-documentation-in-step)
+13. [Known gaps & roadmap](#known-gaps--roadmap)
 
 ---
 
@@ -99,7 +100,7 @@ Three knock-on details, each of which breaks if you only widen the rail:
 
 > **Measuring a themed colour with a `transition` on it gives the wrong answer.** `.m-nav-lbl` transitions `color`, so `getComputedStyle` immediately after flipping `data-theme` returns the mid-transition value — in practice one theme behind, which reported the labels at 2.96:1 and looked like a real AA failure. Inject `*{transition:none!important}` before auditing colour, or the audit measures the animation.
 
-> **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` is still orphaned partly because there were two places to wire a tab up and only one got done. Anything nav-shaped now has exactly one home.
+> **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` sat orphaned for months partly because there were two places to wire a tab up and only one got done (it was deleted on 2026-08-18). Anything nav-shaped now has exactly one home.
 
 **The Checklist's filter bar is two layers.** Six buttons on the left pick **one** component group — All, AS level, Pure, Applied, FM core, FM options — and are the coarse cut. Everything finer lives behind **Filter**, and stacks on top. `matchesFilter()` handles the six; `matchesFilterModal()` handles the rest; `matchesSearch()` narrows whatever those two leave. All three are applied in `visibleTopics()` *and* in the cluster-card builder, which are the two places topics are counted.
 
@@ -153,7 +154,7 @@ The Checklist rhombus is a **square rotated 45°**, not a `<path>`: its corner r
 
 Timing: shape 400ms `cubic-bezier(.2,0,0,1)` with a 180ms delay, colour 400ms with none, and the pill 400ms `cubic-bezier(.32,1.08,.5,1)`. The pill and the colour it carries move as one thing; the shape resolves just behind them. The pill's overshoot was cut from 1.4 to 1.08 because the old curve visibly bounced past the row and settled back. Deliberately **no** overshoot on the icon geometry, where it reads as a wobble rather than a spring. `prefers-reduced-motion` needs nothing extra — the blanket rule in `styles.css` already collapses all of it to an instant swap. The Focus timer used to count down inside its own button in the tab bar; with that gone, the **Tools icon** carries a pulsing dot (`.rail-live` / `.rail-paused`) so a running timer is still visible once its overlay is closed.
 
-> **Note — two orphaned page containers.** `#page-progress` and `#page-settings` still exist in the markup but nothing activates them: neither is in `TAB_ORDER`, neither has a nav button, and neither is ever given `.active`. Settings content moved into `#settings-overlay`; the progress charts are effectively superseded by `#stats-overlay`. `renderProgressTab()` still runs on every refresh, rendering into a permanently hidden container. Both should be either wired up or deleted.
+> **Note — the two orphaned page containers are gone** (2026-08-18). `#page-progress` and `#page-settings` were in the markup with nothing to activate them: neither was in `TAB_ORDER`, neither had a nav button, neither was ever given `.active`. Settings had moved into `#settings-overlay` and the progress charts were superseded by `#stats-overlay`, but `renderProgressTab()` still ran on **every** refresh — measured at **13ms**, a third of the whole refresh cycle, drawing a bar chart, a canvas donut and a per-topic list into a container no one could see. Deleting all three (markup, function, ~24 rules of CSS) is what closed it; `drawDonut()` and `PIE_COLORS` stay, since the Mistakes breakdown wheel uses them.
 
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **3 built-in themes** — **Dark** (the default), **Light** and **Light rose**. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
 
@@ -241,7 +242,7 @@ The **exam timer opens paused** (`timerState.running=false`, button reads `Start
 ### 5. 📊 Statistics — `#stats-overlay`
 **Visual:** the honest audit, opened from the bar-chart icon in the nav rail (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
 
-**Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due. The older `#page-progress` charts (`renderProgressTab`) are the orphaned container noted above.
+**Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due. The older `#page-progress` charts and their `renderProgressTab()` were deleted on 2026-08-18, being an unreachable duplicate of this surface.
 
 ### Cross-cutting features (reachable from the nav's tool group / quick-row)
 - **🧰 Tools overlay** (`#more-overlay`) — the rail's grid icon opens a four-tile menu: Resources, Revision plan, Focus timer, AI Tutor. These used to be text buttons crowding the right-hand end of the tab bar; collecting them behind one icon is what let the nav become icon-only. Mobile reaches the same tools through the ⋯ speed-dial instead, so the overlay is desktop-only in practice.
@@ -315,7 +316,7 @@ On a mature topic (S≈30d, 96% recall) one concept gap gives **96% → 82%, ove
 
 **What's left of the soft channel.** `mistakeLoad()` — severity- and recency-weighted (`MISTAKE_SEVERITY`, `exp(−age/τ)`) — survives only as a small lift to `targetRetention()` ("you got this wrong lately, look sooner"). `MISTAKE_D_WEIGHT` is now **0** and `MISTAKE_RET_WEIGHT` dropped 0.04 → 0.015, because the real penalty lands on stability. `effectiveD()` therefore collapses to `rec.D`. The decay term must never enter the replay: it is a function of `today()`, and replay has to be pure ([sync](#cloud-sync-architecture) depends on it).
 
-**Phase 3 — past-paper marks — is still outstanding.** 2,106 tagged questions with real marks are the best evidence in the app and the scheduler still ignores them. Design in [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) §4.
+**Phase 3 — past-paper marks — is built** (`309b784`), and phase 4's forgetting-curve view with it (`5bc45ee`). A logged per-question paper becomes a dated event on the same timeline: `paperEventsByTopic()` turns each question into `{rating, coverage}` from the mark ratio, `applyPaper()` folds it in, and same-day precedence is paper → review → mistake so one error is never charged twice. It is a setting (`alevel-paperfsrs-v1`, default on) rather than a fait accompli, because it changes what the app tells you to revise. Design and as-built notes in [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md) §4.
 
 ### The evidence trail
 Because the timeline is walked event by event, recording what each one *did* is nearly free. `evidenceTrail(name)` produces the list under the memory details in the study modal:
@@ -335,6 +336,34 @@ Newest first, capped at 8. It is the honest answer to "why is this suddenly at t
 - `simulateGrade(name, date, g)` → the modal's "what happens if I rate this…" forecast, run for each grade without committing.
 
 Guards throughout keep it robust: `validRec()` rejects corrupt state, `safeInterval()` clamps intervals to `[1, 3650]` days to prevent `Date` overflow at extreme stability.
+
+---
+
+## Where the render time actually goes
+
+Measured in Chrome on an M-series Mac against a realistic store — 220 studied topics, 180 mistakes, 25 logged papers, FM track (253 visible rows, 2,874 nodes). Times are the median of ten runs. "Full refresh" is the sequence the sync listener runs on every incoming snapshot.
+
+| | Before | After | |
+|---|--:|--:|---|
+| `renderAll()` | 14.5ms | 5.2ms | |
+| `renderReviewPanel()` | 7.3ms | 2.6ms | |
+| `renderMistakesTab()` | 9.7ms | 2.7ms | |
+| `renderProgressTab()` | 13.0ms | — | deleted; it drew into a hidden container |
+| `updateDueBadge()` | 2.1ms | 0.7ms | |
+| **Full refresh** | **45.2ms** | **11.4ms** | |
+
+Four causes, in the order they mattered. Each was measured rather than guessed, and the surprise is that none of them was the FSRS maths — the engine's own memoisation was already doing its job.
+
+- **`fmtDate()` built a fresh `Intl.DateTimeFormat` on every call.** `toLocaleDateString(locale, options)` constructs a formatter internally each time it is called with an options object; measured at **37.9µs** against **0.55µs** for a hoisted formatter, a 69× difference. At 141 calls per Checklist draw that alone was ~5ms. [MDN says so explicitly](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toLocaleDateString): use `Intl.DateTimeFormat` and reuse it when formatting many dates.
+- **`renderProgressTab()` drew a bar chart, a canvas donut and a per-topic list into a permanently hidden container** on every refresh — 13ms, a third of the cycle, for pixels nobody could see.
+- **`today()` was called 3,439 times per render**, each allocating a `Date` and building three strings. It now re-derives at most once a second, so a single render computes it once and the day can never be stale by more than a second at midnight.
+- **`activePapers()` was rebuilt, remapped and re-sorted 517 times per render** — once per topic, through `targetRetention()` → `examDateForTopic()` → `examDateForComponent()` — and `paperDate()` inside it ran `JSON.parse` on the same unchanged override string for every paper. Memoised on `_examSig()`.
+
+Two rules came out of this that are worth keeping:
+
+> **Cache on a signature, not on an invalidation call.** Every cache added here re-reads its cheap inputs and compares; none of them relies on a future writer remembering to call an invalidate function. `applyChapterRenames()` is in the codebase precisely because a one-shot flag was trusted and sync pushed stale data in behind it.
+
+> **Measure before optimising, and measure the helper, not the feature.** The instinct was to blame the FSRS replay or the 173 KB paper table. Both were nearly free. The cost was in a date formatter and a hidden container.
 
 ---
 
@@ -679,7 +708,8 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 375 named functions total. The load-bearing ones, grouped:
 
-- **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate` (which parse at local *noon*, deliberately, to stay clear of DST).
+- **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate`, all parsing at local *noon*, deliberately, to stay clear of DST. All four run through `_dayMs(str)`, one Date parse per distinct day string; see [the render-cost section](#where-the-render-time-actually-goes) for why.
+- **Topic lookup:** `topicByName(name)` over the `TOPIC_BY_NAME` index. Topic names are the app's primary key, and this replaced thirteen `allTopics.find(...)` linear scans over 315 entries.
 - **Forgetting curve & scheduling:** `forgetting(t,S)`, `intervalForRetention(S,R)`, `safeInterval(x)`, `validRec(r)`, `currentRetrievability(name)`, `dueDateFor(name)`, `statusFor(name)`, `strengthInfo(name)`, `isMastered(name)`, `needsExamConfirmation(name)`.
 - **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`.
 - **The one shared step (phase 1 & 2):** `applyReview(rec,g,date,tdiff)` and `applyMistake(rec,E,date)` — the only two places state is advanced; `buildTimeline`, `replayTimeline`, `mistakeEventsByTopic`, `memoryFor(name)` (the derived read every UI number goes through, memoised per topic/day), `invalidateMemory`, `evidenceTrail(name)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`, `sanitizeAllSR`, `migrateV4`.
@@ -687,6 +717,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
+- **Exam dates:** `activePapers()`, `examDateForComponent(comp)` and `getPaperDates()` are each memoised against `_examSig()` — a cheap string built from raw reads of the track, the paper-date overrides, the FM options and a counter for the fetched defaults. Signature-keyed rather than invalidated by hand, so no future write path can forget to clear them.
 - **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
@@ -795,10 +826,8 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
 - **Accessibility — contrast, type and target sizes are done; focus management is not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, and every control clears SC 2.5.8's 24×24 except two documented exceptions. Still outstanding: there is only one `aria-live` region, and **modals neither trap focus nor restore it to the element that opened them** — tabbing out of an open dialog wanders into the page behind. That is the next accessibility job. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
 - **Light-mode default is arguably the better call and has not been made.** [Piepenbrock et al. (2013)](https://www.tandfonline.com/doi/full/10.1080/00140139.2013.790485) found positive polarity (dark text on light) gave better visual acuity for both younger (d=2.17) and older (d=0.58) adults and better proofreading accuracy, with the advantage growing as text shrinks. The app defaults to `rose-dark`. Dark mode is a genuine accessibility win for readers with cloudy ocular media (Legge et al. 1985), so the right answer is probably to default to the system preference rather than to either theme — currently there is no `prefers-color-scheme` handling at all.
-- **Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab; deferring it would speed up the Checklist's first paint.
+- ~~**Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab.~~ **Retired 2026-08-18 — it is no longer Papers-only.** Phase 3 made paper marks part of the scheduler, so `memoryFor()` → `paperEventsByTopic()` → `ppQuestionsFor()` needs the table on the *Checklist's* first paint. Deferring it would now stall the first render rather than speed it up. Measured at 5ms to fetch and parse; the render work it feeds was the real cost, and that was addressed directly.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
-- **Two orphaned page containers.** `#page-progress` and `#page-settings` are in the markup but unreachable — not in `TAB_ORDER`, no nav button, never given `.active`. `renderProgressTab()` still runs on every refresh, drawing into a hidden container. Wire them up or delete them.
-- **Past-paper marks still don't reach the scheduler** — phase 3 of [`docs/fsrs-evidence-model.md`](docs/fsrs-evidence-model.md). The best evidence in the app, 2,106 tagged questions, is analytics-only. Highest-value engine work outstanding.
 - **Firestore security rules unverified.** One document per user, so a rule left in test mode would expose every student's data. Confirm it is `allow read, write: if request.auth.uid == uid`. (The `apiKey` in source is public by design and fine.)
 - **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites.
 

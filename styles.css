@@ -109,7 +109,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    One element serves both orientations. This block is the rail; the mobile media query
    below turns the same markup into the bottom bar. The rail replaced a horizontal tab bar
    with text labels: two navs meant two sets of icons, two active states and two click
-   paths to keep in step, which is how #page-progress ended up orphaned.   */
+   paths to keep in step, which is how the old #page-progress ended up orphaned (it and the
+   empty #page-settings container were deleted on 2026-08-18).   */
 .m-nav{position:fixed;left:0;top:0;bottom:0;z-index:450;width:var(--rail-w);
   display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:16px 12px;
   background:var(--surface-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
@@ -754,30 +755,6 @@ main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .pie-empty{text-align:center;padding:24px;color:var(--dim);font-style:italic;font-size:var(--fs-sm);}
 
 /*   PROGRESS TAB    */
-.ptab-legend{display:flex;gap:12px;margin-bottom:16px;font-size:var(--fs-xs);color:var(--muted);}
-.ptab-legend span{display:flex;align-items:center;gap:4px;}
-.ptab-ldot{width:7px;height:7px;border-radius:var(--r-xs);}
-.ptab-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;margin-bottom:20px;}
-.ptab-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.ptab-row:last-child{margin-bottom:0;}
-.ptab-name{font-size:var(--fs-xs);color:var(--muted);width:150px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ptab-track{flex:1;height:7px;background:var(--surface2);border-radius:var(--r-xs);overflow:hidden;position:relative;}
-.ptab-fill{height:100%;border-radius:var(--r-xs);transition:width var(--t-slow) ease;}
-.ptab-mast{height:100%;border-radius:var(--r-xs);position:absolute;top:0;left:0;opacity:.45;transition:width var(--t-slow) ease;}
-.ptab-pct{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);width:32px;text-align:right;}
-.prog-donut-wrap{display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;margin-bottom:20px;}
-.prog-details{display:flex;flex-direction:column;gap:8px;}
-.prog-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;}
-.prog-block-hdr{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border);}
-.pbhdot{width:6px;height:6px;border-radius:50%;}
-.pbhname{font-size:var(--fs-sm);color:var(--text);font-weight:500;flex:1;}
-.pbhct{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);}
-.prog-topic-row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);font-size:var(--fs-xs);}
-.prog-topic-row:last-child{border-bottom:none;}
-.ptr-name{flex:1;color:var(--text);}
-.ptr-date{font-family:'JetBrains Mono',monospace;color:var(--dim);font-size:var(--fs-2xs);}
-.ptr-stage{font-family:'JetBrains Mono',monospace;font-size:var(--fs-3xs);padding:2px 4px;border-radius:var(--r-xs);}
-.prog-empty{padding:32px;text-align:center;color:var(--dim);font-style:italic;font-size:var(--fs-sm);}
 
 /*   PAST PAPERS TAB    */
 .pp-year-group{margin-bottom:24px;}
@@ -809,8 +786,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
 
 @media(max-width:640px){
   /* Layout */
-  .form-row,.pie-section,.prog-donut-wrap{grid-template-columns:1fr;}
-  .ptab-name{width:90px;}
+  .form-row,.pie-section{grid-template-columns:1fr;}
 
   /* Header */
   .hdr-title{font-size:var(--fs-xl);}
