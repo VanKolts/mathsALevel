@@ -728,7 +728,14 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         </div>
         <div class="settings-current" id="tutor-key-current"></div>
       </div>
-      <div class="settings-card">
+      <!-- Plain language is hidden, not deleted — parked 2026-08-18 until it does what it
+           says. The setting promises to replace the technical memory vocabulary throughout
+           the app; it actually rewords six strings (the legend line, three rows and two
+           headings in the study modal) and leaves "stability", "retrievability" and the rest
+           untouched everywhere else. A half-kept promise is worse than no toggle. The stored
+           preference is deliberately left alone so it comes back when the feature is finished.
+           Unhide: remove hidden below and restore the real read in loadPlainLang(). -->
+      <div class="settings-card" id="plainlang-card" hidden>
         <div class="settings-row">
           <div class="settings-row-info">
             <div class="settings-row-title">Plain language</div>
@@ -2204,7 +2211,11 @@ function celebrateMastery(name){
 
 // ---- Plain-language mode ----
 var plainLang=false;
-function loadPlainLang(){try{plainLang=localStorage.getItem('alevel-plainlang-v1')==='1';}catch(e){plainLang=false;}}
+/* Parked — see the hidden #plainlang-card in the markup. Forced off rather than read, so a
+   device that had it switched on is not left in a half-translated app with no visible way
+   out. The stored value is NOT overwritten: finish the feature and this one line goes back to
+   `plainLang = localStorage.getItem('alevel-plainlang-v1')==='1'`, preference intact. */
+function loadPlainLang(){ plainLang=false; }
 function applyPlainLang(){
   var ls=document.getElementById('legend-strength-text');
   if(ls)ls.textContent=plainLang?'How well you’d remember it':'Memory strength (predicted recall)';
@@ -2629,19 +2640,48 @@ function fmtDate(d){
 // OK → no change to mult or stage (stage stays same, must review again).
 
 // ---- per-cluster practice links (teacher can fill these with specific PMT papers) ----
+/* PMT topic pages, keyed by cluster id.
+   These were keyed by the *pre-reorganisation* ids — proof, algebra, coord, seq, trig, exp,
+   diff, integ, num, vec — none of which have existed since the July 2026 Pure split renamed
+   every Pure cluster to p1cN / p2cN. So the lookup missed for all of them and 271 of 315
+   topics fell through to PRACTICE_FALLBACK, the generic A-Level index. Only the 44 stats and
+   mechanics topics with an explicit TOPIC_PMT_OVERRIDE still reached a real page.
+   The ten destination URLs are unchanged; only the keys are. Add a cluster here whenever one
+   is added, or its topics silently get the index page — there is no test that can catch a
+   *plausible* wrong link. */
+// NB: PMT (line ~1494) is already the past-paper download root. This is the revision-notes root.
+const PMTREV='https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/';
 const PRACTICE_LINKS = {
-  proof:   'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/proof/',
-  algebra: 'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/algebra-and-functions/',
-  coord:   'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/coordinate-geometry/',
-  seq:     'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/sequences-and-series/',
-  trig:    'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/trigonometry/',
-  exp:     'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/exponentials-and-logarithms/',
-  diff:    'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/differentiation/',
-  integ:   'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/integration/',
-  num:     'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/numerical-methods/',
-  vec:     'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/vectors/',
+  // Pure Year 1
+  p1c1: PMTREV+'algebra-and-functions/',        // 1 · Algebraic expressions
+  p1c2: PMTREV+'algebra-and-functions/',        // 2 · Quadratics
+  p1c3: PMTREV+'algebra-and-functions/',        // 3 · Equations and inequalities
+  p1c4: PMTREV+'algebra-and-functions/',        // 4 · Graphs and transformations
+  p1c5: PMTREV+'coordinate-geometry/',          // 5 · Straight line graphs
+  p1c6: PMTREV+'coordinate-geometry/',          // 6 · Circles
+  p1c7: PMTREV+'proof/',                        // 7 · Algebraic methods (proof)
+  p1c8: PMTREV+'sequences-and-series/',         // 8 · The binomial expansion
+  p1c9: PMTREV+'trigonometry/',                 // 9 · Trigonometric ratios
+  p1c10:PMTREV+'trigonometry/',                 // 10 · Trig identities and equations
+  p1c11:PMTREV+'vectors/',                      // 11 · Vectors
+  p1c12:PMTREV+'differentiation/',              // 12 · Differentiation
+  p1c13:PMTREV+'integration/',                  // 13 · Integration
+  p1c14:PMTREV+'exponentials-and-logarithms/',  // 14 · Exponentials and logarithms
+  // Pure Year 2
+  p2c1: PMTREV+'algebra-and-functions/',        // 1 · Algebraic methods (partial fractions, division)
+  p2c2: PMTREV+'algebra-and-functions/',        // 2 · Functions and graphs
+  p2c3: PMTREV+'sequences-and-series/',         // 3 · Sequences and series
+  p2c4: PMTREV+'sequences-and-series/',         // 4 · Binomial expansion
+  p2c5: PMTREV+'trigonometry/',                 // 5 · Radians
+  p2c6: PMTREV+'trigonometry/',                 // 6 · Trigonometric functions
+  p2c7: PMTREV+'trigonometry/',                 // 7 · Trigonometry and modelling
+  p2c8: PMTREV+'coordinate-geometry/',          // 8 · Parametric equations
+  p2c9: PMTREV+'differentiation/',              // 9 · Differentiation
+  p2c10:PMTREV+'numerical-methods/',            // 10 · Numerical methods
+  p2c11:PMTREV+'integration/',                  // 11 · Integration
+  p2c12:PMTREV+'vectors/',                      // 12 · Vectors
 };
-const PRACTICE_FALLBACK = 'https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/';
+const PRACTICE_FALLBACK = PMTREV;   // the A-Level index — where Further Maths still lands, having no page map yet
 // Topic-level overrides for stats & mech (span multiple PMT topic pages)
 const TOPIC_PMT_OVERRIDE = (function(){
   const B='https://www.physicsandmathstutor.com/maths-revision/a-level-edexcel/';
@@ -2703,6 +2743,9 @@ const TOPIC_PMT_OVERRIDE = (function(){
     .forEach(t=>m[t]=B+'moments/');
   return m;
 })();
+/* Two Pure topics sit in a chapter whose other topics belong to a different PMT page. */
+TOPIC_PMT_OVERRIDE['1.1 Proof by contradiction']=PMTREV+'proof/';
+TOPIC_PMT_OVERRIDE['7.5 Proof by contradiction']=PMTREV+'proof/';
 function practiceLinkFor(name){
   if(TOPIC_PMT_OVERRIDE[name]) return TOPIC_PMT_OVERRIDE[name];
   const t=topicByName(name);
@@ -5298,6 +5341,13 @@ function renderResources(){
 //                                                           
 // Populate topic select
 const msel=document.getElementById('m-topic-sel');
+/* The topic you last logged against is remembered across reloads. Mistakes arrive in runs —
+   a marked paper, one session's worth — so defaulting to the alphabetically-first topic in
+   the syllabus meant re-finding the same entry in a 315-item list every time. Device-local:
+   it is not in SYNC_KEYS, which is an explicit allow-list, so nothing about the sync contract
+   changes and two devices do not fight over a UI preference. */
+const LAST_TOPIC_KEY='msh-last-mistake-topic';
+function rememberMistakeTopic(name){ try{ if(name) localStorage.setItem(LAST_TOPIC_KEY,name); }catch(e){} }
 function populateMistakeTopics(){
   const cur=msel.value;
   msel.innerHTML='';
@@ -5306,9 +5356,15 @@ function populateMistakeTopics(){
     c.topics.forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;og.appendChild(o);});
     msel.appendChild(og);
   });
-  if(cur)msel.value=cur;
+  // Restore in order of confidence: what was selected a moment ago, then what was last
+  // logged. Assigning a value the list does not contain is a no-op, so a topic that has
+  // since been renamed or filtered out by the track simply falls back to the first entry.
+  let want=cur;
+  if(!want){ try{ want=localStorage.getItem(LAST_TOPIC_KEY)||''; }catch(e){} }
+  if(want) msel.value=want;
 }
 populateMistakeTopics();
+msel.addEventListener('change',function(){ rememberMistakeTopic(msel.value); });
 document.getElementById('m-date').value=today();
 // Severity slider — add form
 sevUpdateUI(3,'m-sev-lbl','m-sev-pips');
@@ -5493,6 +5549,7 @@ document.getElementById('add-mistake-btn').addEventListener('click',function(){
    about three, a silly slip barely registers. Report the movement, because a change to
    someone's revision schedule should never be silent. */
 function finishAddMistake(m){
+  rememberMistakeTopic(m&&m.topic);
   const before=(m&&m.topic)?currentRetrievability(m.topic):null;
   mistakes.push(m);
   saveState();
@@ -5686,6 +5743,37 @@ function renderLeaks(){
 
 let _mvTrendBuckets=[];
 let _mvTrendLayout={W:480,H:120,PAD:{t:10,r:8,b:28,l:24},bW:0,gap:0};
+/* Whole-number axis ticks from the 1-2-5 sequence — about `target` of them, never repeating,
+   and never fractional, because the thing being counted is mistakes. */
+function niceTicks(max,target){
+  target=target||4;
+  max=Math.max(1,max);
+  /* Take the candidate step whose tick count lands *closest* to the target, rather than the
+     first one big enough. First-fit overshoots badly on small numbers: a maximum of 9 wants a
+     step of 2 (four ticks) but first-fit jumps to 5 and draws one lonely line. Candidates are
+     the usual 1-2-2.5-5-10 sequence across two magnitudes, rounded to whole numbers because
+     the thing being counted is mistakes; duplicates after rounding are dropped. */
+  const raw=max/target;
+  const mag=Math.pow(10,Math.floor(Math.log10(Math.max(raw,1e-6))));
+  const seen={}, cands=[];
+  [1,2,2.5,5,10].forEach(m=>{
+    [mag,mag*10].forEach(g=>{
+      const st=Math.max(1,Math.round(m*g));
+      if(!seen[st]){ seen[st]=1; cands.push(st); }
+    });
+  });
+  let best=cands[0], bestScore=Infinity;
+  cands.forEach(st=>{
+    const count=Math.floor(max/st);
+    // Ties go to the finer step: more gridlines is the lesser evil when reading a value off.
+    const score=Math.abs(count-target)*2+(count<target?1:0);
+    if(count>0 && score<bestScore){ bestScore=score; best=st; }
+  });
+  const out=[];
+  for(let v=best; v<=max+1e-9; v+=best) out.push(v);
+  if(!out.length) out.push(Math.max(1,Math.round(max)));
+  return out;
+}
 function renderTrendChart(range){
   const wrap=document.getElementById('mv-trend-chart');
   const now=new Date();
@@ -5723,20 +5811,32 @@ function renderTrendChart(range){
   if(!mistakes.length){wrap.innerHTML='<div class="mistakes-empty">No mistakes logged yet.</div>';return;}
   _mvTrendBuckets=buckets;
   const maxC=Math.max(1,...buckets.map(b=>b.count));
+  /* Mistake counts are small integers, and quartiles of a small integer repeat: a maximum of
+     1 gave the axis 0, 1, 1, 1 and a maximum of 3 gave 1, 2, 2, 3. Three of the four
+     gridlines were then unlabelled duplicates and you could not read a value off the chart.
+     Step through whole numbers from the 1-2-5 sequence instead — the standard readable-tick
+     rule — and scale the bars to the top tick so nothing overshoots the last line. */
+  const ticks=niceTicks(maxC,4);
+  const top=Math.max(maxC,ticks[ticks.length-1]);
   const W=480,H=120,PAD={t:10,r:8,b:28,l:24};
   const cW=W-PAD.l-PAD.r,cH=H-PAD.t-PAD.b;
   const bW=Math.max(2,cW/buckets.length-2);
   const gap=(cW-bW*buckets.length)/buckets.length;
   _mvTrendLayout={W,H,PAD,bW,gap};
   let bars='',labels='',grid='',hits='';
-  [0.25,0.5,0.75,1].forEach(f=>{
-    const y=PAD.t+cH*(1-f);const val=Math.round(maxC*f);
+  // Baseline first: without a line at zero the bars floated and there was nothing to read
+  // the short ones against. Slightly stronger than the gridlines, because it is the axis.
+  const yBase=PAD.t+cH;
+  grid+=`<line x1="${PAD.l}" y1="${yBase}" x2="${W-PAD.r}" y2="${yBase}" stroke="var(--border2)" stroke-width="1"/>`;
+  grid+=`<text x="${PAD.l-3}" y="${yBase+3.5}" text-anchor="end" font-size="8" fill="var(--dim)">0</text>`;
+  ticks.forEach(v=>{
+    const y=PAD.t+cH*(1-v/top);
     grid+=`<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
-    grid+=`<text x="${PAD.l-3}" y="${y+3.5}" text-anchor="end" font-size="8" fill="var(--dim)">${val}</text>`;
+    grid+=`<text x="${PAD.l-3}" y="${y+3.5}" text-anchor="end" font-size="8" fill="var(--dim)">${v}</text>`;
   });
   buckets.forEach((b,i)=>{
     const x=PAD.l+i*(bW+gap)+gap/2;
-    const bH=b.count===0?0:Math.max(2,cH*(b.count/maxC));
+    const bH=b.count===0?0:Math.max(2,cH*(b.count/top));
     const y=PAD.t+cH-bH;
     bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bW.toFixed(1)}" height="${bH.toFixed(1)}" rx="2" fill="${b.count?'var(--accent)':'var(--border2)'}" opacity="${b.count?'.75':'1'}"/>`;
     if(b.label)labels+=`<text x="${(x+bW/2).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="8" fill="var(--muted)">${b.label}</text>`;
@@ -6677,21 +6777,42 @@ function perfChart(p,data,asPercent){
   var ttl=document.createElement('div');ttl.className='perf-chart-title';
   ttl.innerHTML='<span>'+p.name+'</span><span class="best">best '+best+(asPercent?'%':'/'+p.max)+'</span>';
   box.appendChild(ttl);
-  var W=520,H=190,padL=40,padR=16,padT=14,padB=30,n=data.length;
+  /* Legacy Core modules plot 22-23 sittings against the modern spec's 6-8, so the x labels
+     went from comfortable to unreadable: at 23 points the spacing is 21px and "January 2005"
+     measures about 65px, i.e. every label sat on top of two neighbours. Two fixes, applied
+     only when they are needed, so the sparse modules are untouched:
+       · shorten the label — "January 2005" → "Jan 05", "Specimen" → "Spec";
+       · if that still does not fit, rotate 45°, which drops the horizontal footprint to
+         roughly the font size (~13px) and clears 21px spacing with room to spare.
+     JetBrains Mono advances ~0.6em, so the width estimate is characters × fontSize × 0.6. */
+  var FS=9, CHAR_W=FS*0.6;
+  function shortYear(y){
+    if(y==='Specimen') return 'Spec';
+    var m=/^([A-Za-z]+)\s+(\d{4})$/.exec(y);
+    return m ? m[1].slice(0,3)+' '+m[2].slice(2) : y;
+  }
+  var labels=data.map(function(d){return shortYear(d.year);});
+  var widest=labels.reduce(function(a,b){return b.length>a.length?b:a;},'').length*CHAR_W;
+  var W=520,padL=40,padR=16,padT=14,n=data.length;
+  var spacing=n<=1?W:(W-padL-padR)/(n-1);
+  var tilt=widest>spacing;
+  var padB=tilt?46:30, H=tilt?206:190;
   function X(i){return n<=1?padL+(W-padL-padR)/2:padL+i*(W-padL-padR)/(n-1);}
   function Y(v){return padT+(1-v/unitMax)*(H-padT-padB);}
   var svg='<svg class="perf-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
   [0,0.25,0.5,0.75,1].forEach(function(f){
     var yy=Y(unitMax*f);
     svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" style="stroke:var(--border)" stroke-width="1"/>';
-    svg+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" text-anchor="end" font-size="9" font-family="monospace" style="fill:var(--muted)">'+Math.round(unitMax*f)+(asPercent?'%':'')+'</text>';
+    svg+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" text-anchor="end" font-size="'+FS+'" font-family="monospace" style="fill:var(--muted)">'+Math.round(unitMax*f)+(asPercent?'%':'')+'</text>';
   });
   var pts=data.map(function(d,i){return X(i)+','+Y(val(d));}).join(' ');
   svg+='<polyline points="'+pts+'" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
   data.forEach(function(d,i){
     svg+='<circle cx="'+X(i)+'" cy="'+Y(val(d))+'" r="'+(d.done?4:3)+'" style="'+(d.done?'fill:var(--accent);stroke:var(--accent)':'fill:var(--surface);stroke:var(--accent)')+'" stroke-width="2"/>';
-    svg+='<text x="'+X(i)+'" y="'+(H-padB+15)+'" text-anchor="middle" font-size="9" font-family="monospace" style="fill:var(--muted)">'+(d.year==='Specimen'?'Spec':d.year)+'</text>';
-    if(d.done)svg+='<text x="'+X(i)+'" y="'+(Y(val(d))-8)+'" text-anchor="middle" font-size="9" font-family="monospace" style="fill:var(--text)">'+val(d)+(asPercent?'%':'')+'</text>';
+    var lx=X(i), ly=H-padB+15;
+    svg+='<text x="'+lx+'" y="'+ly+'" text-anchor="'+(tilt?'end':'middle')+'" font-size="'+FS+'" font-family="monospace" style="fill:var(--muted)"'
+       +(tilt?' transform="rotate(-45 '+lx+' '+ly+')"':'')+'>'+labels[i]+'</text>';
+    if(d.done)svg+='<text x="'+X(i)+'" y="'+(Y(val(d))-8)+'" text-anchor="middle" font-size="'+FS+'" font-family="monospace" style="fill:var(--text)">'+val(d)+(asPercent?'%':'')+'</text>';
   });
   svg+='</svg>';
   var holder=document.createElement('div');holder.innerHTML=svg;box.appendChild(holder.firstElementChild);

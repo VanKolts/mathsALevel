@@ -266,6 +266,8 @@ Tapping a topic opens the **study modal**, where rating how a review went (1–5
 
 The **exam timer opens paused** (`timerState.running=false`, button reads `Start`). It used to start on `openTimer()`, so the clock ran while you found a pen and opened the PDF and every logged `timeTakenMin` was inflated. `timerLabel()` returns `Start` while `remaining===total` and `Resume` after, so a paused timer never claims to have been running; `timerReset()` returns to full duration *paused*, matching the open state.
 
+> **Two chart-legibility fixes, 2026-08-18.** The performance chart plots one point per sitting, and legacy Core modules have 22–23 of them against the modern spec's 6–8: at 21px of spacing, a label reading "January 2005" measures about 65px, so every one sat on top of two neighbours. Labels are now shortened (`January 2005` → `Jan 05`, `Specimen` → `Spec`) and tilted 45° — but only when the measured widest label exceeds the spacing, so the sparse modules are untouched and keep their horizontal labels. The Mistakes trend chart had the opposite problem: it drew quartiles of an integer maximum, so a maximum of 1 labelled the axis `0, 1, 1, 1` and a maximum of 3 gave `1, 2, 2, 3`. `niceTicks()` picks whole-number steps from the 1-2-2.5-5-10 sequence, choosing the one whose tick count lands closest to four, and a zero baseline was added so short bars have something to sit on.
+
 **Technical:** the app ships a `PAPER_QUESTIONS` table — for **every** supported paper, an array of `{q, marks, topics:[…]}` giving each question's mark tariff and the exact topic(s) it examines. When you log marks per question, those lost marks are attributed to specific topics; results are stored in `localStorage['alevel-paperlog-v1']` and cross-referenced against `GRADE_BOUNDARIES` to show your grade. This per-question data is what powers the Leaks report below. Coverage is validated so **every paper's marks sum to its real total** and every topic string matches the canonical topic names.
 
 ### 3. ❌ Mistakes — `#page-mistakes`
@@ -277,6 +279,12 @@ The **exam timer opens paused** (`timerState.running=false`, button reads `Start
 **Visual:** turns all your logged papers into a ranked report — **marks lost per topic**, a **grade-impact headline** ("these leaks cost you ~1 grade"), and a **"revise first" ordering** by how often each topic bleeds marks.
 
 **Technical:** it aggregates the per-question paper-log data (not summed row totals — computed per *question* so multi-topic questions don't double-count), ranks topics by total marks lost and frequency, and maps the recoverable marks onto grade boundaries.
+
+### 4a. Practice links
+
+Each topic's **Worksheets on PMT** button resolves through `practiceLinkFor(name)`: a per-topic override first (`TOPIC_PMT_OVERRIDE`, used for Stats and Mechanics, which span several PMT pages), then `PRACTICE_LINKS[clusterId]`, then the A-Level index as a fallback.
+
+> **`PRACTICE_LINKS` was keyed by cluster ids that no longer existed.** It still used `proof`, `algebra`, `coord`, `seq`, `trig`, `exp`, `diff`, `integ`, `num`, `vec` — the pre-July-2026 names, every one of them replaced by `p1cN` / `p2cN` when Pure was split by textbook chapter. The lookup therefore missed for all of them and **271 of 315 topics** silently landed on the generic index; only the 44 with an explicit override still worked. Re-keyed on 2026-08-18 onto the same ten destination URLs, taking it to 208 working. Nothing can catch this automatically — a wrong-but-plausible link looks exactly like a right one — so **add the entry whenever you add a cluster**.
 
 ### 5. 📊 Statistics — `#stats-overlay`
 **Visual:** the honest audit, opened from the bar-chart icon in the nav rail (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
@@ -428,13 +436,14 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-streak-v1` | study-streak counter — still recorded and synced, but no longer displayed; the 🔥 chip was removed with the tab bar. `weeksMet` still feeds the Checklist's today-card line |
 | `alevel-gemini-key-v1` | your Google Gemini API key |
 | `alevel-fm-options-v1` | Further Maths module choices |
-| `alevel-plainlang-v1` | plain-language toggle |
+| `alevel-plainlang-v1` | plain-language toggle — **parked**: the setting is hidden and `loadPlainLang()` forces `false`, but the stored value is deliberately left intact so the preference survives until the feature is finished. It claimed to replace the technical memory vocabulary app-wide and actually reworded six strings |
 | `alevel-pomo-presets-v1` | study-timer presets |
 | `alevel-shortcuts-v1` | UI shortcuts config |
 | `alevel-onboarded-v1` | onboarding-seen flag |
 | `alevel-exam-off` | exam ramping switched off (cleared via a `keys` tombstone, so the choice propagates) |
 | `alevel-practiceq-v1` | cached AI-generated practice questions, last 8 per topic (device-local) |
 | `msh-theme` | active theme |
+| `msh-last-mistake-topic` | the topic last logged against, restored into the Mistakes form on load. Device-local: `SYNC_KEYS` is an allow-list, so a UI preference never becomes something two devices argue about |
 | `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
 | `alevel-imgpending-v1` | photo ids awaiting upload (device-local — deliberately not synced) |
 | `mh_stamp`, `mh_writer` | sync bookkeeping (last-write timestamp + which device wrote) |
@@ -906,6 +915,7 @@ Before `npm run deploy`, for the change you just made:
 Honest list of what doesn't work yet, so nothing here looks like a bug you have to rediscover.
 
 - **Grade boundaries are A-Level only.** `GRADE_BOUNDARIES` contains a single module (`alevel`), and `getGradeForMarks()` returns `null` for anything else. Logging an AS, Further Maths or legacy Core paper records the marks correctly but shows no grade — 120 of the 142 supported papers. Adding `as`, `fmcp` and the legacy boundaries is the highest-value data job outstanding.
+- **Further Maths has no PMT page map.** `PRACTICE_LINKS` covers the 26 Pure chapters and `TOPIC_PMT_OVERRIDE` the 44 Stats/Mechanics topics, so 208 of 315 topics reach a real revision page; the remaining 107 are all FM clusters and fall through to the A-Level index. Adding them is data entry against PMT's Further Maths URLs.
 - **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
 - **Accessibility — contrast, type, target sizes and focus management are done; live regions are not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, every control clears SC 2.5.8's 24×24 except two documented exceptions, and as of 2026-08-18 all 23 dialogs trap Tab and restore focus to whatever opened them ([see below](#one-focus-manager-for-every-dialog)). Still outstanding: there is only one `aria-live` region, so most state changes are silent to a screen reader. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
