@@ -27,6 +27,49 @@
      that still has 'ocean-light' saved lands on the light theme rather than falling
      through to dark. Sync can push a retired value back from an older build at any
      time, so the map is applied on every load, not once. -->
+<!-- ============================ TEST MODE ============================
+     A sandbox for looking at the app without signing in and without a real study history.
+     It is a *convenience*, not a security boundary, and it is built so it cannot be one:
+
+       · Everything it does is namespaced. localStorage is shadowed with an `msh-test:`
+         prefix before a single line of app code reads state, so seeded demo data can never
+         land in, or overwrite, real progress. Leaving test mode leaves the real store
+         untouched, byte for byte.
+       · The cloud block returns early, exactly as it does when the SDK fails to load. No
+         auth, no listener, no push — test mode cannot read or write anybody's cloud data.
+       · It lives in sessionStorage, so it ends when the tab does.
+
+     The password check is obfuscation, not protection: this is a public static site, so
+     anyone determined can read the hash out of the source and the app has no server to
+     check anything against. That is acceptable precisely because there is nothing behind
+     the gate worth protecting — the sandbox reaches no real data. The password is in the
+     vault at `projects/maths a-level tool/Test mode.md`; it is deliberately NOT in the
+     README, which is public.
+     ================================================================= -->
+<script>
+window.MSH_TEST = (function(){
+  var on=false;
+  try{ on = sessionStorage.getItem('msh-test')==='1'; }catch(e){}
+  if(!on) return false;
+  /* Shadow the three accessors on the localStorage *instance*. They live on Storage.prototype,
+     so an own property on the instance shadows them without touching sessionStorage, which the
+     test flag itself lives in. This has to happen here, above every other script, because the
+     theme boot script two lines down already reads a key. */
+  try{
+    var LS=window.localStorage, P='msh-test:';
+    var _g=LS.getItem.bind(LS), _s=LS.setItem.bind(LS), _r=LS.removeItem.bind(LS);
+    LS.getItem=function(k){ return _g(P+k); };
+    LS.setItem=function(k,v){ return _s(P+k,v); };
+    LS.removeItem=function(k){ return _r(P+k); };
+    window.MSH_TEST_RAW={get:_g,set:_s,remove:_r,prefix:P};
+    // Land on the app, not on the intro — going straight to what you need is the point.
+    // The intro is still reachable on purpose, from the panel's "Go to" list.
+    if(!_g(P+'alevel-onboarded-v1')) _s(P+'alevel-onboarded-v1','1');
+  }catch(e){ console.warn('[test] could not namespace storage — refusing to run',e); return false; }
+  document.documentElement.setAttribute('data-test','1');
+  return true;
+})();
+</script>
 <script>(function(){var M={'ocean-dark':'rose-dark','violet-dark':'rose-dark','pure-black':'rose-dark','ocean-light':'pure-white','violet-light':'pure-white'};
 var t=localStorage.getItem('msh-theme');
 if(t&&M[t]){t=M[t];try{localStorage.setItem('msh-theme',t);}catch(e){}}
@@ -2524,10 +2567,20 @@ function _dayMs(d){
    second: within a single render the answer is computed once, and the day can never be stale
    by more than a second at midnight. */
 var _todayVal='', _todayAt=0;
+/* Test mode's time machine. Every date in the app is derived from today(), so one integer
+   here moves the whole model: due dates, memory percentages, statuses, the exam ramp, the
+   forgetting curve. Always 0 outside test mode — one truthy check per second of wall clock,
+   which is why it is safe to leave in the shipped file rather than maintain a second build.
+   Set it through mshTestSetDay(), never directly: the memo below and the memory caches all
+   key off today() and have to be dropped together. */
+var _testDayShift=0;
 function today(){
   const t=Date.now();
   if(_todayVal && t-_todayAt<1000) return _todayVal;
-  _todayAt=t; return (_todayVal=ymd(new Date()));
+  _todayAt=t;
+  var d=ymd(new Date());
+  if(_testDayShift) d=addDays(d,_testDayShift);
+  return (_todayVal=d);
 }
 function addDays(d,n){const x=new Date(_dayMs(d));x.setDate(x.getDate()+n);return ymd(x);}
 // Noon anchoring keeps the difference within an hour of a whole number of days, so the round
@@ -3156,7 +3209,7 @@ function renderReviewPanel(){
   shown.forEach(item=>{
     const row=document.createElement('div');row.className='rev-item';
     const dot=document.createElement('div');dot.className='rev-dot dot-'+item.status;
-    const name=document.createElement('span');name.className='rev-name';name.textContent=item.name;
+    const name=document.createElement('span');name.className='rev-name';name.textContent=item.name;name.title=item.name;
     const si=strengthInfo(item.name);
     const stage=document.createElement('span');stage.className='rev-stage';
     stage.textContent=(si.pct!=null?si.pct+'% ':'')+'x'+(item.rec.reps||0);
@@ -5078,7 +5131,8 @@ function buildClusterCard(c,vis,openIds){
     row.setAttribute('aria-label',t.name+(rec?', studied':', not studied')+(status?', '+status:''));
 
     const chkbox=document.createElement('div');chkbox.className='checkbox'+(rec?' checked':'');chkbox.setAttribute('aria-hidden','true');
-    const tname=document.createElement('span');tname.className='topic-name';tname.textContent=t.name;
+    // One line with an ellipsis on desktop, so the full name has to be reachable somehow.
+    const tname=document.createElement('span');tname.className='topic-name';tname.textContent=t.name;tname.title=t.name;
     const right=document.createElement('div');right.className='topic-right';
 
     // Shape as well as colour — see .diff-pip in styles.css (SC 1.4.1, Level A).
@@ -6856,6 +6910,264 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
   }
   document.querySelectorAll('.rating-slider,.pp-slider,.plog-slider').forEach(enhance);
 })();
+
+//                                                           
+// TEST MODE — the sandbox panel
+//                                                           
+/* Everything below runs only when window.MSH_TEST is true (see the shim at the top of the
+   file, which namespaces localStorage before any app code reads it). Two rules held
+   throughout: the sandbox must never be able to touch real data, and it must never be
+   mistakable for the real app — hence the permanent banner.
+
+   The point of it is not "skip the login". It is to make the *model* visible. This app's
+   whole behaviour is a function of dates, and waiting three weeks to see an interval land
+   is not a test. So the panel can seed a plausible history, move the clock, and show what
+   the engine derived — which is the part you otherwise have to take on faith. */
+
+// The password gate. Obfuscation, not protection — the note at the top of this file says why.
+const MSH_TEST_HASH='c905247afcbd5d7d743c1c7242e26051eb164c4129a117215b3f071e9a386ea5';
+async function mshSha256(txt){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+/* Opened from the login gate's "Testing mode" link, or by putting ?test on the URL — the
+   second matters because when the Firebase SDK fails to load there is no gate to click. */
+window.mshTestPrompt=async function(){
+  if(window.MSH_TEST) return;
+  const pw=window.prompt('Testing mode — password:');
+  if(pw===null) return;
+  let ok=false;
+  try{ ok=(await mshSha256(pw.trim()))===MSH_TEST_HASH; }
+  catch(e){ alert('This browser cannot check the password (crypto.subtle needs https or localhost).'); return; }
+  if(!ok){ alert('Wrong password.'); return; }
+  try{ sessionStorage.setItem('msh-test','1'); }catch(e){ alert('sessionStorage is blocked, so test mode cannot start.'); return; }
+  location.reload();
+};
+if(!window.MSH_TEST && /[?&]test\b/.test(location.search)) setTimeout(window.mshTestPrompt,300);
+
+/* Move the app's clock. Everything derived — due dates, memory %, status, the exam ramp —
+   is a function of today(), so this one integer moves the entire model. The caches keyed on
+   the day have to be dropped together with it, which is the only reason this is a function
+   rather than an assignment. */
+window.mshTestSetDay=function(shift){
+  _testDayShift=shift|0;
+  _todayVal='';                       // drop the one-second memo
+  _memDay=''; _mlDay='';              // force the per-day memory + mistake-load caches to rebuild
+  invalidateMistakeLoad();            // also calls invalidateMemory()
+  mshTestRefresh();
+};
+function mshTestRefresh(){
+  ['renderAll','renderReviewPanel','renderMistakesTab','renderResources','renderSettings',
+   'updateDueBadge','syncExamInputs','renderStats'].forEach(function(f){
+    if(typeof window[f]==='function'){ try{ window[f](); }catch(e){ console.warn('[test] '+f,e); } }
+  });
+  mshTestPaint();
+}
+
+if(window.MSH_TEST) (function(){
+  /* ---- deterministic seeding ----------------------------------------------------------
+     A fixed-seed PRNG, so "realistic" is the *same* realistic every time. A sandbox whose
+     data changes on every reload cannot be used to compare a before against an after. */
+  function rng(seed){ return function(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }; }
+  function dayOff(n){ const d=new Date(); d.setDate(d.getDate()+n); return ymd(d); }
+
+  const PRESETS={
+    empty:    {label:'Empty',      topics:0,   mistakes:0,   papers:0},
+    light:    {label:'Just started',topics:40, mistakes:12,  papers:2},
+    realistic:{label:'Mid-year',   topics:220, mistakes:180, papers:25},
+    heavy:    {label:'Exam run-in',topics:315, mistakes:400, papers:60}
+  };
+  function seed(kind){
+    const p=PRESETS[kind]; const r=rng(42);
+    const names=allTopics.map(t=>t.name);
+    const sr2={};
+    names.slice(0,p.topics).forEach(function(n,i){
+      const reps=1+Math.floor(r()*6), log=[];
+      for(let k=0;k<reps;k++) log.push({id:'r'+i+'_'+k,date:dayOff(-(reps-k)*7-Math.floor(r()*5)),grade:1+Math.floor(r()*5),r:0.9,elapsed:5});
+      sr2[n]={D:3+r()*6,S:1+r()*200,last:dayOff(-Math.floor(r()*90)-1),reps:reps,lapses:Math.floor(r()*2),log:log};
+    });
+    const cats=Object.keys(MISTAKE_EVIDENCE), ms=[];
+    for(let i=0;i<p.mistakes;i++) ms.push({id:'m'+i,topic:names[Math.floor(r()*names.length)],
+      cat:cats[Math.floor(r()*cats.length)],severity:1+Math.floor(r()*5),date:dayOff(-Math.floor(r()*120)),note:''});
+    const plog=[]; let n=0;
+    outer: for(const mod of Object.keys(PAPER_QUESTIONS||{})){
+      for(const y of Object.keys(PAPER_QUESTIONS[mod])){
+        for(const pn of Object.keys(PAPER_QUESTIONS[mod][y])){
+          const qs=PAPER_QUESTIONS[mod][y][pn], qMarks={};
+          qs.forEach(function(q){ qMarks[q.q]=Math.round(q.marks*(0.45+r()*0.55)); });
+          plog.push({id:'p'+(n++),moduleId:mod,year:y,paperN:pn,date:dayOff(-Math.floor(r()*150)),qMarks:qMarks});
+          if(n>=p.papers) break outer;
+        }
+      }
+    }
+    localStorage.setItem('alevel-sr-v5',JSON.stringify(sr2));
+    localStorage.setItem('alevel-mistakes-v2',JSON.stringify(ms));
+    localStorage.setItem('alevel-paperlog-v1',JSON.stringify(plog));
+    localStorage.setItem('alevel-onboarded-v1','1');
+    location.reload();
+  }
+
+  // ---- where you can jump straight to -------------------------------------------------
+  const JUMPS=[
+    ['Checklist',        ()=>switchTab('checklist')],
+    ['Mistakes',         ()=>switchTab('mistakes')],
+    ['Past Papers',      ()=>switchTab('papers')],
+    ['Study modal',      ()=>{ const t=(activeTopics().find(x=>sr[x.name])||activeTopics()[0]); openModal(t.name); }],
+    ['Statistics',       ()=>openStats()],
+    ['Settings',         ()=>openSettings()],
+    ['Revision plan',    ()=>openPlanner()],
+    ['My exams',         ()=>openMyExams()],
+    ['Resources',        ()=>openResources()],
+    ['Glossary',         ()=>openGlossary()],
+    ['Formula sheet',    ()=>openFormula()],
+    ['Focus timer',      ()=>openPomodoro()],
+    ['AI tutor',         ()=>openTutor()],
+    ['Tools',            ()=>openMore()],
+    ['Onboarding',       ()=>openOnboarding()]
+  ];
+
+  // ---- panel --------------------------------------------------------------------------
+  const css=document.createElement('style');
+  css.textContent=
+   '#msh-test-bar{position:fixed;top:0;left:0;right:0;z-index:100000;height:26px;display:flex;align-items:center;gap:10px;'
+  +'padding:0 12px;font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:.06em;color:#160b10;'
+  +'background:repeating-linear-gradient(135deg,#fbbf24 0 12px,#f59e0b 12px 24px);}'
+  +'#msh-test-bar .grow{flex:1;}'
+  +'#msh-test-bar button{font:inherit;border:1px solid rgba(0,0,0,.35);background:rgba(0,0,0,.12);color:#160b10;'
+  +'border-radius:5px;padding:3px 8px;cursor:pointer;}'
+  +'body{padding-top:26px!important;}'
+  +'#msh-test{position:fixed;right:12px;bottom:12px;z-index:100000;width:310px;max-height:78vh;overflow:auto;'
+  +'background:var(--surface,#24101a);border:1px solid var(--border2,rgba(255,255,255,.15));border-radius:12px;'
+  +'box-shadow:0 18px 50px rgba(0,0,0,.5);font:12px/1.45 "JetBrains Mono",monospace;color:var(--text,#fff1f2);}'
+  +'#msh-test.min{max-height:34px;overflow:hidden;width:150px;}'
+  +'#msh-test h4{margin:0;padding:9px 11px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;'
+  +'color:var(--muted,#b08c99);border-bottom:1px solid var(--border,rgba(255,255,255,.07));cursor:pointer;'
+  +'display:flex;align-items:center;justify-content:space-between;}'
+  +'#msh-test section{padding:9px 11px;border-bottom:1px solid var(--border,rgba(255,255,255,.07));}'
+  +'#msh-test section:last-child{border-bottom:none;}'
+  +'#msh-test .lbl{color:var(--muted,#b08c99);font-size:10px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px;}'
+  +'#msh-test .row{display:flex;flex-wrap:wrap;gap:4px;}'
+  +'#msh-test button{font:inherit;border:1px solid var(--border2,rgba(255,255,255,.15));background:var(--surface2,#2e1522);'
+  +'color:var(--text,#fff1f2);border-radius:6px;padding:4px 7px;cursor:pointer;}'
+  +'#msh-test button:hover{border-color:var(--accent,#fb923c);}'
+  +'#msh-test button.on{background:linear-gradient(90deg,var(--spectrum));color:var(--on-spectrum,#160b10);border-color:transparent;font-weight:700;}'
+  +'#msh-test select{width:100%;font:inherit;background:var(--surface2,#2e1522);color:var(--text,#fff1f2);'
+  +'border:1px solid var(--border2,rgba(255,255,255,.15));border-radius:6px;padding:4px 6px;}'
+  +'#msh-test pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11px;color:var(--muted,#b08c99);}'
+  +'#msh-test .big{font-size:13px;color:var(--text,#fff1f2);font-weight:700;}';
+  document.head.appendChild(css);
+
+  const bar=document.createElement('div'); bar.id='msh-test-bar';
+  bar.innerHTML='<span>TEST MODE</span><span class="grow" id="msh-test-day"></span>'
+    +'<button id="msh-test-exit" type="button">Exit</button>';
+  const panel=document.createElement('div'); panel.id='msh-test';
+  panel.innerHTML=
+    '<h4 id="msh-test-hd"><span>Sandbox</span><span id="msh-test-caret">–</span></h4>'
+   +'<section><div class="lbl">Data</div><div class="row" id="msh-test-seed"></div>'
+     +'<pre id="msh-test-counts"></pre></section>'
+   +'<section><div class="lbl">Clock</div><div class="row" id="msh-test-time"></div>'
+     +'<pre id="msh-test-date"></pre></section>'
+   +'<section><div class="lbl">Go to</div><select id="msh-test-jump"></select></section>'
+   +'<section><div class="lbl">Inspect a topic</div><select id="msh-test-topic"></select>'
+     +'<pre id="msh-test-inspect"></pre></section>'
+   +'<section><div class="lbl">Render cost</div><div class="row">'
+     +'<button type="button" id="msh-test-perf">Measure</button>'
+     +'<button type="button" id="msh-test-theme">Next theme</button></div>'
+     +'<pre id="msh-test-perfout"></pre></section>'
+   +'<section><div class="row"><button type="button" id="msh-test-wipe">Wipe sandbox</button></div></section>';
+
+  function mount(){
+    document.body.appendChild(bar); document.body.appendChild(panel);
+    Object.keys(PRESETS).forEach(function(k){
+      const b=document.createElement('button'); b.type='button'; b.textContent=PRESETS[k].label;
+      b.onclick=function(){ seed(k); }; document.getElementById('msh-test-seed').appendChild(b);
+    });
+    [['−90',-90],['−30',-30],['−7',-7],['−1',-1],['Now',null],['+1',1],['+7',7],['+30',30],['+90',90]]
+      .forEach(function(p){
+        const b=document.createElement('button'); b.type='button'; b.textContent=p[0];
+        b.onclick=function(){ mshTestSetDay(p[1]===null?0:_testDayShift+p[1]); };
+        document.getElementById('msh-test-time').appendChild(b);
+      });
+    const jump=document.getElementById('msh-test-jump');
+    jump.innerHTML='<option value="">— pick a surface —</option>'+JUMPS.map(function(j,i){return '<option value="'+i+'">'+j[0]+'</option>';}).join('');
+    jump.onchange=function(){ const i=this.value; this.value=''; if(i==='')return; try{ JUMPS[i][1](); }catch(e){ alert('Could not open it: '+e.message); } };
+
+    const tsel=document.getElementById('msh-test-topic');
+    tsel.innerHTML='<option value="">— pick a topic —</option>'+activeTopics().map(function(t){return '<option>'+t.name.replace(/</g,'&lt;')+'</option>';}).join('');
+    tsel.onchange=function(){ mshTestInspect(this.value); };
+
+    document.getElementById('msh-test-hd').onclick=function(){
+      panel.classList.toggle('min');
+      document.getElementById('msh-test-caret').textContent=panel.classList.contains('min')?'+':'–';
+    };
+    document.getElementById('msh-test-exit').onclick=function(){
+      try{ sessionStorage.removeItem('msh-test'); }catch(e){}
+      location.reload();
+    };
+    document.getElementById('msh-test-theme').onclick=function(){
+      const ks=Object.keys(THEME_META); applyTheme(ks[(ks.indexOf(activeTheme)+1)%ks.length]);
+    };
+    document.getElementById('msh-test-perf').onclick=mshTestPerf;
+    document.getElementById('msh-test-wipe').onclick=function(){
+      // Only ever clears the sandbox's own prefix. The real store has no key in common with it.
+      if(!confirm('Clear the sandbox? Your real study data is in a separate namespace and is not touched.')) return;
+      const R=window.MSH_TEST_RAW, kill=[];
+      for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.indexOf(R.prefix)===0) kill.push(k); }
+      kill.forEach(R.remove); location.reload();
+    };
+    mshTestPaint();
+  }
+
+  window.mshTestInspect=function(name){
+    const out=document.getElementById('msh-test-inspect');
+    if(!name){ out.textContent=''; return; }
+    const rec=memoryFor(name), stored=sr[name];
+    if(!validRec(rec)){ out.textContent='not started'; return; }
+    const r=currentRetrievability(name);
+    const lines=[
+      Math.round(r*100)+'% recall · '+statusFor(name)+(isMastered(name)?' · mastered':''),
+      'S '+rec.S.toFixed(1)+'d   D '+rec.D.toFixed(1)+'   reps '+rec.reps+'   lapses '+rec.lapses,
+      'last '+rec.last+'   due '+dueDateFor(name),
+      'target retention '+(targetRetention(name)*100).toFixed(1)+'%',
+      // The stored record is reviews-only; the gap is what the mistakes and papers did to it.
+      'stored S '+(stored&&stored.S!=null?stored.S.toFixed(1):'—')+'d → derived '+rec.S.toFixed(1)+'d',
+      '',
+      // newest first, matching the study modal — the thing that just moved them is what you want
+      ...evidenceTrail(name).slice().reverse().slice(0,6).map(e=>e.date+'  '+e.label+'  '+(e.detail||''))
+    ];
+    out.textContent=lines.join('\n');
+  };
+
+  function mshTestPerf(){
+    const med=function(fn,n){ for(let i=0;i<8;i++)fn(); const a=[]; for(let i=0;i<n;i++){const t=performance.now();fn();a.push(performance.now()-t);} a.sort((x,y)=>x-y); return a[Math.floor(n/2)].toFixed(1); };
+    document.getElementById('msh-test-perfout').textContent=
+      'renderAll        '+med(renderAll,15)+' ms\n'+
+      'reviewPanel      '+med(renderReviewPanel,15)+' ms\n'+
+      'mistakesTab      '+med(renderMistakesTab,15)+' ms\n'+
+      'stats            '+med(renderStats,10)+' ms\n'+
+      'full refresh     '+med(function(){renderAll();renderReviewPanel();renderMistakesTab();updateDueBadge();},15)+' ms'+
+      (document.hidden?'\n(tab is hidden — throttled)':'');
+  }
+
+  window.mshTestPaint=function(){
+    const real=ymd(new Date()), sim=today();
+    const dayEl=document.getElementById('msh-test-day');
+    if(dayEl) dayEl.textContent='sandboxed · no cloud'+(_testDayShift?('  ·  clock '+(_testDayShift>0?'+':'')+_testDayShift+'d → '+sim):'');
+    const d=document.getElementById('msh-test-date');
+    if(d) d.innerHTML='<span class="big">'+sim+'</span>'+(_testDayShift?('\nreal date '+real+'  ('+(_testDayShift>0?'+':'')+_testDayShift+'d)'):'\nreal time');
+    const c=document.getElementById('msh-test-counts');
+    if(c){
+      const studied=activeTopics().filter(t=>sr[t.name]).length;
+      const due=activeTopics().filter(t=>{const s=statusFor(t.name);return s==='due'||s==='overdue';}).length;
+      c.textContent=studied+' studied · '+due+' due/overdue · '+mistakes.length+' mistakes · '+paperLog.length+' papers';
+    }
+    const sel=document.getElementById('msh-test-topic');
+    if(sel&&sel.value) mshTestInspect(sel.value);
+  };
+
+  if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount);
+})();
+
 </script>
 
 <!-- ===================== Firebase cloud sync (email/password) ===================== -->
@@ -6872,6 +7184,10 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
     messagingSenderId: "522673793917",
     appId: "1:522673793917:web:3b632eb29e023972a57a14"
   };
+  /* Test mode takes the same exit the missing-SDK path takes: no auth, no gate, no listener,
+     no push. The sandbox therefore cannot read or write any real cloud data, which is what
+     makes a client-side password acceptable — there is nothing behind it to protect. */
+  if(window.MSH_TEST){ console.info('[cloud] test mode — sync disabled, storage namespaced'); return; }
   if(typeof firebase==='undefined'){ console.warn('[cloud] Firebase SDK did not load — app runs in local-only mode'); return; }
   firebase.initializeApp(firebaseConfig);
   var auth=firebase.auth(), db=firebase.firestore();
@@ -7269,7 +7585,9 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       +'#mh-login .toggle{margin-top:15px;text-align:center;font-size:.82rem;color:var(--muted,#b89aa6);}'
       +'#mh-login .toggle a{color:#fb923c;cursor:pointer;text-decoration:underline;}'
       +'#mh-login .err{margin-top:12px;font-size:.8rem;color:#f87171;min-height:1em;}'
-      +'#mh-login .loading{color:var(--muted,#b89aa6);font-size:.9rem;padding:8px 0;}';
+      +'#mh-login .loading{color:var(--muted,#b89aa6);font-size:.9rem;padding:8px 0;}'
+      +'#mh-login .testlink{margin-top:22px;text-align:center;font-size:.72rem;color:rgba(255,255,255,.28);}'
+      +'#mh-login .testlink a{color:inherit;cursor:pointer;text-decoration:underline;}';
     document.head.appendChild(st);
     ov=document.createElement('div'); ov.id='mh-login';
     ov.innerHTML='<div class="card"><div class="brand">ƒx</div>'
@@ -7281,8 +7599,15 @@ function syncSpringSliders(){_springSyncFns.forEach(function(f){f();});}
       +'<div class="err" id="mh-err"></div>'
       +'<button class="go" id="mh-go">Log in</button>'
       +'<div class="toggle" id="mh-toggle"></div>'
+      /* Deliberately quiet: a student who reaches this screen should see a login, not an
+         invitation to poke at a sandbox. It is the honest place for it though — the whole
+         point is to get past this gate without an account. */
+      +'<div class="testlink"><a id="mh-testmode">Testing mode</a></div>'
       +'</div></div>';
     document.body.appendChild(ov);
+    document.getElementById('mh-testmode').onclick=function(){
+      if(typeof window.mshTestPrompt==='function') window.mshTestPrompt();
+    };
 
     var mode='login';
     function setMode(m){ mode=m;

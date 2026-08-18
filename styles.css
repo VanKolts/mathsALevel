@@ -82,7 +82,6 @@
      right, leaving up to 930px of dead space between a topic and its controls.
      NN/g's lawn-mower eyetracking work found that distance between a row label
      and its values makes users break their scan pattern and lose their row. */
-  --row-name-max:24rem;
 
   /* Minimum comfortable touch target. */
   --tap:44px;
@@ -346,7 +345,7 @@ h1 em{font-style:italic;}
 .dot-overdue{background:var(--overdue);}
 .dot-due{background:var(--due);}
 .dot-upcoming{background:var(--upcoming);}
-.rev-name{flex:1 1 0;max-width:var(--row-name-max);color:var(--text);}
+.rev-name{flex:1 1 0;min-width:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rev-stage{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--dim);margin-right:2px;}
 .rev-date{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);}
 .rev-date.overdue{color:var(--overdue);}
@@ -471,9 +470,9 @@ main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 /* Two columns once there is room for them. Baymard's responsive-upscaling
    research is the source for the shape of this fix: on large screens, repackage
    the same content into more columns rather than stretching each row wider.
-   Widening rows would have made the label-to-value distance worse, which is the
-   thing the --row-name-max cap exists to fix. Section headers span both columns,
-   so the DOM stays flat and no JS changed. */
+   Widening rows would have made the label-to-value distance worse — the thing the
+   name column exists to close, by filling the row up to the metadata. Section
+   headers span both columns, so the DOM stays flat and no JS changed. */
 @media (min-width:1500px){
   #clusters-container{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start;}
   #clusters-container > .qual-header,
@@ -507,8 +506,18 @@ main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .topic-row:hover .checkbox{border-color:var(--accent);}
 .checkbox.checked{background:var(--accent);border-color:var(--accent);}
 .checkbox.checked::after{content:'';display:block;width:3px;height:6px;border:1.5px solid #fff;border-top:none;border-left:none;transform:rotate(40deg) translateY(-1px);}
-.topic-name{font-size:var(--fs-sm);color:var(--text);flex:1 1 0;max-width:var(--row-name-max);padding:8px 0;line-height:1.5;}
-.topic-right{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+/* The name takes every pixel up to the metadata, on one line, ellipsed if it still will
+   not fit. It used to stop at a 24rem cap, which left the row's last ~170px empty and the
+   metadata floating in the middle of it. That cap was there for the right reason — NN/g's
+   lawn-mower work found that a wide gap between a label and its values makes people lose
+   their row — but capping the name is only one way to close the gap. Filling it with the
+   name is the other, and it keeps the metadata at a predictable right edge where the eye
+   can run down a single column. Nothing is left floating in between either way.
+   Mobile keeps wrapping: there is no gap to fill down there, and the name gets ~103px, so
+   one line would show about twelve characters. See the media query below. */
+.topic-name{font-size:var(--fs-sm);color:var(--text);flex:1 1 0;min-width:0;padding:8px 0;line-height:1.5;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.topic-right{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;}
 /* The difficulty pip encoded Standard/Challenging/Hard as green/amber/red and
    nothing else. Red-green is the exact axis ~8% of men cannot resolve (NEI;
    Wong 2011, Nature Methods), so for them the three states collapsed into one
@@ -856,7 +865,10 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Lock the view horizontally — like a native app, vertical scroll only */
   html,body{overflow-x:clip;max-width:100%;}
   body{overscroll-behavior-x:none;padding-left:0;padding-bottom:calc(68px + env(safe-area-inset-bottom));}
-  :root{--wrap:min(100% - 32px, 1360px);--wrap-narrow:min(100% - 32px, 1060px);--row-name-max:none;}
+  :root{--wrap:min(100% - 32px, 1360px);--wrap-narrow:min(100% - 32px, 1060px);}
+  /* No dead space to reclaim on a phone, and the name column is ~103px — one line would
+     truncate almost every topic to about twelve characters. Wrap instead. */
+  .topic-name,.rev-name{white-space:normal;overflow:visible;text-overflow:clip;}
   /* The larger type widened the filter chips enough to reflow this row, which
      collapsed the search field to one character. Give it a floor and its own line. */
   .search-wrap{flex:1 1 100%;min-width:180px;max-width:none;}

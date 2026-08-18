@@ -38,10 +38,11 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.4 All tuning constants](#94-all-tuning-constants)
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
-11. [Editing, building & deploying](#editing-building--deploying)
+11. [Test mode](#test-mode)
+12. [Editing, building & deploying](#editing-building--deploying)
     - [Committing without being asked](#committing-without-being-asked)
-12. [Keeping the documentation in step](#keeping-the-documentation-in-step)
-13. [Known gaps & roadmap](#known-gaps--roadmap)
+13. [Keeping the documentation in step](#keeping-the-documentation-in-step)
+14. [Known gaps & roadmap](#known-gaps--roadmap)
 
 ---
 
@@ -168,7 +169,7 @@ Ocean, Violet and Pure Black were retired once the spectrum became a memory scal
 |---|---|---|
 | Reading measure | `--prose: 70ch` | The prose containers previously permitted ~135 characters per line. [Dyson & Haselgrove (2001)](https://www.sciencedirect.com/science/article/abs/pii/S1071581901904586) found 55 cpl read faster than 25 and comprehended best; Bernard et al. (2002) found 45–76 preferred; [WCAG SC 1.4.8](https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html) (AAA) caps text blocks at 80 |
 | Container width | `--wrap: min(100% - 96px, 1360px)` | Lists get the wider cap so a large monitor shows *more rows*; prose is pinned to the measure above instead. At 2560px the old fixed 1060px cap left 742px of dead margin each side |
-| Label→value distance | `--row-name-max: 24rem` | A Checklist row's metadata was pinned to the far right, leaving up to **930px** between a topic and its controls. [NN/g's lawn-mower eyetracking work](https://www.nngroup.com/articles/lawn-mower-pattern/) found that distance makes users break their scan pattern and lose their row. Now measures 8px |
+| Label→value distance | the name column fills the row | A Checklist row's metadata was pinned to the far right, leaving up to **930px** between a topic and its controls. [NN/g's lawn-mower eyetracking work](https://www.nngroup.com/articles/lawn-mower-pattern/) found that distance makes users break their scan pattern and lose their row. First closed with a 24rem cap on the name; since 2026-08-18 closed the other way, by letting the name grow to meet the metadata — see [Row layout](#row-layout) |
 
 **The scrollbar gutter is always reserved** (`html { scrollbar-gutter: stable }`). Without it, any content change that crosses the "does this page scroll?" line resizes the viewport itself: switching Past Papers to Old Spec made the document taller than the window, the scrollbar appeared, `clientWidth` went 1280 → 1265, and the **entire layout jumped 15px left** — then jumped back on the way out. That is app-wide, not a Past Papers bug; every page that grows or shrinks past the window height had it. It only shows up on machines with classic scrollbars, which is why it is easy to miss — macOS's default overlay scrollbars take no layout space. `scrollbar-gutter` is Safari 18.2+, so an `@supports not` fallback pins `overflow-y: scroll` for older engines, which reserves the same width more bluntly.
 
@@ -200,7 +201,18 @@ Three geometry traps, all of which produced a visibly off-centre thumb:
 
 **The review rows put the action on the right.** `.rev-meta` wraps the recall %, the date and the Test button so the group rides to the far right with `margin-left:auto`, 20px clear of the edge (the row's right padding). Test itself is drawn from the same full-strength spectrum as the nav rail's pill, with `--on-spectrum` carrying its text colour — the ramp is light in the dark theme and dark in the light ones, so one hardcoded colour cannot stay legible across both.
 
-> This deliberately walks back part of the `--row-name-max` work. That cap exists because metadata pinned to the far right of a wide row made people lose their line ([NN/g's lawn-mower pattern](https://www.nngroup.com/articles/lawn-mower-pattern/)). The name column is still capped, so the *name* has not moved; only the action group has. Worth re-checking on a very wide monitor, where the gap between topic and button is largest.
+> Both row types now do this — see [Row layout](#row-layout) below.
+
+### Row layout
+
+**The name fills the row; everything else sits hard right; nothing floats in between.** `.topic-name` and `.rev-name` are `flex:1 1 0` with `min-width:0`, on one line, ellipsed if they still do not fit; `.topic-right` / `.rev-meta` take `margin-left:auto`.
+
+They used to stop at `--row-name-max: 24rem`. Measured on a 1280px window that left the metadata ending at x=851 in a row running to x=1036 — **173px of dead space past the controls**, with the group stranded mid-row. The cap was there for a real reason: [NN/g's lawn-mower work](https://www.nngroup.com/articles/lawn-mower-pattern/) found that a wide gap between a label and its values makes people break their scan and lose the row. But capping the name is only one way to close that gap. Filling it with the name is the other, and it also gives the metadata a predictable right edge to scan down as a column. The token is gone; nothing else used it.
+
+Two consequences, both measured:
+
+- **Long names truncate at narrow column widths.** None of the 315 do at 1280px. Eight do above 1500px, where `#clusters-container` splits into two ~627px columns — all of them Statistics topics that run past 400px, and by less than 15%. Both row types carry a `title`, so the full name is one hover away.
+- **Mobile keeps wrapping.** There is no dead space to reclaim on a phone, and the name column measures ~103px there — one line would show about twelve characters. The media query restores `white-space:normal`.
 
 ### One focus manager for every dialog
 
@@ -722,7 +734,6 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 | `--wrap` | `min(100% - 96px, 1360px)` | container cap for list surfaces (32px gutter on mobile) |
 | `--wrap-narrow` | `min(100% - 96px, 1060px)` | the old cap, kept for narrower surfaces |
 | `--prose` | `70ch` | reading measure for prose blocks |
-| `--row-name-max` | `24rem` | how wide a row's name column grows before its metadata starts (`none` on mobile) |
 | `--rail-w` | `64px` | desktop nav rail width; `body` is padded by exactly this |
 | `--tap` | `44px` | SC 2.5.5 (AAA) target; SC 2.5.8's 24px floor is enforced per-component |
 
@@ -744,6 +755,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **Exam dates:** `activePapers()`, `examDateForComponent(comp)` and `getPaperDates()` are each memoised against `_examSig()` — a cheap string built from raw reads of the track, the paper-date overrides, the FM options and a counter for the fetched defaults. Signature-keyed rather than invalidated by hand, so no future write path can forget to clear them.
 - **Dialogs:** `mhDialogStack` (open order), `mhCloseTopDialog()`, `mhReleaseScroll()` and the `MutationObserver` on `open` that maintains all three — see [One focus manager for every dialog](#one-focus-manager-for-every-dialog).
 - **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
+- **Test mode:** `window.MSH_TEST` (set by the namespacing shim at the top of the file), `mshTestPrompt()`, `mshTestSetDay(n)`, `mshTestInspect(name)`, `mshTestPaint()`, `_testDayShift`. All inert unless the sandbox is running — see [Test mode](#test-mode).
 - **Canvas:** `drawDonut(canvas,entries,legendEl)` plus `_hidpiCanvas(canvas)` (device-pixel-ratio backing store, CSS size cached on the element) and `_themeColor(name,fallback)` (reads a CSS custom property, since a canvas cannot).
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
@@ -756,6 +768,37 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **Google Gemini** — `gemini-2.5-flash` via the student's own key in `localStorage['alevel-gemini-key-v1']`.
 - **Service worker** (`sw.js`) — precaches the shell and `data/*.js`; cache-first with background refresh for MathJax, Google Fonts **and the Firebase SDK on `www.gstatic.com`**; network-first for own files so a push reaches you immediately; explicitly *bypasses* Firestore, Identity Toolkit and Gemini so realtime sync and AI calls are never served stale. Caching the SDK is what makes offline durability real: without it the three `<script>` tags failed offline, `firebase` was undefined, and the sync block bailed out early — taking the `localStorage` hook with it, so offline edits were never queued for the cloud at all.
 - No runtime dependencies beyond those CDNs; the only tooling is `scripts/validate.mjs`, which uses nothing but Node's standard library.
+
+---
+
+## Test mode
+
+A sandbox for looking at the app without signing in and without waiting three weeks to see an interval land. Entered from a quiet **Testing mode** link on the login screen, or `?test` on the URL — the second matters because when the Firebase SDK fails to load there is no login screen to click. It is `sessionStorage`-scoped, so it ends with the tab.
+
+**The password is in the Obsidian vault** at `projects/maths a-level tool/Test mode.md`, deliberately not here — this file is public.
+
+> **The password is a speed bump, not a lock, and the design assumes that.** This is a static site with no server: the check runs in the browser and the SHA-256 hash sits in `index.html` for anyone to read. That is acceptable **only because nothing behind the gate is worth protecting** — the three properties below are what make that true, and each was tested rather than argued.
+
+- **Storage is namespaced before any app code runs.** A script above the theme boot block shadows `getItem`/`setItem`/`removeItem` on the `localStorage` *instance* (own properties shadowing `Storage.prototype`, which leaves `sessionStorage` — where the flag lives — alone) and prefixes every key with `msh-test:`. Verified by planting a marker in the real store, seeding the sandbox over it, and confirming the marker survived byte-identical.
+- **The cloud block takes its missing-SDK exit.** No auth, no gate, no listener, no push. The sandbox cannot read or write any account's data.
+- **It cannot be mistaken for the real app.** A permanent hazard bar reading `TEST MODE · sandboxed · no cloud`, plus the live clock offset when one is set.
+
+### What the panel exposes
+
+| Section | Purpose |
+|---|---|
+| **Data** | Four presets — Empty · Just started (40 topics) · Mid-year (220/180/25) · Exam run-in (315/400/60). **Fixed-seed PRNG**, so the same preset is the same data every time; a sandbox whose contents change per reload cannot be used to compare a before against an after |
+| **Clock** | `mshTestSetDay(n)` shifts the app's today by ±1/7/30/90 days |
+| **Go to** | Straight to any page, modal or overlay, including the intro |
+| **Inspect a topic** | Derived recall, S, D, reps, lapses, due date, target retention, `stored S → derived S`, and the evidence trail newest-first |
+| **Render cost** | Medians for each renderer, so a regression is a number rather than a feeling |
+| **Next theme** | Cycles all three |
+
+**The clock is the substantive one.** Nearly everything the app decides is a function of the date, and none of that is visible on any single day. On the Mid-year preset: `+30d` takes the due list 76 → 128 and a sample topic 86% → 82% recall; `+180d` puts everything overdue at 69%; **`+300d` lands inside `EXAM_RAMP_DAYS` of the June 2027 papers and target retention jumps 89.7% → 96.7%** — the exam ramp engaging, which there is otherwise no way to watch. `−60d` shows last term: 94% recall, six topics due. Returning to `Now` reproduces the original numbers exactly.
+
+It works because `today()` is the single choke point every date derivation goes through, so one integer moves the whole model. `_testDayShift` is `0` outside test mode — one truthy check per second of wall clock, which is why it ships in the file rather than needing a second build. Always go through `mshTestSetDay()`: the one-second memo and both per-day caches have to be dropped with it.
+
+**The inspector's `stored S → derived S` line** is the evidence model made legible: the stored figure is the review log alone, the derived one is after mistakes and exam marks replay over it. On a topic with three logged mistakes those read **157.7d → 1.6d**. That gap is exactly what [`computeStats()` was getting wrong](#5--statistics--stats-overlay) until 2026-08-18.
 
 ---
 
