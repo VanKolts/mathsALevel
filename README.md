@@ -3,7 +3,7 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (6,787 lines, 375 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (8,070 lines, 417 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
 
@@ -528,7 +528,7 @@ Three optional tools, all powered by **Google Gemini** with the student's own ke
 ### 1. AI Tutor — `askTutor()`
 Photograph a question → step-by-step exam-style walkthrough. **The prompt opens with a scope guard**: the tool is the student's own Gemini key pointed at a photo box, so without one it is a general-purpose chatbot wearing a maths app's clothes. It declines non-maths questions in one warm line and points back at the camera, rather than refusing formally — and explicitly still answers maths that is oddly phrased or written in another language, so the guard cannot become a reason to fail a real question. The prompt instructs it to quote formulas *"from the formulae booklet"* where the exam provides them, and to annotate steps with the marks they'd earn (M1/A1) when the question shows its allocation. Output runs through `tutorMd()`, a small Markdown→HTML converter that **protects `$$…$$` display-math blocks from line-break insertion** (a subtle bug: a `<br>` inside display math silently breaks MathJax) and bolds numbered steps.
 
-It does that by lifting each block out behind a sentinel and putting it back at the end. The sentinel is `MJX_SENTINEL = '\uE000'`, a Private Use Area codepoint — written as an **escape**, never as a literal character. It used to be a raw NUL byte, which was wrong three times over: HTML's script-data state replaces `U+0000` with `U+FFFD` *before the JS parser sees it*, so the runtime sentinel was silently the replacement character (which Gemini output can legitimately contain, and a collision would mangle the maths); the source therefore did not say what it did; and four raw NULs made the whole 432 KB `index.html` register as **binary to `grep`**, so searching it returned nothing at all. If you ever need another sentinel, take the next PUA codepoint and write it `\uE000`, not as a pasted character.
+It does that by lifting each block out behind a sentinel and putting it back at the end. The sentinel is `MJX_SENTINEL = '\uE000'`, a Private Use Area codepoint — written as an **escape**, never as a literal character. It used to be a raw NUL byte, which was wrong three times over: HTML's script-data state replaces `U+0000` with `U+FFFD` *before the JS parser sees it*, so the runtime sentinel was silently the replacement character (which Gemini output can legitimately contain, and a collision would mangle the maths); the source therefore did not say what it did; and four raw NULs made the whole `index.html` (432 KB then, 495 KB now) register as **binary to `grep`**, so searching it returned nothing at all. If you ever need another sentinel, take the next PUA codepoint and write it `\uE000`, not as a pasted character.
 
 ### 2. AI practice questions — `pqGenerate()`
 Generates an original, spec-accurate exam question **with a real Edexcel mark scheme** (M1/A1/B1 notation). Three quality gates:
@@ -751,7 +751,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 | `--wrap` | `min(100% - 96px, 1360px)` | container cap for list surfaces (32px gutter on mobile) |
 | `--wrap-narrow` | `min(100% - 96px, 1060px)` | the old cap, kept for narrower surfaces |
 | `--prose` | `70ch` | reading measure for prose blocks |
-| `--rail-w` | `64px` | desktop nav rail width; `body` is padded by exactly this |
+| `--rail-w` | `208px` | desktop nav rail width; `body` is padded by exactly this. Was 64px while the rail was icon-only |
 | `--tap` | `44px` | SC 2.5.5 (AAA) target; SC 2.5.8's 24px floor is enforced per-component |
 
 **AI:** `TUTOR_MODEL` = Gemini model id (`gemini-2.5-flash`); shared call timeout 60 s; 1 retry; `pqGenerate` temperature 0.9 / `pqVerify` temperature 0.
