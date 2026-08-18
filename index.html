@@ -65,6 +65,19 @@ window.MSH_TEST = (function(){
     // Land on the app, not on the intro — going straight to what you need is the point.
     // The intro is still reachable on purpose, from the panel's "Go to" list.
     if(!_g(P+'alevel-onboarded-v1')) _s(P+'alevel-onboarded-v1','1');
+    /* Capture problems from here on, which is above every other script — a panel that only
+       starts listening once it has drawn itself misses exactly the errors worth seeing. */
+    window.MSH_TEST_LOG=[];
+    var push=function(kind,args){
+      try{ window.MSH_TEST_LOG.push({kind:kind,t:Date.now(),
+        msg:Array.prototype.map.call(args,function(a){
+          return (a&&a.stack)?a.stack.split('\n')[0]:(typeof a==='object'?JSON.stringify(a).slice(0,200):String(a)); }).join(' ')}); }catch(e){}
+      if(window.MSH_TEST_LOG.length>200) window.MSH_TEST_LOG.shift();
+    };
+    ['error','warn'].forEach(function(k){ var o=console[k].bind(console);
+      console[k]=function(){ push(k,arguments); return o.apply(null,arguments); }; });
+    window.addEventListener('error',function(e){ push('error',[e.message+'  ('+(e.filename||'').split('/').pop()+':'+e.lineno+')']); });
+    window.addEventListener('unhandledrejection',function(e){ push('error',['unhandled promise: '+(e.reason&&e.reason.message||e.reason)]); });
   }catch(e){ console.warn('[test] could not namespace storage — refusing to run',e); return false; }
   document.documentElement.setAttribute('data-test','1');
   return true;
@@ -3384,8 +3397,27 @@ function switchTab(tab){
          carried by the selector. The direction is already known here, so this
          costs no new state. */
       document.documentElement.style.setProperty('--nav-dir', ni>oi?1:-1);
+      var inBtn=document.querySelector('.m-nav-btn[data-tab="'+t+'"]');
+      /* (1) Returning to a tab you just left, inside the release window, used to leave
+         .nav-leaving AND .active on the same button. They have equal specificity, so source
+         order decides and .nav-leaving — declared later — won: the icon parked off-screen
+         with no colour at all until the timer fired, then snapped on. Clear it, and its
+         pending timer, before it becomes the active one. */
+      if(inBtn){ clearTimeout(inBtn._navLeaveT); inBtn.classList.remove('nav-leaving'); }
+      /* (2) Resolve the incoming icon's parked position against the NEW direction *here*,
+         between setting the variable and anything else touching a class. Otherwise the
+         browser never computes style in between, the transition's "before" snapshot is still
+         last frame's — where --nav-dir held whatever the previous move set — and the colour
+         enters from the wrong side. The entry side was therefore inverted on every switch
+         after the first, while the leaving side stayed right, because a leaving icon starts
+         at translateY(0) and 0 does not depend on the direction. On screen: the pill arrives
+         from one side while the fill rises from the other, which reads as a stray flow
+         outside the icon fighting the one inside it.
+         The flush has to sit *after* the variable and *before* prev gains .nav-leaving — flush
+         later and prev's own before-state becomes its end-state, so it stops animating out. */
+      if(inBtn){ var _r=inBtn.querySelector('.ic-rain'); if(_r) void getComputedStyle(_r).transform; }
       var prev=document.querySelector('.m-nav-btn.active');
-      if(prev){
+      if(prev&&prev!==inBtn){
         prev.classList.add('nav-leaving');
         clearTimeout(prev._navLeaveT);
         /* Dropping .nav-leaving also drops the transition, so it snaps back to
@@ -7067,14 +7099,29 @@ if(window.MSH_TEST) (function(){
      +'<pre id="msh-test-counts"></pre></section>'
    +'<section><div class="lbl">Clock</div><div class="row" id="msh-test-time"></div>'
      +'<pre id="msh-test-date"></pre></section>'
-   +'<section><div class="lbl">Go to</div><select id="msh-test-jump"></select></section>'
+   +'<section><div class="lbl">Go to</div><select id="msh-test-jump"></select>'
+     +'<div class="lbl" style="margin:8px 0 6px">Find a topic that is…</div><div class="row" id="msh-test-find"></div></section>'
    +'<section><div class="lbl">Inspect a topic</div><select id="msh-test-topic"></select>'
+     +'<div class="row" style="margin-top:6px"><span class="lbl" style="margin:0;align-self:center">rate it</span>'
+     +'<button type="button" data-g="1">1</button><button type="button" data-g="2">2</button>'
+     +'<button type="button" data-g="3">3</button><button type="button" data-g="4">4</button>'
+     +'<button type="button" data-g="5">5</button></div>'
      +'<pre id="msh-test-inspect"></pre></section>'
+   +'<section><div class="lbl">Motion</div><div class="row" id="msh-test-speed"></div></section>'
+   +'<section><div class="lbl">See the layout</div><div class="row">'
+     +'<button type="button" id="msh-test-zoomnav">Zoom nav ×3</button>'
+     +'<button type="button" id="msh-test-boxes">Outline boxes</button>'
+     +'<button type="button" id="msh-test-icons">Icon slots</button></div></section>'
    +'<section><div class="lbl">Render cost</div><div class="row">'
      +'<button type="button" id="msh-test-perf">Measure</button>'
+     +'<button type="button" id="msh-test-fps">FPS</button>'
      +'<button type="button" id="msh-test-theme">Next theme</button></div>'
      +'<pre id="msh-test-perfout"></pre></section>'
-   +'<section><div class="row"><button type="button" id="msh-test-wipe">Wipe sandbox</button></div></section>';
+   +'<section><div class="lbl">Problems <span id="msh-test-errct"></span></div>'
+     +'<pre id="msh-test-errs">none</pre></section>'
+   +'<section><div class="lbl">Storage</div><pre id="msh-test-storage"></pre></section>'
+   +'<section><div class="row"><button type="button" id="msh-test-copy">Copy diagnostics</button>'
+     +'<button type="button" id="msh-test-wipe">Wipe sandbox</button></div></section>';
 
   function mount(){
     document.body.appendChild(bar); document.body.appendChild(panel);
@@ -7108,6 +7155,126 @@ if(window.MSH_TEST) (function(){
       const ks=Object.keys(THEME_META); applyTheme(ks[(ks.indexOf(activeTheme)+1)%ks.length]);
     };
     document.getElementById('msh-test-perf').onclick=mshTestPerf;
+
+    /* ---- motion speed -------------------------------------------------------------------
+       The nav's colour hand-off is 400ms and its bug was a wrong *start position*, which at
+       full speed is a flicker you cannot argue about. Slowing everything down is how you see
+       a transition rather than infer it, and 0× / reduced-motion checks the branch the
+       blanket prefers-reduced-motion rule takes, which is otherwise untestable without
+       changing an OS setting. */
+    const SPEEDS=[['1×',1],['¼×',4],['⅒×',10],['0×',0]];
+    let speedStyle=null, speedNow=1;
+    function setSpeed(mult){
+      speedNow=mult;
+      if(!speedStyle){ speedStyle=document.createElement('style'); document.head.appendChild(speedStyle); }
+      speedStyle.textContent = mult===1 ? '' : (mult===0
+        ? '*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;animation-delay:0s!important;transition-delay:0s!important;}'
+        : '.m-nav-btn .ic-paint,.ic-mv,.m-nav-pill,.page,.modal,.stats-panel{transition-duration:'+(400*mult)+'ms!important;transition-delay:'+(180*mult)+'ms!important;}'
+          +'.m-nav-pill,.m-nav-btn .ic-paint{transition-delay:0ms!important;}');
+      [].forEach.call(document.querySelectorAll('#msh-test-speed button'),function(b){ b.classList.toggle('on',+b.dataset.m===mult); });
+    }
+    SPEEDS.forEach(function(sp){
+      const b=document.createElement('button'); b.type='button'; b.textContent=sp[0]; b.dataset.m=sp[1];
+      b.onclick=function(){ setSpeed(sp[1]); }; document.getElementById('msh-test-speed').appendChild(b);
+    });
+    setSpeed(1);
+
+    // ---- layout X-ray --------------------------------------------------------------------
+    function toggleStyle(btn,id,css){
+      let el=document.getElementById(id);
+      if(el){ el.remove(); btn.classList.remove('on'); return; }
+      el=document.createElement('style'); el.id=id; el.textContent=css; document.head.appendChild(el); btn.classList.add('on');
+    }
+    document.getElementById('msh-test-zoomnav').onclick=function(){
+      toggleStyle(this,'msh-zoomnav',
+        '.m-nav-btn[data-tab]{transform:scale(3);transform-origin:left center;position:relative;z-index:5;margin-bottom:80px;}'
+       +'.m-nav-btn[data-tab] .m-nav-lbl{display:none!important;}');
+    };
+    document.getElementById('msh-test-boxes').onclick=function(){
+      // Distinct hues per depth, so a row's name/metadata split is visible at a glance.
+      toggleStyle(this,'msh-boxes',
+        '*{outline:1px solid rgba(255,0,80,.22)!important;}'
+       +'.topic-row>*,.rev-row>*{outline:1px solid rgba(0,200,255,.55)!important;}'
+       +'.topic-row,.rev-row{outline:1px solid rgba(255,220,0,.55)!important;}');
+    };
+    document.getElementById('msh-test-icons').onclick=function(){
+      // Same thing ?icons does: outline every named placeholder left by the emoji sweep.
+      toggleStyle(this,'msh-icons',
+        '.ico{outline:1px dashed var(--accent,#fb923c)!important;min-width:14px;min-height:14px;display:inline-block!important;}');
+    };
+
+    // ---- fps ------------------------------------------------------------------------------
+    let fpsOn=false, fpsRaf=0;
+    document.getElementById('msh-test-fps').onclick=function(){
+      fpsOn=!fpsOn; this.classList.toggle('on',fpsOn);
+      if(!fpsOn){ cancelAnimationFrame(fpsRaf); return; }
+      let last=performance.now(), frames=0, acc=0;
+      (function loop(now){
+        if(!fpsOn) return;
+        const dt=now-last; last=now; frames++; acc+=dt;
+        if(acc>=500){
+          const el=document.getElementById('msh-test-perfout');
+          el.textContent=(frames/acc*1000).toFixed(0)+' fps   ·   worst frame '+dt.toFixed(1)+' ms';
+          frames=0; acc=0;
+        }
+        fpsRaf=requestAnimationFrame(loop);
+      })(performance.now());
+    };
+
+    // ---- find a topic in a given state -----------------------------------------------------
+    const FINDERS=[
+      ['overdue',    n=>statusFor(n)==='overdue'],
+      ['due',        n=>statusFor(n)==='due'],
+      ['mastered',   n=>isMastered(n)],
+      ['new',        n=>!sr[n]],
+      ['most wrong', null]   // handled separately: the topic with the most logged mistakes
+    ];
+    FINDERS.forEach(function(f){
+      const b=document.createElement('button'); b.type='button'; b.textContent=f[0];
+      b.onclick=function(){
+        let pick=null;
+        if(f[0]==='most wrong'){
+          const idx=mistakeEventsByTopic(); let best=0;
+          Object.keys(idx).forEach(function(k){ if(idx[k].length>best&&sr[k]){best=idx[k].length;pick=k;} });
+        } else {
+          const t=activeTopics().find(x=>f[1](x.name)); pick=t?t.name:null;
+        }
+        if(!pick){ alert('No topic is currently "'+f[0]+'". Seed some data or move the clock.'); return; }
+        const sel=document.getElementById('msh-test-topic'); sel.value=pick; mshTestInspect(pick);
+        if(typeof openModal==='function') openModal(pick);
+      };
+      document.getElementById('msh-test-find').appendChild(b);
+    });
+
+    // ---- rate the inspected topic ----------------------------------------------------------
+    [].forEach.call(panel.querySelectorAll('button[data-g]'),function(b){
+      b.onclick=function(){
+        const name=document.getElementById('msh-test-topic').value;
+        if(!name){ alert('Pick a topic to inspect first.'); return; }
+        const before=memoryFor(name);
+        const b4=validRec(before)?{S:before.S,D:before.D,due:dueDateFor(name)}:null;
+        saveTopicStudied(name,today(),b.dataset.g);
+        invalidateMistakeLoad();
+        const after=memoryFor(name);
+        document.getElementById('msh-test-perfout').textContent=
+          'rated '+b.dataset.g+' on '+name.slice(0,28)+'\n'+
+          (b4?('S '+b4.S.toFixed(1)+' → '+after.S.toFixed(1)+'d\nD '+b4.D.toFixed(1)+' → '+after.D.toFixed(1)
+               +'\ndue '+b4.due+' → '+dueDateFor(name)):'first review · S '+after.S.toFixed(1)+'d, due '+dueDateFor(name));
+        mshTestRefresh();
+      };
+    });
+
+    document.getElementById('msh-test-copy').onclick=function(){
+      const txt=document.getElementById('msh-test-counts').textContent+'\n'
+        +'clock '+today()+' ('+(_testDayShift>=0?'+':'')+_testDayShift+'d)\n'
+        +'theme '+activeTheme+'  ·  dpr '+(window.devicePixelRatio||1)+'  ·  '+innerWidth+'×'+innerHeight+'\n\n'
+        +document.getElementById('msh-test-inspect').textContent+'\n\n'
+        +document.getElementById('msh-test-perfout').textContent+'\n\nproblems:\n'
+        +document.getElementById('msh-test-errs').textContent+'\n\nstorage:\n'
+        +document.getElementById('msh-test-storage').textContent;
+      navigator.clipboard.writeText(txt).then(function(){ this.textContent='Copied'; setTimeout(()=>{this.textContent='Copy diagnostics';},1200); }.bind(this))
+        .catch(function(){ alert(txt); });
+    };
     document.getElementById('msh-test-wipe').onclick=function(){
       // Only ever clears the sandbox's own prefix. The real store has no key in common with it.
       if(!confirm('Clear the sandbox? Your real study data is in a separate namespace and is not touched.')) return;
@@ -7163,9 +7330,39 @@ if(window.MSH_TEST) (function(){
     }
     const sel=document.getElementById('msh-test-topic');
     if(sel&&sel.value) mshTestInspect(sel.value);
+
+    // Problems since load — captured from the top of the file, so boot-time errors count too.
+    const log=window.MSH_TEST_LOG||[];
+    const ect=document.getElementById('msh-test-errct');
+    const errs=document.getElementById('msh-test-errs');
+    if(ect){
+      const nE=log.filter(l=>l.kind==='error').length, nW=log.length-nE;
+      ect.textContent='· '+nE+' error'+(nE===1?'':'s')+', '+nW+' warning'+(nW===1?'':'s');
+      ect.style.color=nE?'var(--overdue,#f87171)':'var(--muted,#b08c99)';
+    }
+    if(errs) errs.textContent=log.length? log.slice(-6).map(l=>l.kind[0].toUpperCase()+'  '+l.msg.slice(0,110)).join('\n') : 'none';
+
+    // Storage: sandbox against real, so the namespacing is visible rather than promised.
+    const st=document.getElementById('msh-test-storage');
+    if(st){
+      const R=window.MSH_TEST_RAW; let mine=0, real=0, rows=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i)||'', v=R.get(k)||'';
+        if(k.indexOf(R.prefix)===0){ mine+=v.length; rows.push([k.slice(R.prefix.length),v.length]); }
+        else real+=v.length;
+      }
+      rows.sort((a,b)=>b[1]-a[1]);
+      const kb=n=>(n/1024).toFixed(1)+' KB';
+      st.textContent='sandbox '+kb(mine)+'   ·   your real data '+kb(real)+' (untouched)\n'
+        +rows.slice(0,5).map(r=>'  '+r[0].padEnd(22).slice(0,22)+kb(r[1])).join('\n');
+    }
   };
 
   if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount);
+  // The problem list and storage figures change without anything calling a renderer, so give
+  // them a slow tick of their own. Two seconds is well below the threshold where you would
+  // sit staring at a stale panel, and far above anything that could cost measurable time.
+  setInterval(function(){ if(!document.hidden) mshTestPaint(); },2000);
 })();
 
 </script>
