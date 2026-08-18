@@ -208,22 +208,37 @@ fi
 
 # ---------------------------------------------- 1. bump the service-worker cache ----
 
+# Compare against what is PUBLISHED, not against HEAD. Diffing the working tree against HEAD
+# only sees uncommitted work, so a change committed by hand and merely unpushed is invisible —
+# and if some *other* file happens to be dirty, the script takes this path rather than the
+# clean-tree one, so neither check fires. That shipped v26 twice on 2026-08-18 and then, after
+# a fix that only covered the clean-tree path, v31 twice through this exact hole an hour later.
+# `git diff origin/main -- paths` covers uncommitted changes, unpushed commits, and both at
+# once, which is the only formulation with no gap in it.
 bumped=""
-if [ "$NO_BUMP" = 0 ] && ! git diff --quiet HEAD -- "${CACHED_PATHS[@]}"; then
+git fetch --quiet origin "$BRANCH" 2>/dev/null || true
+BUMP_BASE="origin/$BRANCH"
+git rev-parse --verify --quiet "$BUMP_BASE" >/dev/null 2>&1 || BUMP_BASE=HEAD   # no remote ref yet
+if [ "$NO_BUMP" = 0 ] && ! git diff --quiet "$BUMP_BASE" -- "${CACHED_PATHS[@]}"; then
   current="$(sw_version_in sw.js)"
-  at_head="$(git show "HEAD:sw.js" | sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p")"
+  at_base="$(git show "$BUMP_BASE:sw.js" | sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p")"
 
   [ -n "$current" ] || fail "could not read CACHE_VERSION from sw.js"
 
-  if [ "$current" = "$at_head" ]; then
+  if [ "$current" = "$at_base" ]; then
     next="v$(( ${current#v} + 1 ))"
-    # In-place, portable across BSD/GNU sed.
-    sed "s/^const CACHE_VERSION *= *'$current'/const CACHE_VERSION = '$next'/" sw.js > sw.js.tmp
-    mv sw.js.tmp sw.js
     bumped="$current → $next"
     say "Bumped service-worker cache: $bumped"
+    # Guarded, so --dry-run leaves the working tree exactly as it found it. It did not before:
+    # a dry run rewrote sw.js on disk and left it dirty, which is a nasty thing for a command
+    # whose entire promise is that it changes nothing.
+    if [ "$DRY_RUN" = 0 ]; then
+      # In-place, portable across BSD/GNU sed.
+      sed "s/^const CACHE_VERSION *= *'$current'/const CACHE_VERSION = '$next'/" sw.js > sw.js.tmp
+      mv sw.js.tmp sw.js
+    fi
   else
-    say "CACHE_VERSION already bumped this round ($at_head → $current) — leaving it."
+    say "CACHE_VERSION already moved since the published build ($at_base → $current) — leaving it."
   fi
 fi
 
