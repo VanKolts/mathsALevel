@@ -174,11 +174,17 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    should always be seen sliding over the resting muted colour. */
 .m-nav-btn:not(.active):not(.nav-leaving):hover .ic-base{fill:var(--text);}
 .ic-rain{fill:url(#m-rainbow);}
-/* Past Papers only: a dimmed rainbow across the whole silhouette, so the page's
-   interior reads as tinted rainbow rather than flat rail colour. It sits above
-   the opaque plate (which is what keeps it crisp and independent of the pill)
-   and below the full-strength border, so the outline stays clearly darker than
-   what it encloses. Masked by -sil rather than -cut, hence it covers the hole. */
+/* All three page icons: a dimmed rainbow across the whole silhouette, so each
+   one's interior reads as tinted rainbow rather than flat rail colour. It sits
+   above the opaque plate (which is what keeps it crisp and independent of the
+   pill) and below the full-strength border, so the outline stays clearly darker
+   than what it encloses. Masked by -sil rather than -cut, hence it covers the
+   knockout — which is the whole point: the knockout *is* the interior.
+   Past Papers carried this alone until 2026-08-18, on the theory that a tinted
+   X on a rainbow disc would lose the contrast that makes it legible at 28px.
+   Checked at the real rendered size in all three themes: the X and the ring
+   both hold, and three icons that treat their interiors differently read as
+   three unrelated icons, which cost more than the contrast did. */
 .ic-dim{opacity:.35;}
 
 /* Shape morph — 400ms ease-out, 180ms behind the pill so the icon resolves

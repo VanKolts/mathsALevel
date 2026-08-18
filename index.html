@@ -1005,6 +1005,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           <circle cx="12" cy="12" r="2.57" fill="#fff"/>
         </mask>
         <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-check-sil)"/>
+        <!-- Same tinted-interior layer as Past Papers, so all three icons read alike inside. -->
+        <rect class="ic-paint ic-rain ic-dim" x="-4" y="-4" width="32" height="32" mask="url(#ic-check-sil)"/>
         <g mask="url(#ic-check-cut)">
           <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
           <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>
@@ -1029,6 +1031,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           <rect class="ic-mv ic-xb" x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="#000"/>
         </mask>
         <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-miss-sil)"/>
+        <!-- Same tinted-interior layer as Past Papers, so all three icons read alike inside. -->
+        <rect class="ic-paint ic-rain ic-dim" x="-4" y="-4" width="32" height="32" mask="url(#ic-miss-sil)"/>
         <g mask="url(#ic-miss-cut)">
           <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
           <rect class="ic-paint ic-rain" x="-4" y="-4" width="32" height="32"/>
@@ -1051,7 +1055,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         </mask>
         <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
         <!-- Carries .ic-paint/.ic-rain so it flows in on exactly the same slide as the
-             border rather than fading independently; .ic-dim is what holds it back. -->
+             border rather than fading independently; .ic-dim is what holds it back.
+             All three page icons carry this layer now — see .ic-dim in styles.css. -->
         <rect class="ic-paint ic-rain ic-dim" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
         <g mask="url(#ic-paper-cut)">
           <rect class="ic-paint ic-base" x="-4" y="-4" width="32" height="32"/>
