@@ -71,22 +71,24 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   </div>
   <div class="filters-bar">
     <div class="filters-inner">
-      <button class="filter-btn active" id="btn-all">All</button>
-      <button class="filter-btn y1" id="btn-y1">Year 1</button>
-      <button class="filter-btn y2" id="btn-y2">Year 2</button>
-      <button class="filter-btn st" id="btn-stats">Statistics</button>
-      <button class="filter-btn me" id="btn-mech">Mechanics</button>
-      <button class="filter-btn fm" id="btn-fm">Further</button>
+      <!-- All, then the five component groups: exactly one of the six is ever active. -->
+      <button class="filter-btn active" id="btn-all" data-comp="all">All</button>
+      <button class="filter-btn" data-comp="as">AS level</button>
+      <button class="filter-btn" data-comp="pure">Pure</button>
+      <button class="filter-btn" data-comp="applied">Applied</button>
+      <button class="filter-btn" data-comp="corepure">Further Maths core</button>
+      <button class="filter-btn" data-comp="fmopt">FM options</button>
       <div class="sep"></div>
-      <button class="filter-btn sf" id="btn-due">Due</button>
-      <button class="filter-btn sf" id="btn-overdue">Overdue</button>
-      <button class="filter-btn sf" id="btn-notstarted">Not started</button>
-      <div class="sep"></div>
-      <div class="search-wrap">
-        <span class="search-icon">⌕</span>
-        <input class="search-input" type="text" id="search-input" placeholder="Search topics…"/>
-      </div>
-      <button class="rand-btn" id="open-random-btn"><i class="ico" data-icon="shuffle" aria-hidden="true"></i>  Random</button>
+      <button class="tool-chip" id="btn-filter" aria-haspopup="dialog">Filter<span class="chip-badge" id="filter-count" hidden></span></button>
+      <button class="tool-chip" id="btn-search" aria-expanded="false">Search</button>
+      <button class="tool-chip" id="btn-random" aria-haspopup="dialog">Random</button>
+      <button class="tool-chip chip-round" id="btn-legend" aria-haspopup="dialog" aria-label="What do the symbols mean?" title="What do the symbols mean?">?</button>
+    </div>
+    <div class="search-row" id="search-row" hidden>
+      <input class="search-input" type="text" id="search-input" autocomplete="off"
+             placeholder="Topic, chapter number, cluster, or a status like “overdue”…"/>
+      <button class="search-clear" id="search-clear" aria-label="Clear search">&#10005;</button>
+      <span class="search-hits" id="search-hits"></span>
     </div>
   </div>
   <main>
@@ -100,8 +102,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <div class="prog-track"><div class="prog-fill" id="prog"></div></div>
       <span class="prog-pct" id="prog-pct">0%</span>
     </div>
-<details class="legend" id="legend">
-      <summary>What do the symbols mean?</summary>
+<div class="legend-holder" id="legend" hidden>
       <div class="legend-grid">
         <div class="legend-item"><span class="diff-pip d-1" style="background:#34d399;color:#34d399;opacity:1"></span> Standard difficulty <span class="legend-shape">(solid disc)</span></div>
         <div class="legend-item"><span class="diff-pip d-2" style="background:#fbbf24;color:#fbbf24;opacity:1"></span> Challenging <span class="legend-shape">(hollow ring)</span></div>
@@ -114,7 +115,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         <div class="legend-item"><span style="font-size:13px"><i class="ico" data-icon="note" aria-hidden="true"></i></span> A note you saved on a topic</div>
         <div class="legend-item">Tip: click a topic to attempt a question, then rate your recall 1–5.</div>
       </div>
-    </details>
+    </div>
     <div id="clusters-container"></div>
     <div class="empty-state" id="empty">No topics match your search.</div>
   </main>
@@ -381,20 +382,74 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 </div>
 
 <!-- RANDOM MODAL -->
+<!-- RANDOM TOPIC — picks from whatever the filters currently allow, so the filter bar is
+     the only place choices are made. Opens fresh; anything else open is closed first. -->
 <div class="modal-overlay" id="random-overlay">
   <div class="modal rand-modal">
-    <div class="modal-title"><i class="ico" data-icon="shuffle" aria-hidden="true"></i> Random Topic Picker</div>
-    <div class="rand-filters">
-      <div class="rg"><div class="rg-lbl">Year</div><div class="rchips" id="ry-chips"><button class="rchip active" data-val="any">Any</button><button class="rchip" data-val="y1">Y1</button><button class="rchip" data-val="y2">Y2</button><button class="rchip" data-val="fm">FM</button></div></div>
-      <div class="rg"><div class="rg-lbl">Status</div><div class="rchips" id="rs-chips"><button class="rchip active" data-val="any">Any</button><button class="rchip" data-val="notstudied">Not started</button><button class="rchip" data-val="due">Due</button><button class="rchip" data-val="studied">Studied</button></div></div>
-      <div class="rg"><div class="rg-lbl">Difficulty</div><div class="rchips" id="rd-chips"><button class="rchip active" data-val="any">Any</button><button class="rchip" data-val="1">Standard</button><button class="rchip" data-val="2">Challenging</button><button class="rchip" data-val="3">Hard</button></div></div>
-      <div class="rg"><div class="rg-lbl">Cluster</div><div class="rchips" id="rc-chips"></div></div>
-    </div>
-    <div class="rand-result" id="rand-result"><div class="rr-empty">Set filters and press Pick</div></div>
+    <div class="modal-title">A topic to try</div>
+    <div class="rand-result" id="rand-result"></div>
+    <p class="rand-note" id="rand-note">Chosen at random from the topics your current filters allow.</p>
     <div class="modal-btns">
       <button class="modal-btn" id="rand-cancel-btn">Close</button>
-      <button class="modal-btn primary" id="rand-pick-btn">Pick a topic</button>
+      <button class="modal-btn" id="rand-again-btn">Randomise again</button>
+      <button class="modal-btn rainbow" id="rand-go-btn">Go to topic</button>
     </div>
+  </div>
+</div>
+
+<!-- FILTER — everything that is not one of the six component buttons lives here. -->
+<div class="modal-overlay" id="filter-overlay">
+  <div class="modal filter-modal">
+    <div class="modal-title">Filter topics</div>
+    <div class="filter-body">
+      <div class="fsec">
+        <div class="fsec-hd">Status</div>
+        <div class="fchips" id="f-status">
+          <button class="fchip" data-val="notstarted">Not started</button>
+          <button class="fchip" data-val="overdue">Overdue</button>
+          <button class="fchip" data-val="due">Due today</button>
+          <button class="fchip" data-val="upcoming">Upcoming</button>
+          <button class="fchip" data-val="mastered">Mastered</button>
+        </div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-hd">Difficulty</div>
+        <div class="fchips" id="f-diff">
+          <button class="fchip" data-val="1">Standard</button>
+          <button class="fchip" data-val="2">Challenging</button>
+          <button class="fchip" data-val="3">Hard</button>
+        </div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-hd">Memory stability <span class="fsec-val" id="f-stab-val">any</span></div>
+        <p class="fsec-sub">How many days a topic holds before recall drops to 90%. Untouched topics count as 0.</p>
+        <div class="dual" id="f-stab">
+          <div class="dual-track"><div class="dual-fill" id="f-stab-fill"></div></div>
+          <input type="range" id="f-stab-lo" min="0" max="361" step="1" value="0" autocomplete="off" aria-label="Minimum stability in days">
+          <input type="range" id="f-stab-hi" min="0" max="361" step="1" value="361" autocomplete="off" aria-label="Maximum stability in days">
+        </div>
+        <div class="dual-scale"><span>0</span><span>90</span><span>180</span><span>270</span><span>360+</span></div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-hd">Clusters
+          <button class="fsec-act" id="f-cl-toggle">Select all</button>
+        </div>
+        <div class="fcl-tree" id="f-clusters"></div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn" id="filter-reset-btn">Reset</button>
+      <button class="modal-btn rainbow" id="filter-done-btn">Show topics</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEGEND — was an inline <details> above the list; the grid itself is reused from there. -->
+<div class="modal-overlay" id="legend-overlay">
+  <div class="modal legend-modal">
+    <div class="modal-title">What do the symbols mean?</div>
+    <div class="legend-modal-body" id="legend-modal-body"></div>
+    <div class="modal-btns"><button class="modal-btn rainbow" id="legend-close-btn">Got it</button></div>
   </div>
 </div>
 
@@ -3041,7 +3096,10 @@ function renderReviewPanel(){
     const btn=document.createElement('button');btn.className='rev-done-btn';btn.textContent='Test';
     btn.title='Attempt a question, then grade your recall';
     btn.addEventListener('click',e=>{e.stopPropagation();openModal(item.name,true);});
-    row.append(dot,name,stage,dateEl,btn);
+    // Metadata in its own group so it can ride to the far right as one block.
+    const meta=document.createElement('div');meta.className='rev-meta';
+    meta.append(stage,dateEl,btn);
+    row.append(dot,name,meta);
     list.appendChild(row);
   });
   if(items.length>REV_CAP){
@@ -3094,7 +3152,7 @@ function renderTodayCard(){
     head.textContent='Ready when you are.';
     sub.textContent='The loop is simple — pick a topic, try a question with no notes, then rate how it went. Let’s do one.';
     cta.textContent='Start your first topic →';
-    _todayCtaAction=function(){ if(notStarted[0])openModal(notStarted[0],false); else document.getElementById('open-random-btn').click(); };
+    _todayCtaAction=function(){ if(notStarted[0])openModal(notStarted[0],false); else document.getElementById('btn-random').click(); };
   } else if(ready.length){
     const first=ready[0];
     head.textContent=ready.length===1?'1 topic ready to strengthen':ready.length+' topics ready to strengthen';
@@ -3896,8 +3954,11 @@ function openOnboarding(){
 }
 function closeOnboarding(){ document.getElementById('onboard-overlay').classList.remove('open'); }
 function applyOnboardPos(){
-  var map={y1:'btn-y1',all:'btn-all',fm:'btn-fm'};
-  var btn=document.getElementById(map[onboardPos||'all']); if(btn)btn.click();
+  // Onboarding's "where are you" maps onto the component buttons: Year 1 -> AS level,
+  // Further -> FM core. Selected by data-comp now that the buttons have no ids.
+  var map={y1:'as',all:'all',fm:'corepure'};
+  var want=map[onboardPos||'all'];
+  var btn=document.querySelector('.filters-inner .filter-btn[data-comp="'+want+'"]'); if(btn)btn.click();
 }
 function finishOnboarding(tryTopic){
   try{localStorage.setItem('alevel-onboarded-v1','1');}catch(e){}
@@ -4426,53 +4487,204 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{if(e.targe
 //                                                           
 // RANDOM TOPIC PICKER
 //                                                           
-let randF={year:'any',status:'any',diff:'any',cluster:'any'};
-
-// Build cluster chips
-const rcDiv=document.getElementById('rc-chips');
-const anyRc=document.createElement('button');anyRc.className='rchip active';anyRc.dataset.val='any';anyRc.textContent='Any';rcDiv.appendChild(anyRc);
-clusters.forEach(c=>{const ch=document.createElement('button');ch.className='rchip';ch.dataset.val=c.id;ch.textContent=c.name.split(' ')[0];rcDiv.appendChild(ch);});
-
-function setupChips(containerId,key){
-  document.getElementById(containerId).addEventListener('click',e=>{
-    const ch=e.target.closest('.rchip');if(!ch)return;
-    document.getElementById(containerId).querySelectorAll('.rchip').forEach(c=>c.classList.remove('active'));
-    ch.classList.add('active');randF[key]=ch.dataset.val;
-  });
-}
-setupChips('ry-chips','year');setupChips('rs-chips','status');setupChips('rd-chips','diff');setupChips('rc-chips','cluster');
-
 document.getElementById('today-cta').addEventListener('click',function(){if(typeof _todayCtaAction==='function')_todayCtaAction();});
-document.getElementById('open-random-btn').addEventListener('click',()=>document.getElementById('random-overlay').classList.add('open'));
-document.getElementById('rand-cancel-btn').addEventListener('click',()=>document.getElementById('random-overlay').classList.remove('open'));
-document.getElementById('random-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('random-overlay'))document.getElementById('random-overlay').classList.remove('open');});
 
-document.getElementById('rand-pick-btn').addEventListener('click',()=>{
-  let pool=activeTopics().filter(t=>{
-    if(randF.year!=='any'&&t.lvl!==randF.year)return false;
-    if(randF.cluster!=='any'&&t.clusterId!==randF.cluster)return false;
-    if(randF.diff!=='any'&&t.diff!==parseInt(randF.diff))return false;
-    if(randF.status!=='any'){
-      const st=statusFor(t.name);
-      if(randF.status==='notstudied'&&sr[t.name])return false;
-      if(randF.status==='due'&&st!=='due'&&st!=='overdue')return false;
-      if(randF.status==='studied'&&!sr[t.name])return false;
-    }
-    return true;
+/* Declared here, not down in FILTERS & SEARCH, because the modal wiring below runs at parse
+   time and would hit the temporal dead zone of a `let` declared later in the file. */
+var activeFilter='all',searchQuery='';
+var STAB_MAX=361;   // 361 means "360+", i.e. no upper bound
+var fState={status:new Set(),diff:new Set(),stabLo:0,stabHi:STAB_MAX,clusters:null};
+
+const $id=function(i){return document.getElementById(i);};
+function closeChecklistOverlays(){
+  ['random-overlay','filter-overlay','legend-overlay'].forEach(function(i){$id(i).classList.remove('open');});
+}
+function openChecklistOverlay(id){ closeChecklistOverlays(); $id(id).classList.add('open'); }
+['random-overlay','filter-overlay','legend-overlay'].forEach(function(i){
+  $id(i).addEventListener('click',function(e){ if(e.target===this)this.classList.remove('open'); });
+});
+
+/* ---- Search: a row that reveals under the bar ---- */
+(function(){
+  var row=$id('search-row'), btn=$id('btn-search'), input=$id('search-input'), hits=$id('search-hits');
+  function setOpen(on){
+    row.hidden=!on; btn.classList.toggle('on',on); btn.setAttribute('aria-expanded',String(on));
+    if(on) input.focus();
+    else if(searchQuery){ input.value=''; searchQuery=''; renderAll(); }
+  }
+  btn.addEventListener('click',function(){ setOpen(row.hidden); });
+  input.addEventListener('input',function(){
+    searchQuery=this.value.toLowerCase().trim();
+    renderAll();
+    hits.textContent=searchQuery?(visibleTopics().length+' found'):'';
   });
-  const res=document.getElementById('rand-result');res.innerHTML='';
-  if(!pool.length){const em=document.createElement('div');em.className='rr-empty';em.textContent='No topics match your filters.';res.appendChild(em);return;}
-  const pick=pool[Math.floor(Math.random()*pool.length)];
-  const topicEl=document.createElement('div');topicEl.className='rr-topic';topicEl.textContent=pick.name;
-  const metaEl=document.createElement('div');metaEl.className='rr-meta';
-  metaEl.textContent=lvlLabel[pick.lvl]+' · '+DIFF_LABELS[pick.diff]+' · '+clusters.find(c=>c.id===pick.clusterId).name;
-  const goBtn=document.createElement('button');goBtn.className='modal-btn primary';goBtn.style.marginTop='8px';goBtn.textContent='Go to topic →';
-  goBtn.addEventListener('click',()=>{
-    document.getElementById('random-overlay').classList.remove('open');
-    switchTab('checklist');
-    setTimeout(()=>highlightTopic(pick),150);
+  input.addEventListener('keydown',function(e){ if(e.key==='Escape')setOpen(false); });
+  $id('search-clear').addEventListener('click',function(){ input.value=''; searchQuery=''; hits.textContent=''; renderAll(); input.focus(); });
+})();
+
+/* ---- Legend, moved out of the list into a modal behind the ? ---- */
+$id('btn-legend').addEventListener('click',function(){
+  var body=$id('legend-modal-body');
+  if(!body.children.length){ var g=document.querySelector('#legend .legend-grid'); if(g)body.appendChild(g); }
+  openChecklistOverlay('legend-overlay');
+});
+$id('legend-close-btn').addEventListener('click',function(){$id('legend-overlay').classList.remove('open');});
+
+/* ---- Filter modal ---- */
+(function(){
+  var lo=$id('f-stab-lo'), hi=$id('f-stab-hi'), fill=$id('f-stab-fill'), valEl=$id('f-stab-val');
+  function dayLabel(v){ return (+v>=STAB_MAX)?'360+':(+v+'d'); }
+  function paintStab(){
+    var a=Math.min(+lo.value,+hi.value), b=Math.max(+lo.value,+hi.value);
+    fill.style.left=(a/STAB_MAX*100)+'%';
+    fill.style.right=(100-b/STAB_MAX*100)+'%';
+    valEl.textContent=(a===0&&b>=STAB_MAX)?'any':(dayLabel(a)+' – '+dayLabel(b));
+  }
+  // Whichever thumb you drag, the pair stays ordered rather than crossing over.
+  lo.addEventListener('input',function(){ if(+lo.value>+hi.value)hi.value=lo.value; paintStab(); });
+  hi.addEventListener('input',function(){ if(+hi.value<+lo.value)lo.value=hi.value; paintStab(); });
+
+  function chipGroup(id,set){
+    $id(id).addEventListener('click',function(e){
+      var c=e.target.closest('.fchip'); if(!c)return;
+      var v=c.getAttribute('data-val');
+      if(set.has(v))set.delete(v); else set.add(v);
+      c.classList.toggle('on',set.has(v));
+    });
+  }
+  chipGroup('f-status',fState.status);
+  chipGroup('f-diff',fState.diff);
+
+  // Cluster picker: one collapsible group per component, checkbox per cluster.
+  function allClusterIds(){ return activeClusters().map(function(c){return c.id;}); }
+  function buildTree(){
+    var tree=$id('f-clusters'); tree.innerHTML='';
+    var sel=fState.clusters;
+    var byComp={};
+    activeClusters().forEach(function(c){ (byComp[c.component]=byComp[c.component]||[]).push(c); });
+    Object.keys(byComp).forEach(function(compId){
+      var list=byComp[compId];
+      var g=document.createElement('div'); g.className='fcl-group';
+      var head=document.createElement('div'); head.className='fcl-head';
+      var cb=document.createElement('input'); cb.type='checkbox';
+      var caret=document.createElement('span'); caret.className='fcl-caret'; caret.textContent='▸';
+      var nm=document.createElement('span');
+      nm.textContent=(typeof componentName==='function')?componentName(list[0].qual,compId):compId;
+      var ct=document.createElement('span'); ct.className='fcl-count'; ct.textContent=list.length;
+      head.append(caret,cb,nm,ct); g.appendChild(head);
+      var items=document.createElement('div'); items.className='fcl-items';
+      var boxes=[];
+      list.forEach(function(c){
+        var row=document.createElement('label'); row.className='fcl-row';
+        var b=document.createElement('input'); b.type='checkbox'; b.value=c.id;
+        b.checked=!sel||sel.has(c.id);
+        b.addEventListener('change',function(){ syncFromBoxes(); });
+        boxes.push(b);
+        var t=document.createElement('span'); t.textContent=c.name;
+        row.append(b,t); items.appendChild(row);
+      });
+      g.appendChild(items);
+      function refreshHead(){
+        var on=boxes.filter(function(b){return b.checked;}).length;
+        cb.checked=on===boxes.length; cb.indeterminate=on>0&&on<boxes.length;
+      }
+      refreshHead();
+      cb.addEventListener('click',function(e){ e.stopPropagation(); boxes.forEach(function(b){b.checked=cb.checked;}); syncFromBoxes(); });
+      head.addEventListener('click',function(e){ if(e.target===cb)return; g.classList.toggle('open'); });
+      g._refresh=refreshHead;
+      tree.appendChild(g);
+    });
+  }
+  function syncFromBoxes(){
+    var all=allClusterIds();
+    var on=[].slice.call($id('f-clusters').querySelectorAll('.fcl-row input:checked')).map(function(b){return b.value;});
+    fState.clusters=(on.length===all.length)?null:new Set(on);   // null means "no cluster restriction"
+    [].slice.call($id('f-clusters').querySelectorAll('.fcl-group')).forEach(function(g){ if(g._refresh)g._refresh(); });
+    updateToggleLabel();
+  }
+  function updateToggleLabel(){
+    var any=$id('f-clusters').querySelector('.fcl-row input:checked');
+    $id('f-cl-toggle').textContent=any?'Deselect all':'Select all';
+  }
+  $id('f-cl-toggle').addEventListener('click',function(){
+    var boxes=[].slice.call($id('f-clusters').querySelectorAll('.fcl-row input'));
+    var any=boxes.some(function(b){return b.checked;});
+    boxes.forEach(function(b){ b.checked=!any; });
+    syncFromBoxes();
   });
-  res.append(topicEl,metaEl,goBtn);
+
+  $id('btn-filter').addEventListener('click',function(){
+    /* Seed the thumbs FROM state, never the other way round. Browsers restore form control
+       values across a same-URL navigation, so reading the DOM on open silently resurrected a
+       200-day minimum from a previous visit and the list came back empty. */
+    lo.value=fState.stabLo; hi.value=fState.stabHi;
+    buildTree(); paintStab(); updateToggleLabel();
+    $id('f-status').querySelectorAll('.fchip').forEach(function(c){c.classList.toggle('on',fState.status.has(c.getAttribute('data-val')));});
+    $id('f-diff').querySelectorAll('.fchip').forEach(function(c){c.classList.toggle('on',fState.diff.has(c.getAttribute('data-val')));});
+    openChecklistOverlay('filter-overlay');
+  });
+  $id('filter-done-btn').addEventListener('click',function(){
+    fState.stabLo=Math.min(+lo.value,+hi.value);
+    fState.stabHi=Math.max(+lo.value,+hi.value);
+    $id('filter-overlay').classList.remove('open');
+    applyFilterChrome(); renderAll();
+  });
+  $id('filter-reset-btn').addEventListener('click',function(){
+    fState.status.clear(); fState.diff.clear(); fState.clusters=null;
+    fState.stabLo=0; fState.stabHi=STAB_MAX; lo.value=0; hi.value=STAB_MAX;
+    buildTree(); paintStab(); updateToggleLabel();
+    $id('f-status').querySelectorAll('.fchip').forEach(function(c){c.classList.remove('on');});
+    $id('f-diff').querySelectorAll('.fchip').forEach(function(c){c.classList.remove('on');});
+    applyFilterChrome(); renderAll();
+  });
+})();
+
+function applyFilterChrome(){
+  var n=filterCount(), b=$id('filter-count');
+  b.hidden=!n; b.textContent=n;
+  $id('btn-filter').classList.toggle('on',!!n);
+}
+
+/* ---- Random: picks from whatever the filters currently allow ---- */
+var _randPick=null;
+function randomFromFilters(){
+  var pool=visibleTopics();
+  var res=$id('rand-result'), note=$id('rand-note'), go=$id('rand-go-btn');
+  res.innerHTML='';
+  if(!pool.length){
+    _randPick=null; go.disabled=true;
+    var em=document.createElement('div'); em.className='rand-empty';
+    em.textContent='Nothing matches your filters right now — widen them and try again.';
+    res.appendChild(em);
+    note.textContent='Chosen at random from the topics your current filters allow.';
+    return;
+  }
+  go.disabled=false;
+  var pick=pool[Math.floor(Math.random()*pool.length)];
+  _randPick=pick;
+  var cl=clusters.find(function(c){return c.id===pick.clusterId;});
+  var h=document.createElement('div'); h.className='rand-topic'; h.textContent=pick.name;
+  var sub=document.createElement('div'); sub.className='rand-cluster';
+  sub.textContent=(cl?cl.name:'')+' · '+(lvlLabel[pick.lvl]||'')+' · '+(DIFF_LABELS[pick.diff]||'');
+  var p=document.createElement('p'); p.className='rand-desc';
+  var st=statusFor(pick.name), si=strengthInfo(pick.name);
+  p.textContent=!sr[pick.name]
+    ? 'You have not studied this one yet. Attempt a question on it with no notes, then rate how it went — that first honest rating is what starts the schedule.'
+    : ('Predicted recall right now is about '+(si.pct!=null?si.pct+'%':'unknown')+', and it is '+
+       (st==='overdue'?'overdue for review':st==='due'?'due today':'not due yet')+
+       '. Try a question before you look anything up.');
+  res.append(h,sub,p);
+  note.textContent='Chosen at random from the '+pool.length+' topic'+(pool.length===1?'':'s')+
+    ' your current filters allow.';
+}
+$id('btn-random').addEventListener('click',function(){ openChecklistOverlay('random-overlay'); randomFromFilters(); });
+$id('rand-again-btn').addEventListener('click',randomFromFilters);
+$id('rand-cancel-btn').addEventListener('click',function(){$id('random-overlay').classList.remove('open');});
+$id('rand-go-btn').addEventListener('click',function(){
+  if(!_randPick)return;
+  $id('random-overlay').classList.remove('open');
+  switchTab('checklist');
+  var p=_randPick; setTimeout(function(){highlightTopic(p);},150);
 });
 
 function highlightTopic(pick){
@@ -4490,25 +4702,86 @@ function highlightTopic(pick){
 //                                                           
 // FILTERS & SEARCH
 //                                                           
-let activeFilter='all',statusFilter='',searchQuery='';
-document.getElementById('btn-all').addEventListener('click',function(){setFilter('all',this);});
-document.getElementById('btn-y1').addEventListener('click',function(){setFilter('y1',this);});
-document.getElementById('btn-y2').addEventListener('click',function(){setFilter('y2',this);});
-document.getElementById('btn-fm').addEventListener('click',function(){setFilter('fm',this);});
-document.getElementById('btn-stats').addEventListener('click',function(){setFilter('stats',this);});
-document.getElementById('btn-mech').addEventListener('click',function(){setFilter('mech',this);});
-document.getElementById('btn-due').addEventListener('click',function(){setFilter('due',this);});
-document.getElementById('btn-overdue').addEventListener('click',function(){setFilter('overdue',this);});
-document.getElementById('btn-notstarted').addEventListener('click',function(){setFilter('notstarted',this);});
-document.getElementById('search-input').addEventListener('input',function(){searchQuery=this.value.toLowerCase().trim();renderAll();});
-const STATUS_FILTERS=new Set(['due','overdue','notstarted']);
-function matchesFilter(comp,lvl){switch(activeFilter){case 'all':return true;case 'y1':return comp==='pure'&&lvl==='y1';case 'y2':return comp==='pure'&&lvl==='y2';case 'stats':return comp==='stats';case 'mech':return comp==='mech';case 'fm':return lvl==='fm';default:return true;}}
-function setFilter(f,btn){
-  if(STATUS_FILTERS.has(f)){ statusFilter=f; activeFilter='all'; }
-  else{ activeFilter=f; statusFilter=''; }
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  renderAll();
+/* Two layers, deliberately separate. The six buttons in the bar pick ONE component group and
+   are the coarse cut; everything finer — status, difficulty, stability, individual clusters —
+   lives in the Filter modal and stacks on top. Search narrows whatever those two leave. */
+// FM options are whichever further modules exist beyond the core; kept as a set so a new
+// module in clusters.js is picked up without touching this.
+const FM_OPT_COMPONENTS=new Set(['fp1','fs1','fm1','d1']);
+function matchesFilter(comp,lvl){
+  switch(activeFilter){
+    case 'all':      return true;
+    case 'as':       return lvl==='y1';                    // AS is the Year 1 half of Maths
+    case 'pure':     return comp==='pure';
+    case 'applied':  return comp==='stats'||comp==='mech';
+    case 'corepure': return comp==='corepure';
+    case 'fmopt':    return FM_OPT_COMPONENTS.has(comp);
+    default:         return true;
+  }
+}
+document.querySelectorAll('.filters-inner .filter-btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    activeFilter=b.getAttribute('data-comp');
+    document.querySelectorAll('.filters-inner .filter-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    renderAll();
+  });
+});
+
+/* ---- the Filter modal's own predicate ---- */
+function stabilityDays(name){ var r=(typeof memoryFor==='function')?memoryFor(name):null; return (r&&r.S)?r.S:0; }
+function matchesFilterModal(t){
+  if(fState.status.size){
+    var st=statusFor(t.name), ok=false;
+    if(fState.status.has('notstarted')&&!sr[t.name])ok=true;
+    if(fState.status.has('overdue')&&st==='overdue')ok=true;
+    if(fState.status.has('due')&&st==='due')ok=true;
+    if(fState.status.has('upcoming')&&st==='upcoming')ok=true;
+    if(fState.status.has('mastered')&&typeof isMastered==='function'&&isMastered(t.name))ok=true;
+    if(!ok)return false;
+  }
+  if(fState.diff.size && !fState.diff.has(String(t.diff))) return false;
+  if(fState.clusters && !fState.clusters.has(t.clusterId)) return false;
+  if(fState.stabLo>0 || fState.stabHi<STAB_MAX){
+    var S=stabilityDays(t.name);
+    if(S<fState.stabLo) return false;
+    if(fState.stabHi<STAB_MAX && S>fState.stabHi) return false;
+  }
+  return true;
+}
+function filterCount(){
+  var n=fState.status.size+fState.diff.size;
+  if(fState.clusters)n++;
+  if(fState.stabLo>0||fState.stabHi<STAB_MAX)n++;
+  return n;
+}
+
+/* ---- search: name, chapter number, cluster, component, and status words ---- */
+const SEARCH_WORDS={
+  overdue:['overdue','late','behind'], due:['due','today'],
+  notstarted:['not started','notstarted','new','untouched','unstudied'],
+  mastered:['mastered','done','strong'], upcoming:['upcoming','scheduled','later']
+};
+function matchesSearch(t){
+  if(!searchQuery) return true;
+  var q=searchQuery;
+  if(t.name.toLowerCase().includes(q)) return true;
+  var cl=clusters.find(c=>c.id===t.clusterId);
+  if(cl && cl.name.toLowerCase().includes(q)) return true;
+  // "12.8" or a bare "12" matches the chapter number the topic name starts with
+  var num=(t.name.match(/^\d+(\.\d+)?/)||[])[0];
+  if(num && (num===q || num.startsWith(q+'.') || num.split('.')[0]===q)) return true;
+  if((t.component||'').toLowerCase().includes(q)) return true;
+  if((lvlLabel[t.lvl]||'').toLowerCase()===q) return true;
+  var st=statusFor(t.name);
+  var isMast=(typeof isMastered==='function')&&isMastered(t.name);
+  for(var key in SEARCH_WORDS){
+    if(!SEARCH_WORDS[key].some(w=>w.startsWith(q)||q.startsWith(w))) continue;
+    if(key==='notstarted'&&!sr[t.name]) return true;
+    if(key==='mastered'&&isMast) return true;
+    if(key===st) return true;
+  }
+  return false;
 }
 
 //                                                           
@@ -4516,12 +4789,9 @@ function setFilter(f,btn){
 //                                                           
 function visibleTopics(){
   return activeTopics().filter(t=>{
-    if(searchQuery && !t.name.toLowerCase().includes(searchQuery)) return false;
+    if(!matchesSearch(t)) return false;
     if(!matchesFilter(t.component,t.lvl)) return false;
-    const st=statusFor(t.name);
-    if(statusFilter==='due' && st!=='due') return false;
-    if(statusFilter==='overdue' && st!=='overdue') return false;
-    if(statusFilter==='notstarted' && sr[t.name]) return false;
+    if(!matchesFilterModal(t)) return false;
     return true;
   });
 }
@@ -4552,14 +4822,12 @@ function renderAll(){
     (COMPONENTS[q.id]||[]).forEach(comp=>{
       const cards=[];
       qActive.filter(c=>c.component===comp.id).forEach(c=>{
-        const vis=c.topics.map((name,i)=>({name,lvl:c.lvls[i],diff:c.diff[i],component:c.component}))
+        // clusterId is carried through so the Filter modal's cluster picker can see it.
+        const vis=c.topics.map((name,i)=>({name,lvl:c.lvls[i],diff:c.diff[i],component:c.component,clusterId:c.id}))
           .filter(t=>{
-            if(searchQuery && !t.name.toLowerCase().includes(searchQuery)) return false;
+            if(!matchesSearch(t)) return false;
             if(!matchesFilter(t.component,t.lvl)) return false;
-            const st=statusFor(t.name);
-            if(statusFilter==='due' && st!=='due') return false;
-            if(statusFilter==='overdue' && st!=='overdue') return false;
-            if(statusFilter==='notstarted' && sr[t.name]) return false;
+            if(!matchesFilterModal(t)) return false;
             return true;
           });
         if(!vis.length) return;

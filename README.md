@@ -101,6 +101,18 @@ Three knock-on details, each of which breaks if you only widen the rail:
 
 > **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` is still orphaned partly because there were two places to wire a tab up and only one got done. Anything nav-shaped now has exactly one home.
 
+**The Checklist's filter bar is two layers.** Six buttons on the left pick **one** component group — All, AS level, Pure, Applied, Further Maths core, FM options — and are the coarse cut. Everything finer lives behind **Filter**, and stacks on top. `matchesFilter()` handles the six; `matchesFilterModal()` handles the rest; `matchesSearch()` narrows whatever those two leave. All three are applied in `visibleTopics()` *and* in the cluster-card builder, which are the two places topics are counted.
+
+The **Filter** modal carries status (multi-select), intrinsic difficulty, a **dual-thumb stability range** (0–360+ days, where 361 means "no upper bound"), and a cluster picker grouped by component with a select-all that flips to deselect-all. `fState.clusters` is `null` when every cluster is ticked rather than a set of all ids, so "no restriction" and "everything happens to be selected" stay distinguishable. A count badge on the chip shows how many groups are active.
+
+> **Seed the slider thumbs from state, never from the DOM.** Browsers restore form-control values across a same-URL navigation, so reading the inputs when the modal opens silently resurrected a 200-day minimum from a previous visit and the list came back empty. The open handler now writes `fState` into the inputs, and both carry `autocomplete="off"`.
+
+**Search** matches topic name, cluster name, chapter number (`12.8`, or a bare `12` for the whole chapter), component, year label, and status words — `overdue`, `due`, `not started`, `mastered`, `upcoming` — with prefix matching in both directions so `overd` and `overdue reviews` both land. It lives in a row that reveals under the bar; closing it clears the query rather than leaving an invisible filter applied.
+
+**Random** draws from `visibleTopics()`, so it inherits whatever the bar and the modal currently allow and needs no filters of its own — the old picker's chips are gone. It closes any other Checklist overlay first, states the pool size it drew from, and offers *Randomise again* beside a rainbow *Go to topic*.
+
+**The legend moved behind the `?`.** It was a `<details>` above the list; the grid element itself is moved into the modal on first open rather than duplicated, so there is still one copy of it.
+
 **There are no emoji in the app.** All 56 were removed on 2026-08-17 — 52 written as literal characters plus **4 hidden as HTML numeric entities** (`&#128214;` and friends), which a Unicode scan of the source cannot see because they only become pictographs once the browser parses them. Each left a placeholder naming the icon that belongs there:
 
 ```html
@@ -182,6 +194,10 @@ Three geometry traps, all of which produced a visibly off-centre thumb:
 - **A range input is inline-level.** The wrapper then gains a line box with descender space beneath it and is taller than the track, so the thumb's `top:50%` measures against the wrong box and lands ~3.5px low — far enough to overhang the bottom edge. `.sspring-bar input[type=range]{display:block}` collapses it. Scoped deliberately: the round-knob sliders carry a `+2px` nudge that compensates for the very same gap and would go off-centre the other way.
 - **A margin on the input sits *inside* the wrapper.** `.plog-slider` had `margin-top:6px`, which made its wrapper 6px taller and threw the thumb 3px high. Spacing above belongs on `.sspring-has-nums`.
 - **Mobile overrides for these sliders are dead.** The `.rating-slider` / `.plog-slider` rules sit outside any media query and later in the file; media queries add no specificity, so source order wins. The `height:40px` rule in the touch block has never applied. The bar sliders use the same 26px track everywhere, which clears SC 2.5.8's 24px on its own.
+
+**The review rows put the action on the right.** `.rev-meta` wraps the recall %, the date and the Test button so the group rides to the far right with `margin-left:auto`, 20px clear of the edge (the row's right padding). Test itself is drawn from the same full-strength spectrum as the nav rail's pill, with `--on-spectrum` carrying its text colour — the ramp is light in the dark theme and dark in the light ones, so one hardcoded colour cannot stay legible across both.
+
+> This deliberately walks back part of the `--row-name-max` work. That cap exists because metadata pinned to the far right of a wide row made people lose their line ([NN/g's lawn-mower pattern](https://www.nngroup.com/articles/lawn-mower-pattern/)). The name column is still capped, so the *name* has not moved; only the action group has. Worth re-checking on a very wide monitor, where the gap between topic and button is largest.
 
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
