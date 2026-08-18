@@ -1730,7 +1730,7 @@ function openGradeBoundaries(){
   renderGradeBoundaries();
   overlay.classList.add('open');document.body.style.overflow='hidden';
 }
-function closeGradeBoundaries(){document.getElementById('papergb-overlay').classList.remove('open');document.body.style.overflow='';}
+function closeGradeBoundaries(){document.getElementById('papergb-overlay').classList.remove('open');mhReleaseScroll();}
 function positionGbPill(targetBtn,immediate){
   var row=document.getElementById('gb-grade-row');
   var pill=document.getElementById('gb-slider-pill');
@@ -2533,12 +2533,21 @@ function daysDiff(a,b){return Math.round((_dayMs(b)-_dayMs(a))/86400000);}
    calls per Checklist render that was ~5ms of a ~14ms draw. MDN recommends reusing a formatter
    when formatting many dates; the result cache on top makes repeated due dates free. */
 const _DTF_SHORT=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'});
-var _fmtCache=Object.create(null), _fmtCacheN=0;
+const _DTF_YEAR=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric'});
+var _fmtCache=Object.create(null), _fmtCacheN=0, _fmtYr='';
+/* The year appears only when it is not the current one. Without that, a date far enough out
+   reads as one just gone: the study modal's grade forecast routinely offers "+470d · 1 Dec",
+   and intervals run to MAX_INTERVAL = 3,650 days, so this is not a corner case. Dates inside
+   this year — nearly all of them — are unchanged, so the common row stays short.
+   The cache has to drop on 1 January, since the same string formats differently either side. */
 function fmtDate(d){
+  const yr=today().slice(0,4);
+  if(yr!==_fmtYr){ _fmtCache=Object.create(null); _fmtCacheN=0; _fmtYr=yr; }
   const hit=_fmtCache[d]; if(hit!==undefined) return hit;
   if(_fmtCacheN>4000){ _fmtCache=Object.create(null); _fmtCacheN=0; }
   _fmtCacheN++;
-  return (_fmtCache[d]=_DTF_SHORT.format(new Date(_dayMs(d))));
+  const dt=new Date(_dayMs(d));
+  return (_fmtCache[d]=(d.slice(0,4)===yr?_DTF_SHORT:_DTF_YEAR).format(dt));
 }
 
 //                                                           
@@ -3120,7 +3129,7 @@ function renderReviewPanel(){
   activeTopics().forEach(t=>{
     const status=statusFor(t.name);
     if(!status||status==='done') return;
-    items.push({name:t.name,status,due:dueDateFor(t.name),rec:sr[t.name]});
+    items.push({name:t.name,status,due:dueDateFor(t.name),rec:memoryFor(t.name)||sr[t.name]});
   });
   const order={overdue:0,due:1,upcoming:2};
   items.sort((a,b)=>order[a.status]-order[b.status]||a.due.localeCompare(b.due));
@@ -3201,7 +3210,10 @@ function renderTodayCard(){
   const gainsEl=document.getElementById('today-gains');
   if(gainsEl){
     let mastered=0, reviews=0;
-    activeTopics().forEach(t=>{const r=sr[t.name]; if(!r)return; if(r.S>=MASTERY_STABILITY)mastered++; reviews+=(r.log?r.log.length:((r.reps||0)+(r.lapses||0)));});
+    // isMastered() reads the derived record; sr[].S is the pre-evidence value and would
+    // count a topic as mastered that a logged concept gap has since knocked well below it.
+    // The review count deliberately stays the log length — it means "times you rated this".
+    activeTopics().forEach(t=>{const r=sr[t.name]; if(!r)return; if(isMastered(t.name))mastered++; reviews+=(r.log?r.log.length:((r.reps||0)+(r.lapses||0)));});
     if(hasData && (mastered>0||reviews>0)){
       gainsEl.textContent='✓ '+mastered+' mastered · '+reviews+' review'+(reviews===1?'':'s')+' done'+(streakData.weeksMet>0?' · '+streakData.weeksMet+' weekly goal'+(streakData.weeksMet===1?'':'s')+' hit':'');
       gainsEl.style.display='block';
@@ -3380,39 +3392,47 @@ function switchTab(tab){
 })();
 
 // ---- Stats panel ----
+/* Every number here comes from memoryFor(), never from sr[] directly. sr[] is the stored
+   review log and nothing else (phase 1); the mistake and past-paper evidence is layered on
+   in the replay. Reading sr[].S here meant the Statistics panel disagreed with the rest of
+   the app about the same topic: the summary counted it overdue (derived) while the stability
+   histogram binned it at "6m+" (stored, pre-mistake) and the interval histogram scheduled it
+   off that same stale S. A concept gap that had just halved a topic's stability was invisible
+   in the one place built to audit exactly that. */
 function computeStats(){
-  const topics=activeTopics().filter(t=>sr[t.name]);
+  const topics=activeTopics().filter(t=>sr[t.name]);   // studied at all — a fact about the log
   const n=topics.length;
   if(!n)return null;
   const total=activeTopics().length;
+  const recs=topics.map(t=>memoryFor(t.name)).filter(validRec);
   const retVals=topics.map(t=>currentRetrievability(t.name)).filter(r=>r!=null);
   const avgR=retVals.length?retVals.reduce((a,b)=>a+b,0)/retVals.length:0;
   const mastered=topics.filter(t=>isMastered(t.name)).length;   // a mastered topic can now also be due
   const overdue=topics.filter(t=>statusFor(t.name)==='overdue').length;
   const due_=topics.filter(t=>statusFor(t.name)==='due').length;
-  const totalReps=topics.reduce((a,t)=>a+(sr[t.name].reps||0),0);
-  const totalLapses=topics.reduce((a,t)=>a+(sr[t.name].lapses||0),0);
-  const avgS=topics.reduce((a,t)=>a+sr[t.name].S,0)/n;
-  const avgD=topics.reduce((a,t)=>a+sr[t.name].D,0)/n;
+  const totalReps=recs.reduce((a,r)=>a+(r.reps||0),0);
+  const totalLapses=recs.reduce((a,r)=>a+(r.lapses||0),0);
+  const avgS=recs.length?recs.reduce((a,r)=>a+r.S,0)/recs.length:0;
+  const avgD=recs.length?recs.reduce((a,r)=>a+r.D,0)/recs.length:0;
   // Retrievability bins: 0-10,10-20,...,90-100%
   const retBins=Array(10).fill(0);
   retVals.forEach(r=>{retBins[Math.min(9,Math.floor(r*10))]++;});
   // Stability bins
   const stabBins=[0,0,0,0,0];
   const stabLbls=['<7d','7-30d','1-3m','3-6m','6m+'];
-  topics.forEach(t=>{
-    const S=sr[t.name].S;
+  recs.forEach(r=>{
+    const S=r.S;
     if(S<7)stabBins[0]++;else if(S<30)stabBins[1]++;
     else if(S<90)stabBins[2]++;else if(S<180)stabBins[3]++;else stabBins[4]++;
   });
   // Difficulty bins D 1-10
   const diffBins=Array(10).fill(0);
-  topics.forEach(t=>{diffBins[Math.min(9,Math.max(0,Math.round(sr[t.name].D)-1))]++;});
+  recs.forEach(r=>{diffBins[Math.min(9,Math.max(0,Math.round(r.D)-1))]++;});
   // Interval bins
   const ivlBins=[0,0,0,0,0];
   const ivlLbls=['<1w','1-2w','2-4w','1-3m','3m+'];
   topics.forEach(t=>{
-    const rec=sr[t.name];
+    const rec=memoryFor(t.name); if(!validRec(rec)) return;
     const ivl=safeInterval(intervalForRetention(rec.S,targetRetention(t.name)));
     if(ivl<7)ivlBins[0]++;else if(ivl<14)ivlBins[1]++;
     else if(ivl<30)ivlBins[2]++;else if(ivl<90)ivlBins[3]++;else ivlBins[4]++;
@@ -3560,17 +3580,17 @@ function openStats(){
 }
 function closeStats(){
   document.getElementById('stats-overlay').classList.remove('open');
-  document.body.style.overflow='';
+  mhReleaseScroll();
 }
 
 // ---- Resources overlay (folded into the Checklist) ----
 function openResources(){ renderResources(); document.getElementById('resources-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
-function closeResources(){ document.getElementById('resources-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function closeResources(){ document.getElementById('resources-overlay').classList.remove('open'); mhReleaseScroll(); }
 
 // ---- "More tools" overlay (the rail's grid icon) ----
 // Desktop only in practice: mobile reaches the same four tools through the ⋯ speed-dial.
 function openMore(){ document.getElementById('more-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
-function closeMore(){ document.getElementById('more-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function closeMore(){ document.getElementById('more-overlay').classList.remove('open'); mhReleaseScroll(); }
 
 // Checklist quick-access buttons + overlay close (Esc handled by the global .stats-overlay handler)
 (function(){
@@ -3674,6 +3694,93 @@ function renderShortcutsSettings(){
 }
 loadShortcuts();
 
+/* ---- one focus manager for all 23 dialogs -------------------------------
+   Dialogs neither trapped focus nor gave it back: tabbing out of an open dialog walked into
+   the page behind it, and closing one left focus on <body>, so the next Tab restarted from
+   the top of the document. That is WCAG SC 2.4.3 (Focus Order, Level A) and SC 2.1.2 (No
+   Keyboard Trap's counterpart — focus must be *managed*, not merely escapable), and it was
+   the largest accessibility gap left after the contrast, type-size and target-size work.
+
+   Done with one MutationObserver on the `open` class rather than at 23 call sites, for the
+   same reason the nav is one element: 23 places to keep in step is 23 places to forget one.
+   Every dialog is a .modal-overlay or .stats-overlay whose panel is .modal or .stats-panel,
+   and every one is opened by adding `open` — so the observer sees all of them, including any
+   added later, with no registration step.
+
+   The stack it maintains is ordered by *when* each dialog opened, which the DOM cannot tell
+   you. Three things read it: Escape closes the top one, the scroll lock lifts only when the
+   last one goes, and Tab wraps inside the top one. */
+var mhDialogStack=[];
+(function(){
+  var DIALOG_SEL='.modal-overlay,.stats-overlay';
+  var FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  var openers=new WeakMap();
+  function panelOf(d){ return d.querySelector('.modal,.stats-panel')||d; }
+  function focusables(d){
+    return Array.prototype.filter.call(panelOf(d).querySelectorAll(FOCUSABLE),function(el){
+      // offsetParent is null for display:none, and cheaper than getComputedStyle per element
+      return el.offsetParent!==null || el===document.activeElement;
+    });
+  }
+  function onOpen(d){
+    if(mhDialogStack.indexOf(d)>=0) return;
+    mhDialogStack.push(d);
+    var prev=document.activeElement;
+    if(prev&&prev!==document.body&&!d.contains(prev)) openers.set(d,prev);
+    // Several dialogs focus a specific field of their own on a timer; don't fight them, and
+    // don't move focus if it is already inside. preventScroll keeps a long panel from jumping.
+    if(d.contains(document.activeElement)) return;
+    var f=focusables(d);
+    var target=f.length?f[0]:panelOf(d);
+    if(target===panelOf(d)&&!target.hasAttribute('tabindex')) target.setAttribute('tabindex','-1');
+    try{ target.focus({preventScroll:true}); }catch(err){ try{ target.focus(); }catch(e2){} }
+  }
+  function onClose(d){
+    var i=mhDialogStack.indexOf(d); if(i<0) return;
+    mhDialogStack.splice(i,1);
+    var back=openers.get(d); openers.delete(d);
+    // Only hand focus back if the opener is still in the document and still visible — a
+    // re-render between open and close can have replaced the row that opened the dialog.
+    if(back&&document.contains(back)&&back.offsetParent!==null){
+      try{ back.focus({preventScroll:true}); }catch(err){}
+    }
+  }
+  var obs=new MutationObserver(function(muts){
+    for(var i=0;i<muts.length;i++){
+      var t=muts[i].target;
+      if(!t.matches||!t.matches(DIALOG_SEL)) continue;
+      if(t.classList.contains('open')) onOpen(t); else onClose(t);
+    }
+  });
+  obs.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+  // Trap Tab inside the topmost dialog. Capture phase, so it runs before anything else.
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Tab'||!mhDialogStack.length) return;
+    var d=mhDialogStack[mhDialogStack.length-1];
+    var f=focusables(d); if(!f.length) return;
+    var first=f[0], last=f[f.length-1], cur=document.activeElement;
+    if(!d.contains(cur)){ e.preventDefault(); (e.shiftKey?last:first).focus(); return; }
+    if(e.shiftKey && cur===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && cur===last){ e.preventDefault(); first.focus(); }
+  },true);
+})();
+/* One place decides whether the page behind may scroll again. Thirteen close functions each
+   set overflow='' unconditionally, so closing an *inner* dialog unlocked the page while an
+   outer one was still open — Escape out of My exams and the Settings panel still on top of it
+   would scroll away behind you. Reads the live DOM rather than mhDialogStack, because the
+   stack is maintained by a MutationObserver and so is one microtask behind a synchronous
+   close; the DOM is right immediately. */
+function mhReleaseScroll(){
+  if(!document.querySelector('.modal-overlay.open,.stats-overlay.open')) document.body.style.overflow='';
+}
+// Close the dialog on top of the stack — the one the student is actually looking at.
+function mhCloseTopDialog(){
+  var d=mhDialogStack[mhDialogStack.length-1]; if(!d) return false;
+  d.classList.remove('open');
+  mhReleaseScroll();
+  return true;
+}
+
 // Global keydown — capture phase so we intercept before inputs
 document.addEventListener('keydown',function(e){
   // Rebind capture mode
@@ -3692,18 +3799,17 @@ document.addEventListener('keydown',function(e){
     scListeningId=null;renderShortcutsSettings();
     return;
   }
-  // Normal shortcut firing
   if(e.ctrlKey||e.metaKey||e.altKey)return;
+  /* Escape is handled *before* the text-field guard below. It used to sit after it, so with
+     the cursor in the glossary's search box — or any of the dozen fields inside a dialog —
+     Escape did nothing at all and the only way out was the mouse. One input had a private
+     workaround for this; the rest did not. Closing the top of the stack also fixes two
+     smaller wrongs: it used to close the first *stats-overlay in DOM order* whatever was
+     actually on top, so Settings would close from under an open My exams. */
+  if(e.key==='Escape'){ mhCloseTopDialog(); return; }
+  // Normal shortcut firing — only when the student is not typing
   var tag=(document.activeElement||{}).tagName||'';
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
-  // Escape closes overlays
-  if(e.key==='Escape'){
-    var open=document.querySelector('.stats-overlay.open');
-    if(open){open.classList.remove('open');document.body.style.overflow='';return;}
-    var mopen=document.querySelector('.modal-overlay.open');
-    if(mopen){mopen.classList.remove('open');document.body.style.overflow='';return;}
-    return;
-  }
   var match=SHORTCUTS_DEF.find(function(s){return getShortcutKey(s.id)===e.key;});
   if(match){e.preventDefault();fireShortcut(match.id);}
 },true);
@@ -3788,7 +3894,7 @@ function renderSyncCard(){
 }
 function closeSettings(){
   document.getElementById('settings-overlay').classList.remove('open');
-  document.body.style.overflow='';
+  mhReleaseScroll();
 }
 document.getElementById('settings-close').addEventListener('click',closeSettings);
 document.getElementById('settings-overlay').addEventListener('click',function(e){if(e.target===this)closeSettings();});
@@ -3889,7 +3995,7 @@ function openMyExams(){
   _mexTrack=getTrack(); _mexFm=new Set(fmOptions); _mexDates=Object.assign({},getPaperDates());
   renderMyExams(); document.getElementById('myexams-overlay').classList.add('open'); document.body.style.overflow='hidden';
 }
-function closeMyExams(){ document.getElementById('myexams-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function closeMyExams(){ document.getElementById('myexams-overlay').classList.remove('open'); mhReleaseScroll(); }
 function renderMyExams(){
   var tw=document.getElementById('mex-tracks'); tw.innerHTML='';
   TRACKS.forEach(function(t){
@@ -3953,7 +4059,7 @@ function _weakScore(name){
   return base;
 }
 function openPlanner(){ renderPlanner(); document.getElementById('planner-overlay').classList.add('open'); document.body.style.overflow='hidden'; }
-function closePlanner(){ document.getElementById('planner-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function closePlanner(){ document.getElementById('planner-overlay').classList.remove('open'); mhReleaseScroll(); }
 function renderPlanner(){
   var body=document.getElementById('planner-body'); if(!body)return;
   var papers=activePapers();
@@ -6069,7 +6175,7 @@ function renderFormulaSheet(){
   });
 }
 function openFormula(){renderFormulaSheet();document.getElementById('formula-overlay').classList.add('open');document.body.style.overflow='hidden';}
-function closeFormula(){document.getElementById('formula-overlay').classList.remove('open');document.body.style.overflow='';}
+function closeFormula(){document.getElementById('formula-overlay').classList.remove('open');mhReleaseScroll();}
 
 // ---- glossary ----
 var gxScope='';      // '' = all topics, else a topic name
@@ -6137,7 +6243,7 @@ function openGlossary(prefill){
   document.body.style.overflow='hidden';
   if(inp&&!prefill)setTimeout(function(){inp.focus();},120);
 }
-function closeGlossary(){document.getElementById('glossary-overlay').classList.remove('open');document.body.style.overflow='';}
+function closeGlossary(){document.getElementById('glossary-overlay').classList.remove('open');mhReleaseScroll();}
 
 // ---- inline glossary (tap any term in the app for a quick definition) ----
 var glossIndex=null,glossRe=null;
@@ -6295,7 +6401,7 @@ function openTopicPP(topic){
   document.getElementById('topicpp-overlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
-function closeTopicPP(){document.getElementById('topicpp-overlay').classList.remove('open');document.body.style.overflow='';}
+function closeTopicPP(){document.getElementById('topicpp-overlay').classList.remove('open');mhReleaseScroll();}
 function renderPlogMistakes(){
   var list=document.getElementById('plog-mk-list');list.innerHTML='';
   if(!plogMistakes.length){var e=document.createElement('div');e.className='plog-mk-empty';e.textContent='No mistakes added yet.';list.appendChild(e);return;}
@@ -6350,7 +6456,7 @@ function openPaperLog(prefill){
   document.body.style.overflow='hidden';
   setTimeout(syncSpringSliders,50);
 }
-function closePaperLog(){document.getElementById('paperlog-overlay').classList.remove('open');document.body.style.overflow='';}
+function closePaperLog(){document.getElementById('paperlog-overlay').classList.remove('open');mhReleaseScroll();}
 function plogSave(){
   var mid=document.getElementById('plog-module').value,n=+document.getElementById('plog-paper').value;
   var year=document.getElementById('plog-year').value;
@@ -6420,7 +6526,7 @@ function openPaperPerf(){
   document.getElementById('paperperf-overlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
-function closePaperPerf(){document.getElementById('paperperf-overlay').classList.remove('open');document.body.style.overflow='';}
+function closePaperPerf(){document.getElementById('paperperf-overlay').classList.remove('open');mhReleaseScroll();}
 function renderPerfCharts(){
   var wrap=document.getElementById('perf-charts');if(!wrap)return;wrap.innerHTML='';
   var mid=document.getElementById('perf-module').value,m=ppModuleById(mid);if(!m)return;

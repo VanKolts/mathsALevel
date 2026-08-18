@@ -3,7 +3,7 @@
 const clusters = [
   // ==================== A-LEVEL MATHEMATICS (9MA0) ====================
   // ---- PURE (Edexcel Pure Year 1 & Year 2, by chapter) ----
-  { id:'p1c1', name:'1 · Algebraic expressions', color:'#a78bfa', qual:'maths', component:'pure',
+  { id:'p1c1', name:'Y1 1 · Algebraic expressions', color:'#a78bfa', qual:'maths', component:'pure',
     topics:[
       '1.1 Index laws',
       '1.2 Expanding brackets',
@@ -13,7 +13,7 @@ const clusters = [
       '1.6 Rationalising denominators',
     ],
     lvls:['y1','y1','y1','y1','y1','y1'], diff:[1,1,1,2,1,2] },
-  { id:'p1c2', name:'2 · Quadratics', color:'#34d399', qual:'maths', component:'pure',
+  { id:'p1c2', name:'Y1 2 · Quadratics', color:'#34d399', qual:'maths', component:'pure',
     topics:[
       '2.1 Solving quadratic equations',
       '2.2 Completing the square',
@@ -23,7 +23,7 @@ const clusters = [
       '2.6 Modelling with quadratics',
     ],
     lvls:['y1','y1','y1','y1','y1','y1'], diff:[1,2,1,1,2,2] },
-  { id:'p1c3', name:'3 · Equations and inequalities', color:'#f472b6', qual:'maths', component:'pure',
+  { id:'p1c3', name:'Y1 3 · Equations and inequalities', color:'#f472b6', qual:'maths', component:'pure',
     topics:[
       '3.1 Linear simultaneous equations',
       '3.2 Quadratic simultaneous equations',
@@ -34,7 +34,7 @@ const clusters = [
       '3.7 Regions',
     ],
     lvls:['y1','y1','y1','y1','y1','y1','y1'], diff:[1,2,2,1,2,2,2] },
-  { id:'p1c4', name:'4 · Graphs and transformations', color:'#f97316', qual:'maths', component:'pure',
+  { id:'p1c4', name:'Y1 4 · Graphs and transformations', color:'#f97316', qual:'maths', component:'pure',
     topics:[
       '4.1 Cubic graphs',
       '4.2 Quartic graphs',
@@ -45,7 +45,7 @@ const clusters = [
       '4.7 Transforming functions',
     ],
     lvls:['y1','y1','y1','y1','y1','y1','y1'], diff:[2,2,2,2,2,2,2] },
-  { id:'p1c5', name:'5 · Straight line graphs', color:'#fbbf24', qual:'maths', component:'pure',
+  { id:'p1c5', name:'Y1 5 · Straight line graphs', color:'#fbbf24', qual:'maths', component:'pure',
     topics:[
       '5.1 y = mx + c',
       '5.2 Equations of straight lines',
@@ -54,7 +54,7 @@ const clusters = [
       '5.5 Modelling with straight lines',
     ],
     lvls:['y1','y1','y1','y1','y1'], diff:[1,1,1,2,2] },
-  { id:'p1c6', name:'6 · Circles', color:'#60a5fa', qual:'maths', component:'pure',
+  { id:'p1c6', name:'Y1 6 · Circles', color:'#60a5fa', qual:'maths', component:'pure',
     topics:[
       '6.1 Midpoints and perpendicular bisectors',
       '6.2 Equation of a circle',
@@ -63,7 +63,7 @@ const clusters = [
       '6.5 Circles and triangles',
     ],
     lvls:['y1','y1','y1','y1','y1'], diff:[2,2,2,2,3] },
-  { id:'p1c7', name:'7 · Algebraic methods', color:'#818cf8', qual:'maths', component:'pure',
+  { id:'p1c7', name:'Y1 7 · Algebraic methods', color:'#818cf8', qual:'maths', component:'pure',
     topics:[
       '7.1 Algebraic fractions',
       '7.2 Dividing polynomials',
@@ -72,7 +72,7 @@ const clusters = [
       '7.5 Methods of proof',
     ],
     lvls:['y1','y1','y1','y1','y1'], diff:[2,2,2,1,1] },
-  { id:'p1c8', name:'8 · The binomial expansion', color:'#2dd4bf', qual:'maths', component:'pure',
+  { id:'p1c8', name:'Y1 8 · The binomial expansion', color:'#2dd4bf', qual:'maths', component:'pure',
     topics:[
       "8.1 Pascal's triangle",
       '8.2 Factorial notation',
@@ -81,7 +81,7 @@ const clusters = [
       '8.5 Binomial estimation',
     ],
     lvls:['y1','y1','y1','y1','y1'], diff:[1,1,2,2,2] },
-  { id:'p1c9', name:'9 · Trigonometric ratios', color:'#94a3b8', qual:'maths', component:'pure',
+  { id:'p1c9', name:'Y1 9 · Trigonometric ratios', color:'#94a3b8', qual:'maths', component:'pure',
     topics:[
       '9.1 The cosine rule',
       '9.2 The sine rule',
@@ -91,7 +91,7 @@ const clusters = [
       '9.6 Transforming trigonometric graphs',
     ],
     lvls:['y1','y1','y1','y1','y1','y1'], diff:[1,1,1,1,2,2] },
-  { id:'p1c10', name:'10 · Trigonometric identities and equations', color:'#c084fc', qual:'maths', component:'pure',
+  { id:'p1c10', name:'Y1 10 · Trigonometric identities and equations', color:'#c084fc', qual:'maths', component:'pure',
     topics:[
       '10.1 Angles in all four quadrants',
       '10.2 Exact values of trigonometrical ratios',
@@ -101,7 +101,7 @@ const clusters = [
       '10.6 Equations and identities',
     ],
     lvls:['y1','y1','y1','y1','y1','y1'], diff:[2,2,2,2,3,3] },
-  { id:'p1c11', name:'11 · Vectors', color:'#e879f9', qual:'maths', component:'pure',
+  { id:'p1c11', name:'Y1 11 · Vectors', color:'#e879f9', qual:'maths', component:'pure',
     topics:[
       '11.1 Vectors',
       '11.2 Representing vectors',
@@ -111,7 +111,7 @@ const clusters = [
       '11.6 Modelling with vectors',
     ],
     lvls:['y1','y1','y1','y1','y1','y1'], diff:[1,1,1,1,2,2] },
-  { id:'p1c12', name:'12 · Differentiation', color:'#fb7185', qual:'maths', component:'pure',
+  { id:'p1c12', name:'Y1 12 · Differentiation', color:'#fb7185', qual:'maths', component:'pure',
     topics:[
       '12.1 Gradients of curves',
       '12.2 Finding the derivative',
@@ -126,7 +126,7 @@ const clusters = [
       '12.11 Modelling with differentiation',
     ],
     lvls:['y1','y1','y1','y1','y1','y1','y1','y1','y1','y1','y1'], diff:[2,1,1,1,1,1,1,2,2,2,2] },
-  { id:'p1c13', name:'13 · Integration', color:'#38bdf8', qual:'maths', component:'pure',
+  { id:'p1c13', name:'Y1 13 · Integration', color:'#38bdf8', qual:'maths', component:'pure',
     topics:[
       '13.1 Integrating xⁿ',
       '13.2 Indefinite integrals',
@@ -137,7 +137,7 @@ const clusters = [
       '13.7 Areas between curves and lines',
     ],
     lvls:['y1','y1','y1','y1','y1','y1','y1'], diff:[2,1,2,2,2,2,2] },
-  { id:'p1c14', name:'14 · Exponentials and logarithms', color:'#a3e635', qual:'maths', component:'pure',
+  { id:'p1c14', name:'Y1 14 · Exponentials and logarithms', color:'#a3e635', qual:'maths', component:'pure',
     topics:[
       '14.1 Exponential functions',
       '14.2 y = eˣ',
@@ -149,7 +149,7 @@ const clusters = [
       '14.8 Logarithms and non-linear data',
     ],
     lvls:['y1','y1','y1','y1','y1','y1','y1','y1'], diff:[1,1,2,1,2,2,2,2] },
-  { id:'p2c1', name:'1 · Algebraic methods', color:'#a78bfa', qual:'maths', component:'pure',
+  { id:'p2c1', name:'Y2 1 · Algebraic methods', color:'#a78bfa', qual:'maths', component:'pure',
     topics:[
       '1.1 Proof by contradiction',
       '1.3 Partial fractions',
@@ -157,7 +157,7 @@ const clusters = [
       '1.5 Algebraic division',
     ],
     lvls:['y2','y2','y2','y2'], diff:[2,2,3,2] },
-  { id:'p2c2', name:'2 · Functions and graphs', color:'#34d399', qual:'maths', component:'pure',
+  { id:'p2c2', name:'Y2 2 · Functions and graphs', color:'#34d399', qual:'maths', component:'pure',
     topics:[
       '2.1 The modulus function',
       '2.2 Functions and mappings',
@@ -168,7 +168,7 @@ const clusters = [
       '2.7 Solving modulus problems',
     ],
     lvls:['y2','y2','y2','y2','y2','y2','y2'], diff:[2,2,2,2,3,3,3] },
-  { id:'p2c3', name:'3 · Sequences and series', color:'#f472b6', qual:'maths', component:'pure',
+  { id:'p2c3', name:'Y2 3 · Sequences and series', color:'#f472b6', qual:'maths', component:'pure',
     topics:[
       '3.1 Arithmetic sequences',
       '3.2 Arithmetic series',
@@ -180,14 +180,14 @@ const clusters = [
       '3.8 Modelling with series',
     ],
     lvls:['y2','y2','y2','y2','y2','y2','y2','y2'], diff:[1,1,1,1,1,1,2,2] },
-  { id:'p2c4', name:'4 · Binomial expansion', color:'#f97316', qual:'maths', component:'pure',
+  { id:'p2c4', name:'Y2 4 · Binomial expansion', color:'#f97316', qual:'maths', component:'pure',
     topics:[
       '4.1 Expanding (1 + x)ⁿ',
       '4.2 Expanding (a + bx)ⁿ',
       '4.3 Using partial fractions',
     ],
     lvls:['y2','y2','y2'], diff:[2,2,3] },
-  { id:'p2c5', name:'5 · Radians', color:'#fbbf24', qual:'maths', component:'pure',
+  { id:'p2c5', name:'Y2 5 · Radians', color:'#fbbf24', qual:'maths', component:'pure',
     topics:[
       '5.1 Radian measure',
       '5.2 Arc length',
@@ -196,7 +196,7 @@ const clusters = [
       '5.5 Small angle approximations',
     ],
     lvls:['y2','y2','y2','y2','y2'], diff:[1,1,2,2,2] },
-  { id:'p2c6', name:'6 · Trigonometric functions', color:'#60a5fa', qual:'maths', component:'pure',
+  { id:'p2c6', name:'Y2 6 · Trigonometric functions', color:'#60a5fa', qual:'maths', component:'pure',
     topics:[
       '6.1 Secant, cosecant and cotangent',
       '6.2 Graphs of sec x, cosec x and cot x',
@@ -205,7 +205,7 @@ const clusters = [
       '6.5 Inverse trigonometric functions',
     ],
     lvls:['y2','y2','y2','y2','y2'], diff:[2,2,2,2,2] },
-  { id:'p2c7', name:'7 · Trigonometry and modelling', color:'#818cf8', qual:'maths', component:'pure',
+  { id:'p2c7', name:'Y2 7 · Trigonometry and modelling', color:'#818cf8', qual:'maths', component:'pure',
     topics:[
       '7.1 Addition formulae',
       '7.2 Using the angle addition formulae',
@@ -216,7 +216,7 @@ const clusters = [
       '7.7 Modelling with trigonometric functions',
     ],
     lvls:['y2','y2','y2','y2','y2','y2','y2'], diff:[3,3,3,3,3,3,2] },
-  { id:'p2c8', name:'8 · Parametric equations', color:'#2dd4bf', qual:'maths', component:'pure',
+  { id:'p2c8', name:'Y2 8 · Parametric equations', color:'#2dd4bf', qual:'maths', component:'pure',
     topics:[
       '8.1 Parametric equations',
       '8.2 Using trigonometric identities',
@@ -225,7 +225,7 @@ const clusters = [
       '8.5 Modelling with parametric equations',
     ],
     lvls:['y2','y2','y2','y2','y2'], diff:[2,2,2,2,2] },
-  { id:'p2c9', name:'9 · Differentiation', color:'#94a3b8', qual:'maths', component:'pure',
+  { id:'p2c9', name:'Y2 9 · Differentiation', color:'#94a3b8', qual:'maths', component:'pure',
     topics:[
       '9.1 Differentiating sin x and cos x',
       '9.2 Differentiating exponentials and logarithms',
@@ -239,7 +239,7 @@ const clusters = [
       '9.10 Rates of change',
     ],
     lvls:['y2','y2','y2','y2','y2','y2','y2','y2','y2','y2'], diff:[2,2,3,2,2,2,3,3,2,3] },
-  { id:'p2c10', name:'10 · Numerical methods', color:'#c084fc', qual:'maths', component:'pure',
+  { id:'p2c10', name:'Y2 10 · Numerical methods', color:'#c084fc', qual:'maths', component:'pure',
     topics:[
       '10.1 Locating roots',
       '10.2 Iteration',
@@ -247,7 +247,7 @@ const clusters = [
       '10.4 Applications to modelling',
     ],
     lvls:['y2','y2','y2','y2'], diff:[1,2,2,2] },
-  { id:'p2c11', name:'11 · Integration', color:'#e879f9', qual:'maths', component:'pure',
+  { id:'p2c11', name:'Y2 11 · Integration', color:'#e879f9', qual:'maths', component:'pure',
     topics:[
       '11.1 Integrating standard functions',
       '11.2 Integrating f(ax + b)',
@@ -263,7 +263,7 @@ const clusters = [
       '11.12 Volumes of revolution',
     ],
     lvls:['y2','y2','y2','y2','y2','y2','y2','y2','y2','y2','y2','y2'], diff:[2,2,3,3,3,3,3,2,1,3,3,3] },
-  { id:'p2c12', name:'12 · Vectors', color:'#fb7185', qual:'maths', component:'pure',
+  { id:'p2c12', name:'Y2 12 · Vectors', color:'#fb7185', qual:'maths', component:'pure',
     topics:[
       '12.1 3D coordinates',
       '12.2 Vectors in 3D',

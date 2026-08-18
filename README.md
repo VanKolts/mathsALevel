@@ -200,6 +200,20 @@ Three geometry traps, all of which produced a visibly off-centre thumb:
 
 > This deliberately walks back part of the `--row-name-max` work. That cap exists because metadata pinned to the far right of a wide row made people lose their line ([NN/g's lawn-mower pattern](https://www.nngroup.com/articles/lawn-mower-pattern/)). The name column is still capped, so the *name* has not moved; only the action group has. Worth re-checking on a very wide monitor, where the gap between topic and button is largest.
 
+### One focus manager for every dialog
+
+Until 2026-08-18 no dialog trapped keyboard focus or gave it back: Tab walked straight out of an open panel into the page behind it, and closing one left focus on `<body>`, so the next Tab restarted from the top of the document. That is [SC 2.4.3 Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html) (Level A), and it was the largest gap left after the contrast and target-size work.
+
+All 23 dialogs are a `.modal-overlay` or a `.stats-overlay` with a `.modal` / `.stats-panel` inside, and every one is opened by adding the class `open`. So it is **one `MutationObserver` on that class**, not 23 call sites — the same argument as [one nav element](#the-visual-layer): 23 places to keep in step is 23 places to forget one, and a dialog added next year is covered without registering it.
+
+The observer maintains `mhDialogStack`, ordered by *when* each dialog opened, which the DOM cannot tell you. Three things read it, and each was a bug before it existed:
+
+- **Escape closes the dialog on top.** It used to close the first open `.stats-overlay` *in document order*, so with Settings open behind My exams, Escape dismissed Settings and left My exams sitting on top of nothing.
+- **Escape works while you are typing.** The handler's `if(tag==='INPUT') return` guard sat *above* the Escape branch, so with the cursor in the glossary's search box — or any of the dozen fields inside a dialog — Escape did nothing and the only way out was the mouse. One input carried a private workaround; the rest did not.
+- **The scroll lock lifts only when the last dialog goes.** Thirteen close functions each set `overflow=''` unconditionally, so closing an inner dialog let the page scroll away behind an outer one that was still open. They all call `mhReleaseScroll()` now, which reads the live DOM rather than the stack — the stack is maintained by an observer and is therefore one microtask behind a synchronous close.
+
+> **Do not fight a dialog's own autofocus.** Several open by focusing a specific field on a ~120ms timer. The observer runs at microtask time, so it lands first and theirs wins, which is the right order; and it skips the move entirely when focus is already inside. Focus is taken with `preventScroll:true`, or a long panel jumps to its first control as it opens.
+
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
 **Maths.** All mathematical content is written in LaTeX and typeset by **MathJax** (`$…$` inline, `$$…$$` displayed).
@@ -242,7 +256,9 @@ The **exam timer opens paused** (`timerState.running=false`, button reads `Start
 ### 5. 📊 Statistics — `#stats-overlay`
 **Visual:** the honest audit, opened from the bar-chart icon in the nav rail (or the ⋯ menu on mobile) — average predicted recall, mastered / overdue / due counts, total reviews and lapses, and four distributions: retrievability in ten bands, stability (`<7d` · `7–30d` · `1–3m` · `3–6m` · `6m+`), difficulty `D 1–10`, and current intervals. Then a per-topic breakdown.
 
-**Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due. The older `#page-progress` charts and their `renderProgressTab()` were deleted on 2026-08-18, being an unreachable duplicate of this surface.
+**Technical:** `computeStats()` builds all of it from the derived memory records; mastery is counted with `isMastered()` rather than `statusFor(...)==='done'`, since a mastered topic can also be due.
+
+> **It did not, until 2026-08-18.** Average recall, mastery and the due counts went through `memoryFor()`, but average stability, average difficulty, the lapse rate and the stability / difficulty / interval histograms read `sr[]` **directly** — the stored review-only record, before mistakes and paper marks are replayed onto it. So the one surface built to audit the model disagreed with the model. On a realistic store **104 of 220 studied topics** differed: average stability was reported as 107 days against a true 72, the mastered count as 23 against 15, and "2.1 Solving quadratic equations" was binned at `6m+` and labelled Mastered while its derived stability was **0.6 days** and the Checklist was calling it overdue. Everything here now reads `memoryFor()`; only the *existence* check (`filter(t=>sr[t.name])`, "has this been studied at all") still touches `sr[]`, which is correct — that is a fact about the review log. The older `#page-progress` charts and their `renderProgressTab()` were deleted on 2026-08-18, being an unreachable duplicate of this surface.
 
 ### Cross-cutting features (reachable from the nav's tool group / quick-row)
 - **🧰 Tools overlay** (`#more-overlay`) — the rail's grid icon opens a four-tile menu: Resources, Revision plan, Focus timer, AI Tutor. These used to be text buttons crowding the right-hand end of the tab bar; collecting them behind one icon is what let the nav become icon-only. Mobile reaches the same tools through the ⋯ speed-dial instead, so the overlay is desktop-only in practice.
@@ -345,12 +361,12 @@ Measured in Chrome on an M-series Mac against a realistic store — 220 studied 
 
 | | Before | After | |
 |---|--:|--:|---|
-| `renderAll()` | 14.5ms | 5.2ms | |
-| `renderReviewPanel()` | 7.3ms | 2.6ms | |
-| `renderMistakesTab()` | 9.7ms | 2.7ms | |
+| `renderAll()` | 14.5ms | 3.5ms | |
+| `renderReviewPanel()` | 7.3ms | 2.2ms | |
+| `renderMistakesTab()` | 9.7ms | 3.0ms | |
 | `renderProgressTab()` | 13.0ms | — | deleted; it drew into a hidden container |
-| `updateDueBadge()` | 2.1ms | 0.7ms | |
-| **Full refresh** | **45.2ms** | **11.4ms** | |
+| `updateDueBadge()` | 2.1ms | 0.5ms | |
+| **Full refresh** | **45.2ms** | **10.9ms** | |
 
 Four causes, in the order they mattered. Each was measured rather than guessed, and the surprise is that none of them was the FSRS maths — the engine's own memoisation was already doing its job.
 
@@ -718,6 +734,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
 - **Exam dates:** `activePapers()`, `examDateForComponent(comp)` and `getPaperDates()` are each memoised against `_examSig()` — a cheap string built from raw reads of the track, the paper-date overrides, the FM options and a counter for the fetched defaults. Signature-keyed rather than invalidated by hand, so no future write path can forget to clear them.
+- **Dialogs:** `mhDialogStack` (open order), `mhCloseTopDialog()`, `mhReleaseScroll()` and the `MutationObserver` on `open` that maintains all three — see [One focus manager for every dialog](#one-focus-manager-for-every-dialog).
 - **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
@@ -824,7 +841,7 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **Grade boundaries are A-Level only.** `GRADE_BOUNDARIES` contains a single module (`alevel`), and `getGradeForMarks()` returns `null` for anything else. Logging an AS, Further Maths or legacy Core paper records the marks correctly but shows no grade — 120 of the 142 supported papers. Adding `as`, `fmcp` and the legacy boundaries is the highest-value data job outstanding.
 - **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
-- **Accessibility — contrast, type and target sizes are done; focus management is not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, and every control clears SC 2.5.8's 24×24 except two documented exceptions. Still outstanding: there is only one `aria-live` region, and **modals neither trap focus nor restore it to the element that opened them** — tabbing out of an open dialog wanders into the page behind. That is the next accessibility job. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
+- **Accessibility — contrast, type, target sizes and focus management are done; live regions are not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, every control clears SC 2.5.8's 24×24 except two documented exceptions, and as of 2026-08-18 all 23 dialogs trap Tab and restore focus to whatever opened them ([see below](#one-focus-manager-for-every-dialog)). Still outstanding: there is only one `aria-live` region, so most state changes are silent to a screen reader. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
 - **Light-mode default is arguably the better call and has not been made.** [Piepenbrock et al. (2013)](https://www.tandfonline.com/doi/full/10.1080/00140139.2013.790485) found positive polarity (dark text on light) gave better visual acuity for both younger (d=2.17) and older (d=0.58) adults and better proofreading accuracy, with the advantage growing as text shrinks. The app defaults to `rose-dark`. Dark mode is a genuine accessibility win for readers with cloudy ocular media (Legge et al. 1985), so the right answer is probably to default to the system preference rather than to either theme — currently there is no `prefers-color-scheme` handling at all.
 - ~~**Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab.~~ **Retired 2026-08-18 — it is no longer Papers-only.** Phase 3 made paper marks part of the scheduler, so `memoryFor()` → `paperEventsByTopic()` → `ppQuestionsFor()` needs the table on the *Checklist's* first paint. Deferring it would now stall the first render rather than speed it up. Measured at 5ms to fetch and parse; the render work it feeds was the real cost, and that was addressed directly.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
