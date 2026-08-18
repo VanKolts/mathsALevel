@@ -160,6 +160,12 @@ MSG
 
 # ---------------------------------------------------------------- 0. sanity ----
 
+# Everything sw.js precaches. If any of these changed, installed devices must be told to
+# refetch — that is exactly what a CACHE_VERSION bump does (old caches are dropped on activate).
+CACHED_PATHS=(index.html styles.css exam-dates.json data)
+
+sw_version_in() { sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p" "$1"; }
+
 [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] \
   || fail "on branch '$(git rev-parse --abbrev-ref HEAD)', not '$BRANCH' — deploy only publishes $BRANCH"
 
@@ -169,6 +175,28 @@ if [ -z "$(git status --porcelain)" ]; then
   git fetch --quiet origin "$BRANCH"
   if [ "$(git rev-list --count "origin/$BRANCH..$BRANCH")" -gt 0 ]; then
     say "Local $BRANCH is ahead of origin — pushing existing commits."
+    # Committing by hand and then running deploy skips the bump in step 1: by then the tree is
+    # clean and there is nothing left to compare against HEAD. That shipped v26 twice on
+    # 2026-08-18. So check the *unpushed range* instead — if it touched anything sw.js
+    # precaches and CACHE_VERSION did not move, bump it here, as its own commit.
+    if [ "$NO_BUMP" = 0 ] && ! git diff --quiet "origin/$BRANCH" "$BRANCH" -- "${CACHED_PATHS[@]}"; then
+      current="$(sw_version_in sw.js)"
+      at_remote="$(git show "origin/$BRANCH:sw.js" | sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p")"
+      [ -n "$current" ] || fail "could not read CACHE_VERSION from sw.js"
+      if [ "$current" = "$at_remote" ]; then
+        next="v$(( ${current#v} + 1 ))"
+        say "Unpushed commits changed precached files without a bump — bumping $current → $next."
+        # Guarded, so --dry-run leaves the working tree exactly as it found it.
+        if [ "$DRY_RUN" = 0 ]; then
+          sed "s/^const CACHE_VERSION *= *'$current'/const CACHE_VERSION = '$next'/" sw.js > sw.js.tmp
+          mv sw.js.tmp sw.js
+          git add sw.js
+          git commit -q -m "Bump service-worker cache to $next"
+        fi
+      else
+        say "CACHE_VERSION already moved in the unpushed range ($at_remote → $current) — leaving it."
+      fi
+    fi
     if [ "$DRY_RUN" = 0 ]; then
       git push origin "$BRANCH"
       verify_publish "$(web_served)"
@@ -180,13 +208,9 @@ fi
 
 # ---------------------------------------------- 1. bump the service-worker cache ----
 
-# Everything sw.js precaches. If any of these changed, installed devices must be told to
-# refetch — that is exactly what a CACHE_VERSION bump does (old caches are dropped on activate).
-CACHED_PATHS=(index.html styles.css exam-dates.json data)
-
 bumped=""
 if [ "$NO_BUMP" = 0 ] && ! git diff --quiet HEAD -- "${CACHED_PATHS[@]}"; then
-  current="$(sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p" sw.js)"
+  current="$(sw_version_in sw.js)"
   at_head="$(git show "HEAD:sw.js" | sed -n "s/^const CACHE_VERSION *= *'\(v[0-9]*\)'.*/\1/p")"
 
   [ -n "$current" ] || fail "could not read CACHE_VERSION from sw.js"

@@ -758,6 +758,8 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 **Pushing follows the same rule**, because on this repo a push to `main` *is* the deploy — GitHub Pages publishes from the branch. So push through `npm run deploy`, never a bare `git push`: the deploy script bumps `CACHE_VERSION` when a precached file changed, runs the validator, and **aborts before committing if anything fails**, which is the only gate that actually stops a broken build reaching the live site (CI can report a failure but cannot block a branch-source publish).
 
+> **Prefer letting `npm run deploy` do the commit.** It bumps `CACHE_VERSION` by diffing the *working tree* against `HEAD`, so committing by hand first leaves nothing for it to see and the bump is silently skipped — `v26` shipped twice on 2026-08-18 that way. It no longer can: on a clean tree with unpushed commits the script now diffs the **unpushed range** against `origin/main` and bumps there instead, as its own commit. Committing by hand is therefore safe again, but the one-step path is still the one with fewer ways to go wrong.
+
 Two things still warrant stopping to ask, because neither is recoverable from git history alone:
 
 - a change that **rewrites saved student progress** — a new `CHAPTER_RENAMES` batch, a storage-key migration, anything touching `alevel-sr-v5` in place;
@@ -788,7 +790,7 @@ Everything else: commit it, push it, then say what you did.
 
   Files are checked smallest-first and each round stops at the first mismatch, so a stale site is detected from `sw.js` without pulling 600 KB of `index.html`. On timeout it exits **1** and says plainly that the commit is safe on `origin/main` and that this is a publish failure rather than a code failure — the fix is to re-run the `pages-build-deployment` job, never to re-commit.
   It refuses to run off `main`, makes no empty commits, and pushes any already-committed-but-unpushed work if the tree is clean.
-- **Changing cached files?** Bump `CACHE_VERSION` in `sw.js`. Old caches are deleted on activate, so a bump is the clean way to push every device onto a new build. `npm run deploy` does this automatically whenever `index.html`, `styles.css`, `exam-dates.json` or `data/` changed — and skips it if you've already bumped by hand (`--no-bump` overrides).
+- **Changing cached files?** Bump `CACHE_VERSION` in `sw.js`. Old caches are deleted on activate, so a bump is the clean way to push every device onto a new build. `npm run deploy` does this automatically whenever `index.html`, `styles.css`, `exam-dates.json` or `data/` changed — and skips it if you've already bumped by hand (`--no-bump` overrides). It checks **twice**: once against `HEAD` for uncommitted work, and once against `origin/main` for commits you made by hand before running it. Missing the bump is not fatal, because own-origin fetches are network-first and an online device gets the new bytes regardless — but the version then stops tracking builds, and a device that was offline over the deploy keeps the old shell until its next online load.
 - **Push auth.** The remote is written as SSH (`git@github.com:VanKolts/mathsALevel.git`), but no SSH key on this machine is registered with the account, so command-line pushes over SSH fail. A repo-local rewrite sends them over HTTPS instead, reusing the token GitHub Desktop already stored in the macOS keychain:
   ```
   git config --local url."https://github.com/".insteadOf "git@github.com:"
