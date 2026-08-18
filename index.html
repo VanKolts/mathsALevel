@@ -3926,6 +3926,10 @@ function applyTheme(key){
   if(key==='rose-dark')document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme',key);
   renderThemePicker();
+  /* Everything else in the app is a CSS variable and re-themes itself. A canvas is pixels:
+     the donut's hub and separators are painted from --surface at draw time, so switching
+     theme with the Mistakes wheel already on screen leaves it wearing the old one. */
+  if(typeof renderPieChart==='function'){ try{ renderPieChart('mistake'); }catch(e){} }
 }
 function renderThemePicker(){
   const wrap=document.getElementById('theme-picker-wrap');if(!wrap)return;
@@ -5917,22 +5921,56 @@ function renderPieChart(type){
   }
 }
 
+/* A canvas has two sizes: the CSS box it occupies and the pixel grid it actually draws on.
+   Setting only width/height in the markup makes them equal, so on a 2x or 3x display the
+   browser upscales a 170px bitmap and every arc edge and the number in the middle come out
+   soft. Redraw at devicePixelRatio and scale the context back down, and the geometry below
+   can go on thinking in CSS pixels. */
+function _hidpiCanvas(canvas){
+  const dpr=Math.min(window.devicePixelRatio||1,3);   // 3 is past the point of visible return
+  /* Capture the intended CSS size once and remember it. After the first resize canvas.width
+     is the *backing store*, so falling back to it a second time multiplies by dpr again:
+     170 → 340 → 680, without bound. Not hypothetical — this donut lives behind one of the
+     five Mistakes breakdown tabs, so clientWidth is 0 on most draws and the fallback is the
+     normal path, not the edge case. It reached 174,080px before the pixel probe caught it. */
+  let w=+canvas.dataset.cssw, h=+canvas.dataset.cssh;
+  if(!w||!h){
+    w=canvas.clientWidth||canvas.width; h=canvas.clientHeight||canvas.height;
+    canvas.dataset.cssw=w; canvas.dataset.cssh=h;
+  }
+  if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){
+    canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
+    canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  }
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+// Canvas cannot read a CSS variable, so the theme has to be handed to it explicitly.
+function _themeColor(name,fallback){
+  try{ const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v||fallback; }
+  catch(e){ return fallback; }
+}
 function drawDonut(canvas,entries,legendEl){
   const total=entries.reduce((s,e)=>s+e.count,0);if(!total)return;
-  const ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const g=_hidpiCanvas(canvas), ctx=g.ctx;
+  ctx.clearRect(0,0,g.w,g.h);
+  /* These were hardcoded #1E293B and #E2E8F0 — slate, from a palette the app no longer has.
+     On both light themes that painted a dark blue-grey hub and dark separators into a white
+     card; on rose-dark it was a blue hub on a maroon one. It matched no theme at all. */
+  const surface=_themeColor('--surface','#24101a'), text=_themeColor('--text','#fff1f2');
   let sa=-Math.PI/2;
-  const cx=canvas.width/2,cy=canvas.height/2,r=Math.min(cx,cy)-5;
+  const cx=g.w/2,cy=g.h/2,r=Math.min(cx,cy)-5;
   entries.forEach(e=>{
     const slice=(e.count/total)*2*Math.PI;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,sa,sa+slice);ctx.closePath();
     ctx.fillStyle=e.color;ctx.fill();
-    ctx.strokeStyle='#1E293B';ctx.lineWidth=2;ctx.stroke();
+    ctx.strokeStyle=surface;ctx.lineWidth=2;ctx.stroke();
     sa+=slice;
   });
   const hr=r*0.52;
-  ctx.beginPath();ctx.arc(cx,cy,hr,0,2*Math.PI);ctx.fillStyle='#1E293B';ctx.fill();
-  ctx.fillStyle='#E2E8F0';ctx.font='bold 14px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.beginPath();ctx.arc(cx,cy,hr,0,2*Math.PI);ctx.fillStyle=surface;ctx.fill();
+  ctx.fillStyle=text;ctx.font='bold 14px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(total,cx,cy);
 
   entries.sort((a,b)=>b.count-a.count).forEach(e=>{

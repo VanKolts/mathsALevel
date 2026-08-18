@@ -216,6 +216,12 @@ The observer maintains `mhDialogStack`, ordered by *when* each dialog opened, wh
 
 **Motion & feel.** Modals scale-and-rise in with a spring cubic-bézier; buttons use solid fills with `:focus-visible` rings (deliberately **no transparent borders on filled buttons** — they create a faint seam). Everything is built mobile-first and installs as a **PWA** — home-screen icon, and a service worker (`sw.js`) that precaches the shell, `styles.css` and all five data files on first visit, so the app opens and runs **with no network at all**. Revision on a train works exactly like revision at a desk; only cloud sync and the AI tools need a connection.
 
+**The one canvas gets the theme handed to it.** Everything else in the app is a CSS variable and re-themes itself; the Mistakes breakdown wheel is pixels. It painted its hub and slice separators in a hardcoded `#1E293B` with `#E2E8F0` for the total — slate, from a palette the app no longer has, so it matched *no* theme: a dark blue-grey hub inside a white card on both light themes, and a blue hub on a maroon one in `rose-dark`. It reads `--surface` and `--text` through `_themeColor()` at draw time now, and `applyTheme()` redraws it, since no stylesheet can restyle a bitmap.
+
+It also drew at **half resolution on every retina display**. A canvas has two sizes — the CSS box and the pixel grid behind it — and setting only the `width`/`height` attributes makes them equal, so the browser upscales. `_hidpiCanvas()` sizes the backing store to `devicePixelRatio` (capped at 3) and scales the context back, leaving the drawing code thinking in CSS pixels.
+
+> **Cache the CSS size on the element; never re-read `canvas.width` as a fallback.** After the first resize that attribute *is* the backing store, so `canvas.clientWidth || canvas.width` multiplies by the pixel ratio again on every call. This canvas lives behind one of the five Mistakes breakdown tabs, so `clientWidth` is 0 on most draws and that fallback is the normal path, not the edge case — it reached **174,080px** before a pixel probe caught it.
+
 **Maths.** All mathematical content is written in LaTeX and typeset by **MathJax** (`$…$` inline, `$$…$$` displayed).
 
 ---
@@ -736,6 +742,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **Exam dates:** `activePapers()`, `examDateForComponent(comp)` and `getPaperDates()` are each memoised against `_examSig()` — a cheap string built from raw reads of the track, the paper-date overrides, the FM options and a counter for the fetched defaults. Signature-keyed rather than invalidated by hand, so no future write path can forget to clear them.
 - **Dialogs:** `mhDialogStack` (open order), `mhCloseTopDialog()`, `mhReleaseScroll()` and the `MutationObserver` on `open` that maintains all three — see [One focus manager for every dialog](#one-focus-manager-for-every-dialog).
 - **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
+- **Canvas:** `drawDonut(canvas,entries,legendEl)` plus `_hidpiCanvas(canvas)` (device-pixel-ratio backing store, CSS size cached on the element) and `_themeColor(name,fallback)` (reads a CSS custom property, since a canvas cannot).
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
 
 (Grep `function ` in `index.html` for the exhaustive list; names are stable and descriptive.)
