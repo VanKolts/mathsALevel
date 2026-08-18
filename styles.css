@@ -1695,7 +1695,15 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 .stats-cl-track{height:3px;background:var(--surface3);margin:0 12px 6px;border-radius:var(--r-xs);position:relative;overflow:hidden;}
 .stats-cl-mast{position:absolute;left:0;top:0;height:100%;background:var(--y1);border-radius:var(--r-xs);}
 .stats-cl-fill{position:absolute;left:0;top:0;height:100%;border-radius:var(--r-xs);opacity:.5;}
-.stats-cl-topics{display:flex;flex-direction:column;border-top:1px solid var(--border);}
+/* Collapsed by default — the header toggles it. display:none rather than a height
+   animation: this list can be 200+ rows and animating that many is a jank machine, while the
+   panel already has plenty of motion of its own. */
+.stats-cl-topics{display:none;flex-direction:column;border-top:1px solid var(--border);}
+.stats-cl-topics.open{display:flex;}
+.stats-cl-hdr{cursor:pointer;}
+.stats-cl-hdr:hover .stats-cl-name{color:var(--text);}
+.stats-cl-hdr:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-xs);}
+.stats-cl-chev{margin-left:6px;font-size:var(--fs-2xs);color:var(--muted);transition:transform var(--t-base);flex-shrink:0;}
 .stats-cl-topic{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);}
 .stats-cl-topic:last-child{border-bottom:none;}
 .stats-cl-tname{flex:1;font-size:var(--fs-sm);color:var(--text);}

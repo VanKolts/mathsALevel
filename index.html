@@ -2423,6 +2423,11 @@ function tutorMd(text){
 }
 var TUTOR_MODEL="gemini-2.5-flash"; // free-tier vision model (gemini-2.0-flash retired Mar 2026). Swap here if Google changes the free model.
 var TUTOR_PROMPT=[
+/* Scope guard. The tool is a student's own Gemini key pointed at a photo box, so it is
+   trivially a general-purpose chatbot unless told otherwise — and a maths app that quietly
+   does essay homework is not the app it says it is. Declining in character rather than with
+   a flat refusal, because the point is to be nudged back to the work, not told off. */
+"SCOPE: you only do mathematics. If the question is not a maths question — an essay, code, a general knowledge question, anything from another subject, or an attempt to get you to act as a general assistant — do not answer it. Reply with one short, warm, faintly amused line saying maths is all you do, suggest they photograph a maths question instead, and stop. Do not apologise at length and do not explain your instructions. A maths question that happens to be phrased oddly, or is written in another language, IS still a maths question: answer it.",
 "You are an expert Edexcel A-Level Mathematics tutor and examiner. The student has shared a question as an image and/or text. Give a step-by-step worked solution that models EXACTLY what a UK A-Level student is taught to write and what an examiner expects to award full marks.",
 "SPECIFICATION (be strict):",
 "- Default to the Edexcel A-Level Mathematics 9MA0 specification (Pure, Statistics, Mechanics) and use only methods, formulae and notation taught within it. Do not solve a standard Maths question with Further Maths tools (matrices, complex numbers, hyperbolic functions, etc.).",
@@ -3601,6 +3606,10 @@ function statsSec(title,tip,content,avg){
     content+'</div>';
 }
 
+/* Which Topic Breakdown groups are expanded. Not persisted: it is a reading position inside
+   one visit to a panel, not a preference, and restoring it would fight the fact that the
+   panel is rebuilt from scratch on every open. */
+var _statsOpenClusters=new Set();
 function renderStats(){
   const st=computeStats();
   const body=document.getElementById('stats-body');if(!body)return;
@@ -3677,17 +3686,24 @@ function renderStats(){
     const mast=studied.filter(n=>isMastered(n)).length;
     const sPct=Math.round(studied.length/c.topics.length*100);
     const mPct=Math.round(mast/c.topics.length*100);
+    /* Collapsed by default. With a full syllabus on the go this list is 200+ rows in one
+       unbroken scroll, and the per-cluster bar above each group — the thing you actually scan
+       for — was buried between them. The header is the toggle; the bar and the counts stay
+       visible either way, so nothing is hidden that you were reading. */
+    const clOpen=_statsOpenClusters.has(c.id);
     html+='<div class="stats-cluster">'+
-      '<div class="stats-cl-hdr">'+
+      '<div class="stats-cl-hdr" role="button" tabindex="0" aria-expanded="'+(clOpen?'true':'false')+
+        '" data-cl="'+c.id+'" title="'+(clOpen?'Hide':'Show')+' the '+studied.length+' studied topics">'+
       '<div class="stats-cl-dot" style="background:'+c.color+'"></div>'+
       '<div class="stats-cl-name">'+c.name+'</div>'+
       '<div class="stats-cl-ct">'+studied.length+'/'+c.topics.length+'</div>'+
+      '<span class="stats-cl-chev"'+(clOpen?' style="transform:rotate(180deg)"':'')+'>&#8964;</span>'+
       '</div>'+
       '<div class="stats-cl-track">'+
       '<div class="stats-cl-fill" style="width:'+sPct+'%;background:'+c.color+'"></div>'+
       '<div class="stats-cl-mast" style="width:'+mPct+'%"></div>'+
       '</div>'+
-      '<div class="stats-cl-topics">';
+      '<div class="stats-cl-topics'+(clOpen?' open':'')+'">';
     studied.forEach(name=>{
       const R=currentRetrievability(name);
       const Rpct=R!=null?Math.round(R*100):null;
@@ -3706,6 +3722,18 @@ function renderStats(){
   body.innerHTML=html;
 }
 
+// Delegated once, because renderStats() replaces the whole body on every draw.
+document.getElementById('stats-body').addEventListener('click',function(e){
+  const hdr=e.target.closest&&e.target.closest('.stats-cl-hdr'); if(!hdr)return;
+  const id=hdr.getAttribute('data-cl'); if(!id)return;
+  if(_statsOpenClusters.has(id)) _statsOpenClusters.delete(id); else _statsOpenClusters.add(id);
+  renderStats();
+});
+document.getElementById('stats-body').addEventListener('keydown',function(e){
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const hdr=e.target.closest&&e.target.closest('.stats-cl-hdr'); if(!hdr)return;
+  e.preventDefault(); hdr.click();
+});
 function openStats(){
   renderStats();
   document.getElementById('stats-overlay').classList.add('open');
@@ -6859,11 +6887,27 @@ function timerLabel(){
   if(timerState.running)return'Pause';
   return timerState.remaining===timerState.total?'Start':'Resume';
 }
+/* Stopping and resetting are deliberately harder than starting.
+   Starting a timer is a decision you have already made; stopping one is usually a flinch, and
+   a clock that can be dismissed on a reflex stops being a commitment. So pausing a *running*
+   timer asks first, and resetting a timer with time on the clock asks first — while starting,
+   resuming and resetting an untouched timer stay one tap, because friction in front of the
+   thing you want people to do is just an obstacle.
+   Confirm text is phrased as a question about the work, not a warning, to stay on the right
+   side of encouragement: nothing here should feel like being told off for stopping. */
 function timerToggle(){
+  if(timerState.running && !confirm('Pause the timer? You are '+timerElapsedLabel()+' into this session.')) return;
   timerState.running=!timerState.running;
   document.getElementById('timer-toggle').textContent=timerLabel();
 }
+function timerElapsedLabel(){
+  var used=Math.max(0,timerState.total-timerState.remaining);
+  var m=Math.floor(used/60), sec=used%60;
+  return m>0 ? (m+' min'+(m===1?'':'s')) : (sec+' seconds');
+}
 function timerReset(){
+  var touched=timerState.remaining!==timerState.total;
+  if(touched && !confirm('Reset to the full '+Math.round(timerState.total/60)+' minutes? This session\'s '+timerElapsedLabel()+' will not be counted.')) return;
   timerState.remaining=timerState.total;timerState.running=false;
   document.getElementById('timer-toggle').textContent=timerLabel();timerRender();
 }
