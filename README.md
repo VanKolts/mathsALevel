@@ -121,7 +121,7 @@ The **Filter** modal carries status (multi-select), intrinsic difficulty, a **du
 <i class="ico" data-icon="camera" aria-hidden="true"></i>
 ```
 
-They render as nothing, so the UI looks finished; `?icons` on the URL outlines every one in place. A handful marked `ico-live` sit where the emoji *was* the control — the favourite heart, the note marker — and draw a neutral box instead, because rendering nothing would delete the affordance; those carry `data-state="on|off"`. `ico(name, extra, state)` generates the markup for the JS-built ones, and `lnk()` on paper cards now takes an icon **name** rather than a glyph. **[`docs/icon-placeholders.md`](docs/icon-placeholders.md) lists all 48 sites** and is generated from the file, so it cannot drift.
+They render as nothing, so the UI looks finished; `?icons` on the URL outlines every one in place. A handful marked `ico-live` sit where the emoji *was* the control — the favourite heart, the note marker — and draw a neutral box instead, because rendering nothing would delete the affordance; those carry `data-state="on|off"`. `ico(name, extra, state)` generates the markup for the JS-built ones, and `lnk()` on paper cards now takes an icon **name** rather than a glyph. **[`docs/icon-placeholders.md`](docs/icon-placeholders.md) lists all 46 sites** and is regenerated from the file. Its **line numbers go stale fast** — they were 45-of-48 wrong within a day of heavy editing — so regenerate it rather than trusting it, and treat the icon *names* as the durable handle.
 
 Kept deliberately, because they are text glyphs the UI depends on rather than decoration: `✕` close, `✓` tick, `×` attempt count, `＋` add, `ƒ` formula sheet.
 
@@ -758,7 +758,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 ### 9.5 Function inventory by subsystem
 
-375 named functions total. The load-bearing ones, grouped:
+417 named functions total. The load-bearing ones, grouped:
 
 - **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate`, all parsing at local *noon*, deliberately, to stay clear of DST. All four run through `_dayMs(str)`, one Date parse per distinct day string; see [the render-cost section](#where-the-render-time-actually-goes) for why.
 - **Topic lookup:** `topicByName(name)` over the `TOPIC_BY_NAME` index. Topic names are the app's primary key, and this replaced thirteen `allTopics.find(...)` linear scans over 315 entries.
