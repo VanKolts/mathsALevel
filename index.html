@@ -1421,7 +1421,13 @@ var _apRemoteV=0;
 function _examSig(){
   var raw=''; try{ raw=localStorage.getItem('alevel-paper-dates-v1')||''; }catch(e){}
   var fm=''; try{ fm=(typeof fmOptions!=='undefined')?Array.from(fmOptions).sort().join(','):''; }catch(e){}
-  return getTrack()+'|'+raw+'|'+fm+'|'+_apRemoteV;
+  /* today() belongs in here because examDateForComponent() now asks which papers are still
+     ahead, which changes at midnight without anything being edited. Cheap: today() is memoised
+     for a second, and the only cost of the extra invalidation is that activePapers() rebuilds
+     once a day rather than never. Keeping one signature for both caches is what makes them
+     impossible to leave stale — including under the test clock, which moves today() by an
+     integer and would otherwise strand both caches on yesterday's answer. */
+  return getTrack()+'|'+raw+'|'+fm+'|'+_apRemoteV+'|'+today();
 }
 /* Papers active for the current track (+ chosen FM options), soonest first.
    Memoised: examDateForTopic() runs once per topic per render, so this was rebuilt, remapped
@@ -1440,18 +1446,50 @@ function activePapers(){
             .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; }));
   _apSig=sig; return _apVal;
 }
-// Earliest active paper date assessing a component. Memoised on the same signature: there are
-// only a handful of distinct components, but targetRetention() asks once per topic per render.
+/* Earliest paper *still ahead* that assesses this component, or '' once they have all been
+   sat. Memoised on the same signature: there are only a handful of distinct components, but
+   targetRetention() asks once per topic per render.
+
+   "Still ahead" is the whole point, and it used to say "earliest, full stop". Two bugs came
+   out of that one word:
+
+   - **The ramp never switched off.** A passed date still won, and targetRetention() reads
+     `dte <= 0` as "sit the exam today" and pins at MAX_RETENTION. Stepping the test clock to
+     +1000d put a Pure topic at a 96.7% target *723 days after the exam* — every interval in
+     the app permanently compressed, with no way out but Settings → Remove exam dates. The app
+     is younger than its own exam timetable, which is the only reason nobody had hit it.
+   - **Papers after the first were invisible.** Pure is examined by Paper 1 (26 May) and again
+     by Paper 2 (9 June). Between those two dates the old code still answered 26 May — passed,
+     so pinned at the ceiling — instead of ramping toward the paper actually next. The fortnight
+     between two Pure papers is exactly when the ramp should be steering, and it was frozen.
+
+   Once every paper for a component has been sat, this returns '' and the topic drops back to
+   BASE_RETENTION: revision after the exam is ordinary revision. `>= td` rather than `> td`
+   keeps exam morning itself at the ceiling. */
 var _edcSig=null, _edcVal=null;
 function examDateForComponent(comp){
   if(getExamOff())return '';
   var sig=_examSig();
   if(sig!==_edcSig){ _edcVal=Object.create(null); _edcSig=sig; }
   var hit=_edcVal[comp]; if(hit!==undefined) return hit;
-  var best=''; activePapers().forEach(function(p){ if(p.comps.indexOf(comp)>=0 && (!best||p.date<best)) best=p.date; });
+  var td=today(), best='';
+  activePapers().forEach(function(p){
+    if(p.comps.indexOf(comp)<0) return;
+    if(p.date<td) return;                       // already sat — it cannot be revised for
+    if(!best||p.date<best) best=p.date;
+  });
   _edcVal[comp]=best; return best;
 }
-function examDateForTopic(name){ if(getExamOff())return ''; var t=topicByName(name); var d=t?examDateForComponent(t.component):''; return d||getExamDate(); }
+/* The legacy single date gets the same treatment: it is a fallback for stores predating
+   per-paper dates, and a fallback that has passed is not a fallback. */
+function examDateForTopic(name){
+  if(getExamOff())return '';
+  var t=topicByName(name);
+  var d=t?examDateForComponent(t.component):'';
+  if(d) return d;
+  var legacy=getExamDate();
+  return (legacy&&legacy>=today())?legacy:'';
+}
 
 // A component is active only if it belongs to the student's track.
 function isComponentActive(qual,component){
