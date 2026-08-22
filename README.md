@@ -6,7 +6,7 @@ A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / 
 - **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (8,141 lines, 418 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
-- **Want to actually look at it?** The app raises a sign-in gate on load, so opening `index.html` shows you a login wall and nothing else. Serve the folder on localhost and use **[test mode](#driving-it-from-a-script)** — `?test&seed=heavy&day=277&go=planner` stages a seeded sandbox on any screen you name, with no account and no password.
+- **Want to actually look at it?** The app raises a sign-in gate on load, so opening `index.html` shows you a login wall and nothing else. Serve the folder on localhost and use **[test mode](#driving-it-from-a-script)** — one `mshTestStart({seed:'heavy', day:277, go:'planner'})` from the console stages a seeded sandbox on any screen you name, with no account and no password.
 
 This document describes the app on **three levels**: the **visual/UX layer** (what a student sees), the **feature layer** (what each part does), and the **technical layer** (how it actually works — data model, the spaced-repetition maths, sync, and the AI subsystem).
 
@@ -851,13 +851,21 @@ Serve the folder over **`localhost`** — not `file://`, which breaks `crypto.su
 python3 -m http.server 8000
 ```
 
-Then state the situation you want to look at **in the URL**, and one navigation stages all of it:
+**Get in once per origin** by calling this from the console, on whatever page you land on — it works from the login wall itself:
+
+```js
+mshTestStart({seed:'heavy', day:277, go:'planner'})
+```
+
+That lands on the revision planner with a full study history seeded and the clock moved to exam morning — no account, no password prompt, no clicking through the panel.
+
+**After that, the same five things are readable off the URL**, so every later navigation in that tab stages itself in one go:
 
 ```
-http://localhost:8000/?test&seed=heavy&day=277&go=planner
+http://localhost:8000/?test&seed=realistic&day=-30&go=stats
 ```
 
-That lands on the revision planner, with a full study history seeded and the clock moved to exam morning — no login, no password prompt, no clicking through the panel.
+The order matters and is easy to get wrong: the flag lives in `sessionStorage`, which is **per-origin and per-tab**. On an origin you have not entered yet, `?test` alone still raises the password prompt — the URL params are the *setup*, not the *entry*. `mshTestStart()` is the entry, and it is deliberately the only thing that opens the gate without the password, so a visitor who stumbles onto `?test` still meets the prompt.
 
 | Param | Values | What it does |
 |---|---|---|
@@ -867,7 +875,7 @@ That lands on the revision planner, with a full study history seeded and the clo
 | `theme` | `rose-dark` · `rose-light` · `pure-white` | |
 | `motion` | `1` · `4` · `10` · `0` | Motion divisor. `10` is ⅒ speed for watching a transition rather than inferring it; `0` freezes everything and exercises the branch the blanket `prefers-reduced-motion` rule takes |
 
-`window.mshTestStart({seed:'realistic', day:300, go:'planner'})` does the same thing from the console, for when you are already on the page. Both exist because the interactive gate is a `window.prompt()`, which **blocks the very script that would answer it** — automation cannot get in that way at all, however much it knows the password.
+Both exist because the interactive gate is a `window.prompt()`, which **blocks the very script that would answer it** — automation cannot get in that way at all, however much it knows the password.
 
 The setup applies **once per distinct query string**, tracked in `sessionStorage`. `seed` reloads the page, so a seed param that re-ran on the way back in would reload forever; the query string itself is the stamp, so changing any param re-applies and revisiting does not. A bad value warns to the console with the list of valid ones and everything else still applies, rather than the whole setup aborting on one typo.
 
