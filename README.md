@@ -3,9 +3,10 @@
 A single-file spaced-repetition study app for A-Level Maths (Edexcel **9MA0** / AS **8MA0** / Further **9FM0**, plus legacy specifications). It helps students track what they know, drill what they don't, log real past papers question-by-question, and see exactly where they lose marks.
 
 - **Live app:** https://vankolts.github.io/mathsALevel
-- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (8,070 lines, 417 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
+- **Structure:** [`index.html`](index.html) holds the markup and *all* the logic (8,141 lines, 418 named functions); [`styles.css`](styles.css) holds the theming; `data/*.js` hold the five static datasets. No build step, no server, no dependencies beyond MathJax and the Firebase CDN.
 - **Offline:** a [service worker](sw.js) precaches the shell and all data files, so the app opens and works with no signal.
 - **Repo:** `VanKolts/mathsALevel` → auto-deploys to GitHub Pages from `main`. Every push is validated by [`scripts/validate.mjs`](scripts/validate.mjs) in CI.
+- **Want to actually look at it?** The app raises a sign-in gate on load, so opening `index.html` shows you a login wall and nothing else. Serve the folder on localhost and use **[test mode](#driving-it-from-a-script)** — `?test&seed=heavy&day=277&go=planner` stages a seeded sandbox on any screen you name, with no account and no password.
 
 This document describes the app on **three levels**: the **visual/UX layer** (what a student sees), the **feature layer** (what each part does), and the **technical layer** (how it actually works — data model, the spaced-repetition maths, sync, and the AI subsystem).
 
@@ -39,6 +40,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.5 Function inventory by subsystem](#95-function-inventory-by-subsystem)
    - [9.6 External dependencies & config](#96-external-dependencies--config)
 11. [Test mode](#test-mode)
+    - [Driving it from a script](#driving-it-from-a-script)
 12. [Editing, building & deploying](#editing-building--deploying)
     - [Committing without being asked](#committing-without-being-asked)
 13. [Keeping the documentation in step](#keeping-the-documentation-in-step)
@@ -302,6 +304,20 @@ Each topic's **Worksheets on PMT** button resolves through `practiceLinkFor(name
 - **🧮 Formula sheet** — the `FORMULAS` data rendered as an interactive, searchable sheet styled like the real formulae booklet.
 - **⏱ Focus timer** — pausing a *running* timer and resetting one with time on the clock both confirm first; starting, resuming, and resetting an untouched timer stay a single tap. Starting is a decision already made, whereas stopping is usually a flinch, and a clock you can dismiss on reflex is not a commitment. The confirms are phrased as questions about the session, not warnings, because nothing here should read as being told off for stopping.
 - **📅 Revision plan / My exams** — the multi-exam adaptive planner. Instead of one global exam date, you set a date **per paper** (AS P1–P2, A-Level P1–P3, and the Further modules), seeded from `exam-dates.json` (currently the provisional Edexcel Summer 2027 timetable) and overridable per paper. Each topic then ramps against the date of the paper that actually examines it, so Statistics tightens for the Stats paper rather than for whichever exam happens to be first. Reachable from Settings → My exams, from the Tools overlay, and from a plan generator on the Checklist quick-row.
+
+  **How the two halves fit together**, since the window is easy to misread as doing more than it does:
+
+  | | **My exams** (`openMyExams`) | **Revision plan** (`openPlanner`) |
+  |---|---|---|
+  | Owns | the *inputs* — track, FM options, one date per paper | nothing |
+  | Writes | `alevel-track`, `alevel-fm-options-v1`, `alevel-paper-dates-v1` | **no state at all** |
+  | On open | copies state into `_mexTrack`/`_mexFm`/`_mexDates` and edits the copy, so Cancel is free | derives everything from scratch, every time |
+
+  The date a topic ramps toward is `examDateForTopic()` → `examDateForComponent()`: **the earliest active paper whose `comps` include that topic's component**, falling back to the legacy single `alevel-exam-date` and returning `''` when exam dates are switched off. `activePapers()` and `examDateForComponent()` are both memoised on `_examSig()` — a cheap string of track, raw overrides, FM options and a remote-fetch counter — because the scheduler asks once per topic per render and this was 517 rebuilds on a full Checklist draw.
+
+  The ramp itself is three lines of `targetRetention()`: outside `EXAM_RAMP_DAYS` (70) the target is `BASE_RETENTION` (0.90); inside it, it interpolates linearly to `MAX_RETENTION` (0.97) at the exam. Higher target ⇒ shorter intervals ⇒ topics resurface faster. Alongside it, `needsExamConfirmation()` forces one confirmation pass over anything not reviewed since the run-in began, so a topic stable enough to sail past the exam date still gets seen once. **Both have defects** — see [Known gaps](#known-gaps--roadmap).
+
+  The planner window ranks each paper's topics by `_weakScore()`: 3 for overdue, 2 for due, 2.5 for never-started, plus `(1 − retrievability) × 2`, plus `mistakeLoad × 0.5`. It shows the top six per paper and a "Today's focus" of five drawn from the next two upcoming papers. It is a **ranked list, not a schedule** — no dates, no per-day allocation, nothing to tick off.
 - **Settings** (`#settings-overlay`, opened from the ⚙ icon in the nav's tool group) — account, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, and a **Sync diagnostics** panel with manual push/pull.
 
 ---
@@ -758,7 +774,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 ### 9.5 Function inventory by subsystem
 
-417 named functions total. The load-bearing ones, grouped:
+418 named functions total. The load-bearing ones, grouped:
 
 - **Dates:** `ymd(d)` — the single local-calendar-day helper every other date derivation goes through — plus `today()`, `addDays`, `daysDiff`, `fmtDate`, all parsing at local *noon*, deliberately, to stay clear of DST. All four run through `_dayMs(str)`, one Date parse per distinct day string; see [the render-cost section](#where-the-render-time-actually-goes) for why.
 - **Topic lookup:** `topicByName(name)` over the `TOPIC_BY_NAME` index. Topic names are the app's primary key, and this replaced thirteen `allTopics.find(...)` linear scans over 315 entries.
@@ -792,7 +808,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 
 A sandbox for looking at the app without signing in and without waiting three weeks to see an interval land. Entered from a quiet **Testing mode** link on the login screen, or `?test` on the URL — the second matters because when the Firebase SDK fails to load there is no login screen to click. It is `sessionStorage`-scoped, so it ends with the tab.
 
-**The password is in the Obsidian vault** at `projects/maths a-level tool/Test mode.md`, deliberately not here — this file is public.
+**The password is in the Obsidian vault** at `projects/maths a-level tool/Test mode.md`, deliberately not here — this file is public. **If you are a script or an agent, you do not need it** — see [Driving it from a script](#driving-it-from-a-script).
 
 > **The password is a speed bump, not a lock, and the design assumes that.** This is a static site with no server: the check runs in the browser and the SHA-256 hash sits in `index.html` for anyone to read. That is acceptable **only because nothing behind the gate is worth protecting** — the three properties below are what make that true, and each was tested rather than argued.
 
@@ -824,6 +840,43 @@ A sandbox for looking at the app without signing in and without waiting three we
 It works because `today()` is the single choke point every date derivation goes through, so one integer moves the whole model. `_testDayShift` is `0` outside test mode — one truthy check per second of wall clock, which is why it ships in the file rather than needing a second build. Always go through `mshTestSetDay()`: the one-second memo and both per-day caches have to be dropped with it.
 
 **The inspector's `stored S → derived S` line** is the evidence model made legible: the stored figure is the review log alone, the derived one is after mistakes and exam marks replay over it. On a topic with three logged mistakes those read **157.7d → 1.6d**. That gap is exactly what [`computeStats()` was getting wrong](#5--statistics--stats-overlay) until 2026-08-18.
+
+### Driving it from a script
+
+**If you are an agent or a script and you want to look at this app, start here rather than at the login screen.** A plain `GET /` raises the auth gate and the app is unusable behind it, so browsing the real thing means either credentials or this. Test mode is the way in, and as of 2026-08-22 it is scriptable end to end.
+
+Serve the folder over **`localhost`** — not `file://`, which breaks `crypto.subtle`, the service worker and the data loads. There is no build step, so any static server does:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then state the situation you want to look at **in the URL**, and one navigation stages all of it:
+
+```
+http://localhost:8000/?test&seed=heavy&day=277&go=planner
+```
+
+That lands on the revision planner, with a full study history seeded and the clock moved to exam morning — no login, no password prompt, no clicking through the panel.
+
+| Param | Values | What it does |
+|---|---|---|
+| `seed` | `empty` · `light` · `realistic` · `heavy` | The four presets from the panel's **Data** row. Fixed-seed, so the same param is the same data every time — which is what makes a before/after comparison mean anything |
+| `day` | any integer | Shifts the clock by that many days **from the real date**, not to an absolute one. Written on 2026-08-22, `day=277` was exam morning for Paper 1 Pure; check the hazard bar, which prints the resulting date |
+| `go` | a surface name | Opens it on arrival. Any label from the panel's **Go to** list, or a short alias: `planner`, `plan`, `exams`, `stats`, `papers`, `timer`, `tutor`, `formula`, `study`, `intro` |
+| `theme` | `rose-dark` · `rose-light` · `pure-white` | |
+| `motion` | `1` · `4` · `10` · `0` | Motion divisor. `10` is ⅒ speed for watching a transition rather than inferring it; `0` freezes everything and exercises the branch the blanket `prefers-reduced-motion` rule takes |
+
+`window.mshTestStart({seed:'realistic', day:300, go:'planner'})` does the same thing from the console, for when you are already on the page. Both exist because the interactive gate is a `window.prompt()`, which **blocks the very script that would answer it** — automation cannot get in that way at all, however much it knows the password.
+
+The setup applies **once per distinct query string**, tracked in `sessionStorage`. `seed` reloads the page, so a seed param that re-ran on the way back in would reload forever; the query string itself is the stamp, so changing any param re-applies and revisiting does not. A bad value warns to the console with the list of valid ones and everything else still applies, rather than the whole setup aborting on one typo.
+
+Two things worth knowing once you are in, both of which have cost real debugging time:
+
+- **`fmOptions`, `sr`, `mistakes` and `paperLog` are `let` bindings in script scope, not properties of `window`.** Assigning `window.fmOptions = …` from the console creates a *different* global and the app never sees it — the reads keep returning the old value and the numbers come out suspiciously constant. Go through the app's own writers (`openMyExams()` then the save button, `saveTopicStudied()`, the panel's seeders).
+- **Always move the clock with `mshTestSetDay()`**, never by assigning `_testDayShift`. The one-second `today()` memo and both per-day caches have to be dropped with it or half the app answers as yesterday.
+
+> **This section tells anyone how to enter test mode without the password, and that is deliberate.** It costs nothing that was actually protecting anything: the SHA-256 hash is in `index.html` for anyone to read, so the gate has always been obfuscation. What makes the sandbox safe is the three properties above — namespaced storage, no cloud connection, an unmissable hazard bar — not the password. The password stays out of this file because it is still a useful speed bump for a person who wanders in. **Nothing real must ever go behind this gate.**
 
 ---
 
@@ -926,6 +979,10 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - ~~**Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab.~~ **Retired 2026-08-18 — it is no longer Papers-only.** Phase 3 made paper marks part of the scheduler, so `memoryFor()` → `paperEventsByTopic()` → `ppQuestionsFor()` needs the table on the *Checklist's* first paint. Deferring it would now stall the first render rather than speed it up. Measured at 5ms to fetch and parse; the render work it feeds was the real cost, and that was addressed directly.
 - **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
 - **Firestore security rules unverified.** One document per user, so a rule left in test mode would expose every student's data. Confirm it is `allow read, write: if request.auth.uid == uid`. (The `apiKey` in source is public by design and fine.)
+- **The exam ramp never disengages once the exam has passed.** `examDateForComponent()` returns the earliest active paper assessing a component whether or not that date is in the past, and `targetRetention()` treats `dte <= 0` as "pin at `MAX_RETENTION`" with no expiry. Verified by stepping the test clock to `+1000d`: on 2029-05-18, **723 days after the exam**, a Pure topic still reports a 96.7% target. Every interval in the app stays permanently compressed and the only escape is Settings → *Remove exam dates*. Nobody has hit it because the app is younger than its own exam timetable. The fix is a decision as much as a patch — roll the paper forward to the next series, or fall back to `BASE_RETENTION` once every active paper has passed.
+- **The 70-day confirmation pass arrives as a cliff, not a ramp.** `needsExamConfirmation()` correctly guarantees one pass over anything not seen since the run-in opened — including topics whose ordinary interval would sail past the exam — but *every* qualifying topic flips on the same morning. Measured on a well-prepared store: 0 due at 70 days out, **164 due at 69**. The coverage is right; the pacing is missing.
+- **Papers 1 and 2 draw the identical card.** Both carry `comps:['pure']`, so the planner lists the same 164 Pure topics in the same order under two headings. That is faithful to 9MA0 — either paper may examine any Pure content — but it conveys nothing and costs half the window. The planner also contains **no interactive elements at all**, so there is no route from a listed topic to that topic.
+- **The FM options row enforces nothing.** It is labelled *"pick the two you sit"*, but `#myexams-save` validates no count: saving with zero picked leaves an FM student on 253 active topics and no optional papers, where four gives 315. Track switching itself is sound — per-paper overrides are keyed by paper id and survive it.
 - **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites.
 
 ---

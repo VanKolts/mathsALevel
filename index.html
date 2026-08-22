@@ -7142,6 +7142,28 @@ window.mshTestPrompt=async function(){
 };
 if(!window.MSH_TEST && /[?&]test\b/.test(location.search)) setTimeout(window.mshTestPrompt,300);
 
+/* The door for anything scripted — a browser-automation tool, a screenshot run, an agent
+   driving the app to check a change. mshTestPrompt() asks with window.prompt(), which blocks
+   the very script that would have to answer it, so that route is closed to automation by
+   construction rather than by policy. This sets the same sessionStorage flag the prompt sets
+   and reloads, optionally carrying a whole sandbox setup on the URL:
+
+     mshTestStart({seed:'realistic', day:300, go:'planner'})
+
+   It is not a weaker gate than the prompt. The hash sits in this file for anyone to read and
+   the note at the top says why that is fine: there is nothing behind the gate worth
+   protecting, and the sandbox reaches no real data. What it does buy is that a scripted
+   entry is a named, documented function rather than each caller poking sessionStorage and
+   hoping the key never changes. */
+window.mshTestStart=function(opts){
+  opts=opts||{};
+  try{ sessionStorage.setItem('msh-test','1'); }
+  catch(e){ throw new Error('sessionStorage is blocked, so test mode cannot start.'); }
+  const q=new URLSearchParams(); q.set('test','1');
+  ['seed','day','go','theme','motion'].forEach(function(k){ if(opts[k]!=null) q.set(k,String(opts[k])); });
+  location.search='?'+q.toString();   // assigning to .search navigates, so this reloads
+};
+
 /* Move the app's clock. Everything derived — due dates, memory %, status, the exam ramp —
    is a function of today(), so this one integer moves the entire model. The caches keyed on
    the day have to be dropped together with it, which is the only reason this is a function
@@ -7447,6 +7469,55 @@ if(window.MSH_TEST) (function(){
       for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.indexOf(R.prefix)===0) kill.push(k); }
       kill.forEach(R.remove); location.reload();
     };
+
+    /* ---- the same panel, driven off the URL ------------------------------------------------
+       Everything above is built for a person clicking it, which is no use to anything driving
+       the app from outside. These five params reach the same four controls — the seeder, the
+       clock, the theme, the motion multiplier and the jump list — so a scripted run can state
+       the situation it wants to look at in one navigation instead of a dozen clicks:
+
+         ?test&seed=realistic&day=300&go=planner
+
+       Applied once per distinct query, tracked in sessionStorage, because seed() reloads the
+       page: a seed param that ran again on the way back in would reload forever. The stamp is
+       the query string itself, so changing any param re-applies and re-visiting does not. */
+    function applyUrlSetup(){
+      const q=new URLSearchParams(location.search);
+      if(!['seed','day','go','theme','motion'].some(k=>q.has(k))) return;
+      let done=''; try{ done=sessionStorage.getItem('msh-test-setup')||''; }catch(e){}
+      const fresh = done!==location.search;
+      try{ sessionStorage.setItem('msh-test-setup',location.search); }catch(e){}
+
+      const s=q.get('seed');
+      if(s && fresh){
+        if(!PRESETS[s]){ console.warn('[test] no preset "'+s+'". Try: '+Object.keys(PRESETS).join(', ')); }
+        else { seed(s); return; }        // seed() reloads; the rest applies on the way back in
+      }
+      if(q.has('theme')){
+        const t=q.get('theme');
+        if(THEME_META[t]) applyTheme(t);
+        else console.warn('[test] no theme "'+t+'". Try: '+Object.keys(THEME_META).join(', '));
+      }
+      if(q.has('motion')){ const m=parseInt(q.get('motion'),10); setSpeed(isNaN(m)?1:m); }
+      if(q.has('day')){ const d=parseInt(q.get('day'),10); mshTestSetDay(isNaN(d)?0:d); }
+      if(q.has('go')){
+        /* The jump list is labelled for a menu ("Revision plan"), but the word that comes to
+           mind when writing a URL is the one the code uses ("planner", from openPlanner).
+           Both should work, so the obvious short name for each surface is spelled out. */
+        const ALIAS={planner:'Revision plan', plan:'Revision plan', exams:'My exams',
+                     stats:'Statistics', papers:'Past Papers', timer:'Focus timer',
+                     pomodoro:'Focus timer', tutor:'AI tutor', formula:'Formula sheet',
+                     intro:'Onboarding', study:'Study modal', topic:'Study modal'};
+        const flat=x=>x.toLowerCase().replace(/[^a-z]/g,'');
+        const raw=q.get('go'), want=flat(ALIAS[flat(raw)]||raw);
+        const j=JUMPS.find(x=>flat(x[0])===want) || JUMPS.find(x=>flat(x[0]).indexOf(want)>=0);
+        if(j){ try{ j[1](); }catch(e){ console.warn('[test] go='+raw,e); } }
+        else console.warn('[test] no surface "'+raw+'". Try: '+JUMPS.map(x=>x[0]).join(', ')
+                          +' — or '+Object.keys(ALIAS).join(', '));
+      }
+    }
+    applyUrlSetup();
+
     mshTestPaint();
   }
 
