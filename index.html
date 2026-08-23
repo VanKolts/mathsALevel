@@ -1924,14 +1924,26 @@ function openGradeBoundaries(){
   Object.keys(GRADE_BOUNDARIES.components).forEach(function(y){ years[y]=1; });
   Object.keys(GRADE_BOUNDARIES.overall).forEach(function(y){ years[y]=1; });
   Object.keys(GRADE_BOUNDARIES.notAwarded).forEach(function(y){ if(/^\d{4}$/.test(y)) years[y]=1; });
-  var list=Object.keys(years).sort().reverse();
-  ySel.innerHTML='';
-  list.forEach(function(y){
-    var o=document.createElement('option');o.value=y;o.textContent=y;
-    if(gbNoAwardReason(y)) o.textContent=y+' — no exams';
-    ySel.appendChild(o);
+  var modern=Object.keys(years).sort().reverse();
+  // Legacy sittings read "June 2012", so they sort by year then by month within it.
+  var legacy=Object.keys(GRADE_BOUNDARIES.legacy||{}).sort(function(a,b){
+    var A=a.split(' '), B=b.split(' ');
+    return (+B[1]-+A[1]) || ((B[0]==='June'?1:0)-(A[0]==='June'?1:0));
   });
-  if(list.indexOf(gbActiveYear)<0) gbActiveYear=list[0]||'';
+  ySel.innerHTML='';
+  function group(label,items,decorate){
+    if(!items.length) return;
+    var g=document.createElement('optgroup'); g.label=label;
+    items.forEach(function(y){
+      var o=document.createElement('option'); o.value=y; o.textContent=decorate?decorate(y):y;
+      g.appendChild(o);
+    });
+    ySel.appendChild(g);
+  }
+  group('Current specification', modern, function(y){ return gbNoAwardReason(y)?y+' — no exams':y; });
+  group('Old specification (C1–C4)', legacy);
+  var list=modern.concat(legacy);
+  if(list.indexOf(gbActiveYear)<0) gbActiveYear=modern[0]||list[0]||'';
   ySel.value=gbActiveYear;
   renderGradeBoundaries();
   overlay.classList.add('open');document.body.style.overflow='hidden';
@@ -2004,6 +2016,28 @@ function renderGbTable(){
     var n=document.createElement('div');n.className='gb-subnote';n.innerHTML=text;return n;
   }
 
+  /* A legacy sitting is a different world: four standalone modular units, each out of 75 and
+     graded A-E on its own. There is no aggregate to show, because the old spec awarded the
+     qualification on UMS totalled across six units the app does not track. */
+  var lg=(GRADE_BOUNDARIES.legacy||{})[gbActiveYear];
+  if(lg){
+    var lhead=document.createElement('div');lhead.className='gb-section-head';
+    lhead.innerHTML='<span class="gb-section-title">Old specification — '+esc(gbActiveYear)+'</span>'
+      +'<span class="gb-section-spec">6663–6666</span>';
+    wrap.appendChild(lhead);
+    var got=false;
+    ['oldc1','oldc2','oldc3','oldc4'].forEach(function(m){
+      if(!lg[m]) return;
+      wrap.appendChild(row((GB_MODULE_PAPERS[m]||{})[1]||m,lg[m])); got=true;
+    });
+    if(gbActiveGrade==='A*')
+      wrap.appendChild(note('Modular units were graded <b>A to E</b>. A* existed only in the raw-to-UMS conversion, not as a published unit grade.'));
+    else if(!got)
+      wrap.appendChild(note('No boundaries published for this sitting.'));
+    wrap.appendChild(note('These are <b>unit</b> boundaries. The old specification awarded the qualification on UMS totalled across six units, which this app does not track, so there is no overall row.'));
+    table.appendChild(wrap); return;
+  }
+
   var myTrack=getTrack(), drew=false;
   gbQualifications().forEach(function(q){
     var rows=[];
@@ -2069,7 +2103,13 @@ function renderGradeBoundaries(){
      would misrepresent what they are: a qualification is graded on the total, not paper by
      paper, and these component boundaries are notional. */
   var note=document.getElementById('gb-note');
-  if(note) note.textContent='Per-paper figures are Pearson\u2019s notional component boundaries \u2014 indicative only. The grade is awarded on the overall total.';
+  if(note){
+    /* The caveat only applies to the current spec. A legacy unit boundary was a real published
+       unit grade, so calling it notional would be wrong in the opposite direction. */
+    note.textContent=(GRADE_BOUNDARIES.legacy||{})[gbActiveYear]
+      ? 'Modular unit boundaries as published by Edexcel for that sitting.'
+      : 'Per-paper figures are Pearson\u2019s notional component boundaries \u2014 indicative only. The grade is awarded on the overall total.';
+  }
 }
 
 // ---- Live grade hint in paper logger

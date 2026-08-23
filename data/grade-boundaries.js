@@ -11,6 +11,21 @@
 //   June 2024  grade-boundaries-june-2024-notional-component-gce.pdf · grade-boundaries-june-2024-gce.pdf
 //   June 2025  grade-boundaries-june-2025-notional-component-gce.pdf · grade-boundaries-june-2025-gce.pdf
 //   June 2026  grade-boundaries-june-2026-notional-component-gce.pdf · grade-boundaries-june-2026-gce.pdf
+// Legacy C1–C4 units (6663–6666), by series:
+//   Jun 2010  1006-GCE-Units-Grade-Boundaries-(Home-and-Int).pdf   (note: has an extra N column)
+//   Jan 2013  GCE-composite-final-3.pdf
+//   Jun 2015  1506-A-level-Grade-Boundaries.pdf
+//   Jun 2016  1606-A-level-Grade-Boundaries-V6.pdf
+//   Jun 2017  1706-a-level-grade-boundaries-v3.pdf
+//   Jun 2018  1806-a-level-grade-boundaries1.pdf
+//   The other 17 series (Jan 2005 - Jun 2014) come from Edexcel's own compiled document
+//   "C2000 GCE MATHEMATICS: MARKS-TO-UMS BOUNDARIES JANUARY 2001 - JUNE 2014". It is only
+//   mirrored third-party now, so it was NOT taken on trust: every row where it overlaps a
+//   Pearson document was compared (June 2010 and January 2013 - 7 rows) and all 7 agreed.
+//   One row it gives is demonstrably corrupt - C3 June 2010, where a page-boundary splice in
+//   the PDF pulled C4's C/D/E into C3's row - so the last data row of every page is discarded
+//   and taken from Pearson instead. The single row that left missing (C1 January 2007) was
+//   restored only after corroborating it against a separate source.
 // Retrieved 2026-08-23.
 //
 // Two kinds of boundary, and they are NOT interchangeable:
@@ -58,9 +73,36 @@ const GRADE_BOUNDARIES={
     '2025':{'8MA0':{max:160,A:108,B:95,C:82,D:69,E:57},'9FM0':{'3A+3B':{max:300,'A*':251,A:222,B:189,C:156,D:124,E:92},'3A+3C':{max:300,'A*':266,A:239,B:202,C:165,D:128,E:92},'3A+3D':{max:300,'A*':243,A:217,B:183,C:149,D:115,E:81},'3A+4A':{max:300,'A*':262,A:233,B:195,C:158,D:121,E:84},'3B+3C':{max:300,'A*':262,A:233,B:199,C:165,D:131,E:97},'3B+3D':{max:300,'A*':245,A:211,B:179,C:148,D:117,E:86},'3B+4B':{max:300,'A*':244,A:215,B:185,C:155,D:125,E:95},'3C+3D':{max:300,'A*':256,A:228,B:192,C:156,D:121,E:86},'3C+4C':{max:300,'A*':262,A:233,B:197,C:161,D:126,E:91},'3D+4D':{max:300,'A*':241,A:212,B:178,C:144,D:110,E:76}},'9MA0':{max:300,'A*':258,A:214,B:178,C:142,D:106,E:71}},
     '2026':{'8FM0':{'21+22':{max:160,A:111,B:96,C:82,D:68,E:54},'21+23':{max:160,A:114,B:100,C:86,D:72,E:58},'21+25':{max:160,A:113,B:99,C:85,D:71,E:57},'21+27':{max:160,A:111,B:97,C:83,D:69,E:56},'23+24':{max:160,A:118,B:104,C:90,D:76,E:62},'23+25':{max:160,A:119,B:105,C:91,D:78,E:65},'23+27':{max:160,A:117,B:103,C:90,D:77,E:64},'25+26':{max:160,A:118,B:104,C:90,D:76,E:63},'25+27':{max:160,A:116,B:102,C:89,D:76,E:63},'27+28':{max:160,A:112,B:98,C:84,D:70,E:57}},'8MA0':{max:160,A:113,B:99,C:85,D:71,E:58},'9FM0':{'3A+3B':{max:300,'A*':275,A:251,B:213,C:176,D:139,E:102},'3A+3C':{max:300,'A*':273,A:247,B:210,C:173,D:136,E:99},'3A+3D':{max:300,'A*':264,A:237,B:200,C:164,D:128,E:92},'3A+4A':{max:300,'A*':263,A:237,B:200,C:163,D:127,E:91},'3B+3C':{max:300,'A*':274,A:250,B:213,C:176,D:140,E:104},'3B+3D':{max:300,'A*':265,A:240,B:204,C:168,D:132,E:97},'3B+4B':{max:300,'A*':271,A:245,B:210,C:175,D:140,E:105},'3C+3D':{max:300,'A*':263,A:236,B:200,C:164,D:129,E:94},'3C+4C':{max:300,'A*':264,A:236,B:200,C:165,D:130,E:95},'3D+4D':{max:300,'A*':262,A:236,B:199,C:162,D:125,E:89}},'9MA0':{max:300,'A*':254,A:210,B:173,C:136,D:100,E:64}},
   },
-  // legacy modular units (raw marks). The app's legacy years read 'June 2018' etc.
+  /* Legacy modular units (6663-6666, C1-C4). Raw marks out of 75, graded **A to E**:
+     Pearson's own June 2010 document states that a* at unit level "is only used in conversion
+     from raw to uniform marks. It is not a published unit grade", so no A* is stored here.
+     23 sittings, January 2005 to June 2018, 79 unit-sittings in all. Sources per series are in
+     the header above; where Pearson's own document and the archive both cover a series they were
+     compared and agreed on every row. */
   legacy:{
-    'June 2018':{oldc1:{max:75,A:62,B:56,C:50,D:44,E:38},oldc2:{max:75,A:70,B:63,C:57,D:51,E:45},oldc3:{max:75,'A*':67,A:60,B:53,C:46,D:40,E:34},oldc4:{max:75,'A*':65,A:58,B:51,C:44,D:37,E:31}},
+    'January 2005':{oldc1:{max:75,A:60,B:52,C:44,D:37,E:30},oldc2:{max:75,A:62,B:54,C:46,D:38,E:31}},
+    'June 2005':{oldc2:{max:75,A:60,B:52,C:44,D:36,E:28},oldc3:{max:75,A:61,B:53,C:46,D:39,E:32},oldc4:{max:75,A:52,B:45,C:38,D:32,E:26}},
+    'January 2006':{oldc3:{max:75,A:61,B:53,C:46,D:39,E:32},oldc4:{max:75,A:61,B:53,C:45,D:38,E:31}},
+    'June 2006':{oldc1:{max:75,A:60,B:52,C:44,D:37,E:30},oldc2:{max:75,A:67,B:59,C:51,D:43,E:36},oldc3:{max:75,A:56,B:49,C:43,D:37,E:31},oldc4:{max:75,A:58,B:50,C:42,D:35,E:28}},
+    'January 2007':{oldc1:{max:75,A:61,B:53,C:45,D:37,E:29},oldc2:{max:75,A:62,B:53,C:44,D:35,E:27},oldc3:{max:75,A:58,B:50,C:42,D:34,E:27},oldc4:{max:75,A:58,B:51,C:44,D:37,E:31}},
+    'June 2007':{oldc1:{max:75,A:60,B:52,C:44,D:37,E:30},oldc2:{max:75,A:59,B:50,C:42,D:34,E:26},oldc3:{max:75,A:59,B:52,C:45,D:39,E:33},oldc4:{max:75,A:58,B:50,C:43,D:36,E:29}},
+    'January 2008':{oldc1:{max:75,A:62,B:53,C:44,D:36,E:28},oldc2:{max:75,A:62,B:53,C:45,D:37,E:29},oldc3:{max:75,A:64,B:56,C:49,D:42,E:35},oldc4:{max:75,A:55,B:49,C:43,D:37,E:31}},
+    'June 2008':{oldc1:{max:75,A:62,B:53,C:44,D:36,E:28},oldc2:{max:75,A:63,B:54,C:45,D:36,E:27},oldc3:{max:75,A:64,B:57,C:50,D:43,E:37},oldc4:{max:75,A:57,B:50,C:44,D:38,E:32}},
+    'January 2009':{oldc1:{max:75,A:59,B:51,C:43,D:35,E:27},oldc2:{max:75,A:57,B:48,C:39,D:30,E:22},oldc3:{max:75,A:60,B:52,C:44,D:36,E:29},oldc4:{max:75,A:59,B:52,C:45,D:38,E:32}},
+    'June 2009':{oldc2:{max:75,A:53,B:45,C:38,D:31,E:24},oldc3:{max:75,A:67,B:59,C:52,D:45,E:38},oldc4:{max:75,A:58,B:52,C:46,D:40,E:35}},
+    'January 2010':{oldc1:{max:75,A:63,B:54,C:46,D:38,E:30},oldc2:{max:75,A:54,B:47,C:40,D:33,E:27},oldc3:{max:75,A:59,B:52,C:45,D:39,E:33},oldc4:{max:75,A:61,B:53,C:46,D:39,E:32}},
+    'June 2010':{oldc1:{max:75,A:59,B:52,C:45,D:38,E:31},oldc2:{max:75,A:62,B:54,C:46,D:38,E:30},oldc3:{max:75,A:62,B:55,C:48,D:41,E:34},oldc4:{max:75,A:60,B:52,C:44,D:37,E:30}},
+    'January 2011':{oldc1:{max:75,A:62,B:53,C:44,D:35,E:27},oldc2:{max:75,A:65,B:57,C:50,D:43,E:36},oldc3:{max:75,A:61,B:53,C:45,D:38,E:31},oldc4:{max:75,A:69,B:61,C:53,D:46,E:39}},
+    'June 2011':{oldc1:{max:75,A:58,B:51,C:44,D:37,E:30},oldc2:{max:75,A:62,B:54,C:46,D:38,E:30},oldc3:{max:75,A:65,B:58,C:51,D:44,E:37}},
+    'January 2012':{oldc2:{max:75,A:61,B:54,C:48,D:42,E:36},oldc3:{max:75,A:65,B:58,C:51,D:45,E:39},oldc4:{max:75,A:65,B:58,C:51,D:45,E:39}},
+    'June 2012':{oldc2:{max:75,A:63,B:55,C:47,D:39,E:32},oldc3:{max:75,A:64,B:57,C:51,D:45,E:39},oldc4:{max:75,A:63,B:56,C:49,D:43,E:37}},
+    'January 2013':{oldc1:{max:75,A:58,B:50,C:43,D:36,E:29},oldc3:{max:75,A:62,B:56,C:50,D:45,E:40},oldc4:{max:75,A:61,B:54,C:47,D:41,E:35}},
+    'June 2013':{oldc1:{max:75,A:63,B:56,C:49,D:42,E:36},oldc3:{max:75,A:50,B:43,C:36,D:30,E:24},oldc4:{max:75,A:61,B:53,C:46,D:39,E:32}},
+    'June 2014':{oldc2:{max:75,A:60,B:53,C:46,D:40,E:34},oldc3:{max:75,A:60,B:54,C:48,D:42,E:36},oldc4:{max:75,A:59,B:52,C:46,D:40,E:34}},
+    'June 2015':{oldc1:{max:75,A:63,B:56,C:50,D:44,E:38},oldc3:{max:75,A:59,B:53,C:47,D:41,E:35},oldc4:{max:75,A:62,B:56,C:50,D:44,E:39}},
+    'June 2016':{oldc1:{max:75,A:61,B:55,C:50,D:45,E:40},oldc2:{max:75,A:63,B:57,C:51,D:46,E:41},oldc3:{max:75,A:59,B:53,C:47,D:42,E:37},oldc4:{max:75,A:65,B:58,C:51,D:44,E:38}},
+    'June 2017':{oldc1:{max:75,A:63,B:56,C:49,D:43,E:37},oldc2:{max:75,A:63,B:57,C:52,D:47,E:42},oldc3:{max:75,A:58,B:52,C:46,D:40,E:34},oldc4:{max:75,A:60,B:53,C:47,D:41,E:35}},
+    'June 2018':{oldc1:{max:75,A:62,B:56,C:50,D:44,E:38},oldc2:{max:75,A:70,B:63,C:57,D:51,E:45},oldc3:{max:75,A:60,B:53,C:46,D:40,E:34},oldc4:{max:75,A:58,B:51,C:44,D:37,E:31}},
   },
   // Years the app carries papers for that were never sat, so no boundary exists at all.
   notAwarded:{

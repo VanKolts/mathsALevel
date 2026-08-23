@@ -647,7 +647,7 @@ PAPER_QUESTIONS = {
 ```
 Invariant enforced across the dataset: **for every paper, Σ marks = the paper's real total**, and every string in `topics[]` is an exact canonical topic name.
 
-**`GRADE_BOUNDARIES`** — Pearson's published boundaries, used to convert a logged total into a grade and to compute the Leaks grade-impact headline. **144 rows** covering 9MA0, 8MA0 and 9FM0 (Core Pure plus all four options) for 2019 and 2022–2026, plus the legacy C1–C4 units for June 2018.
+**`GRADE_BOUNDARIES`** — Pearson's published boundaries, used to convert a logged total into a grade and to compute the Leaks grade-impact headline. **219 rows**: 9MA0, 8MA0 and 9FM0 (Core Pure plus all four options) for 2019 and 2022–2026, plus **all 79 legacy C1–C4 unit-sittings** across the 23 series from January 2005 to June 2018.
 
 ```js
 GRADE_BOUNDARIES = {
@@ -669,7 +669,11 @@ Three things about the shape are load-bearing:
 - **Further Maths overall is keyed by option pair, because the aggregate genuinely differs.** Pearson publishes a separate row for every combination. In 2024, **240/300 is a B on `3A+3C` (FP1+FM1) and an A\* on `3B+3D` (FS1+D1)** — three grades apart for the same mark on the same qualification. `gbOverallFor()` resolves the row from the student's track and `fmOptions`; with fewer or more than two options chosen it returns `null` rather than guessing, because no such row exists.
 - **`notAwarded` is data, not an omission.** The app carries 2020 and 2021 papers, but those exams were cancelled and Pearson published no boundaries, so the UI says why instead of showing a blank. 2019 likewise has no notional component `A*` — that year Pearson didn't publish one.
 
-Every figure is transcribed mechanically by [`scripts/extract-grade-boundaries.py`](scripts/extract-grade-boundaries.py) from Pearson's own PDFs (sources listed in the data file's header); none is hand-typed or estimated. `npm test` re-checks all 144 rows for ordering, range, and agreement with the paper maxima the app already derives from `PAPER_QUESTIONS`.
+**Legacy units are graded A–E, deliberately.** Pearson's own June 2010 document states that a\* at unit level "is only used in conversion from raw to uniform marks. It is not a published unit grade", so no A\* is stored for C1–C4 and selecting A\* says why. There is no aggregate row either: the old spec awarded the qualification on UMS totalled across six units, which this app does not track.
+
+Every figure is transcribed mechanically — [`scripts/extract-grade-boundaries.py`](scripts/extract-grade-boundaries.py) for the current spec, [`scripts/extract-legacy-boundaries.py`](scripts/extract-legacy-boundaries.py) for C1–C4 — from Pearson's PDFs; none is hand-typed or estimated. `npm test` re-checks all 219 rows for ordering, range, and agreement with the paper maxima the app already derives from `PAPER_QUESTIONS`.
+
+> **Six legacy series come from Pearson directly; the other seventeen (Jan 2005 – Jun 2014) come from Edexcel's compiled "MARKS-TO-UMS BOUNDARIES JANUARY 2001 – JUNE 2014", which now survives only as a third-party mirror — so it was not taken on trust.** Every row where it overlaps a Pearson document was compared: 7 rows across June 2010 and January 2013, all 7 agreed. One row it gives is demonstrably corrupt — **C3 June 2010**, where a page-boundary splice in the PDF pulls C4's C/D/E into C3's row, producing a plausible-looking line that is wrong by four marks per grade. Both `pypdf` and a coordinate-aware `pdfplumber` pass reproduce it identically, so the defect is in the document, not the parser. The extractor therefore **discards the last data row of every page** and takes it from Pearson instead; the one row that left missing (C1 January 2007) was restored only after corroborating it against a separate source.
 
 ### 9.2 Topic taxonomy (full)
 
@@ -1006,7 +1010,7 @@ Before `npm run deploy`, for the change you just made:
 
 Honest list of what doesn't work yet, so nothing here looks like a bug you have to rediscover.
 
-- ~~**Grade boundaries are A-Level only.**~~ **Fixed 2026-08-23 — and the data that was there was wrong.** The old table covered only `alevel`, and every figure in it matched no published source: 9MA0 2024 was recorded as A\* 220/300 against a real **251**, and all fifteen paper rows were out too. It is now 144 mechanically-extracted rows covering 9MA0, 8MA0 and 9FM0 (Core Pure + all four options) for 2019 and 2022–2026, resolved against the student's own track and option pair. **Still uncovered:** the legacy C1–C4 sittings from January 2005 to January 2018 (June 2018 is in). Those need one Pearson document per series — about 28 more — and they are unit boundaries on the old modular UMS system rather than the linear one, so they are a separate data job.
+- ~~**Grade boundaries are A-Level only.**~~ **Fixed 2026-08-23, and the data that was there was wrong.** The old table covered only `alevel`, and every figure in it matched no published source: 9MA0 2024 was recorded as A\* 220/300 against a real **251**, and all fifteen paper rows were out too. It is now **219 mechanically-extracted rows** — 9MA0, 8MA0 and 9FM0 (Core Pure + all four options) for 2019 and 2022–2026, resolved against the student's own track and option pair, plus **all 79 legacy C1–C4 unit-sittings** from January 2005 to June 2018. Every supported paper in the app can now be graded.
 - **Further Maths has no PMT page map.** `PRACTICE_LINKS` covers the 26 Pure chapters and `TOPIC_PMT_OVERRIDE` the 44 Stats/Mechanics topics, so 208 of 315 topics reach a real revision page; the remaining 107 are all FM clusters and fall through to the A-Level index. Adding them is data entry against PMT's Further Maths URLs.
 - **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
