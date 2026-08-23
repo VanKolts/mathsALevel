@@ -172,7 +172,71 @@ if (exists('sw.js')) {
 
 /* ---------------------------------------------------------- 8. misc datasets ---- */
 
-if (!GRADE_BOUNDARIES || !GRADE_BOUNDARIES.alevel) fail('GRADE_BOUNDARIES.alevel missing — grade lookup will break');
+/* Grade boundaries. These are real published figures about someone's exam results, so the
+   checks are about *internal consistency* — a transcription slip shows up as a boundary that
+   is out of order, above the paper maximum, or attached to a paper the app does not have.
+   It cannot check a number against Pearson; only the extractor's provenance does that. */
+{
+  const GB = GRADE_BOUNDARIES;
+  const ORDER = ['A*', 'A', 'B', 'C', 'D', 'E'];
+  if (!GB || !GB.modules || !GB.components || !GB.overall) {
+    fail('GRADE_BOUNDARIES is missing modules/components/overall — grade lookup will break');
+  } else {
+    let rows = 0, bad = 0;
+    const checkRow = (where, b, expectMax) => {
+      rows++;
+      if (typeof b.max !== 'number') { fail(`${where}: no max`); bad++; return; }
+      if (expectMax != null && b.max !== expectMax) {
+        fail(`${where}: max ${b.max} but the app's paper is out of ${expectMax}`); bad++;
+      }
+      const present = ORDER.filter(g => b[g] != null);
+      if (!present.length) { fail(`${where}: no grades at all`); bad++; return; }
+      for (const g of present) {
+        if (b[g] < 0 || b[g] > b.max) { fail(`${where}: ${g}=${b[g]} outside 0..${b.max}`); bad++; }
+      }
+      for (let i = 1; i < present.length; i++) {
+        if (b[present[i - 1]] <= b[present[i]]) {
+          fail(`${where}: ${present[i - 1]} (${b[present[i - 1]]}) not above ${present[i]} (${b[present[i]]})`);
+          bad++;
+        }
+      }
+    };
+    // component rows, cross-checked against the paper maxima the app already knows
+    const maxOf = (mod, pn) => {
+      const yrs = PAPER_QUESTIONS[mod]; if (!yrs) return null;
+      for (const y of Object.keys(yrs)) {
+        const qs = yrs[y][pn];
+        if (Array.isArray(qs) && qs.length) return qs.reduce((s, q) => s + q.marks, 0);
+      }
+      return null;
+    };
+    for (const year of Object.keys(GB.components))
+      for (const mod of Object.keys(GB.components[year])) {
+        if (!GB.modules[mod]) { fail(`components ${year}: unknown module "${mod}"`); bad++; continue; }
+        for (const pn of Object.keys(GB.components[year][mod]))
+          checkRow(`${mod} ${year} paper ${pn}`, GB.components[year][mod][pn], maxOf(mod, pn));
+      }
+    for (const year of Object.keys(GB.overall))
+      for (const spec of Object.keys(GB.overall[year])) {
+        const t = GB.overall[year][spec];
+        if (t.max != null) checkRow(`overall ${spec} ${year}`, t);
+        else for (const combo of Object.keys(t)) checkRow(`overall ${spec} ${year} ${combo}`, t[combo]);
+      }
+    for (const year of Object.keys(GB.legacy || {}))
+      for (const mod of Object.keys(GB.legacy[year])) checkRow(`legacy ${mod} ${year}`, GB.legacy[year][mod]);
+    // every option a student can pick must resolve to a published aggregate row
+    const opts = Object.values(GB.optionPaper).sort();
+    for (const year of Object.keys(GB.overall)) {
+      const fm = GB.overall[year]['9FM0'];
+      if (!fm || fm.max != null) continue;
+      for (let i = 0; i < opts.length; i++) for (let j = i + 1; j < opts.length; j++) {
+        const key = [opts[i], opts[j]].sort().join('+');
+        if (!fm[key]) { fail(`overall 9FM0 ${year}: no row for option pair ${key}`); bad++; }
+      }
+    }
+    if (!bad) ok(`grade boundaries: ${rows} rows, all ordered, in range and matching paper maxima`);
+  }
+}
 let terms = 0;
 for (const g of GLOSSARY) {
   if (!Array.isArray(g.items)) { fail(`glossary group ${g.topic || g.n} has no items array`); continue; }

@@ -647,14 +647,29 @@ PAPER_QUESTIONS = {
 ```
 Invariant enforced across the dataset: **for every paper, Σ marks = the paper's real total**, and every string in `topics[]` is an exact canonical topic name.
 
-**`GRADE_BOUNDARIES`** — official boundaries per module/year, used to convert a logged total into a grade and to compute the Leaks grade-impact headline:
+**`GRADE_BOUNDARIES`** — Pearson's published boundaries, used to convert a logged total into a grade and to compute the Leaks grade-impact headline. **144 rows** covering 9MA0, 8MA0 and 9FM0 (Core Pure plus all four options) for 2019 and 2022–2026, plus the legacy C1–C4 units for June 2018.
+
 ```js
 GRADE_BOUNDARIES = {
-  alevel:{ years:{ '2024':{
-    overall:{ max:300, 'A*':220, A:196, B:164, C:134, D:105, E:77 }, …
-  } } }, …
+  modules:{ alevel:{spec:'9MA0', papers:{'1':'01','2':'02','3':'03'}},
+            fp1:{spec:'9FM0', papers:{'1':'3A'}, option:'3A'}, … },
+  tracks:{ as:'8MA0', alevel:'9MA0', fm:'9FM0' },
+  optionPaper:{ fp1:'3A', fs1:'3B', fm1:'3C', d1:'3D' },
+  components:{ '2024':{ alevel:{ 1:{max:100,'A*':81,A:66,B:53,C:40,D:28,E:16}, … } } },
+  overall:{ '2024':{ '9MA0':{max:300,'A*':251,A:205,…},
+                     '9FM0':{ '3A+3B':{max:300,'A*':263,…}, '3B+3D':{max:300,'A*':235,…}, … } } },
+  legacy:{ 'June 2018':{ oldc1:{max:75,A:62,B:56,…}, … } },
+  notAwarded:{ '2020':'…cancelled…', '2021':'…', 'Specimen':'…' }
 }
 ```
+
+Three things about the shape are load-bearing:
+
+- **Components and overall are different objects because they are different things.** Component rows are Pearson's *notional* per-paper boundaries, which Pearson states plainly "do not equate to actual grades" — a qualification is graded on the total. The app shows them because they are the only honest answer to "what was this paper worth", and labels them indicative in the UI.
+- **Further Maths overall is keyed by option pair, because the aggregate genuinely differs.** Pearson publishes a separate row for every combination. In 2024, **240/300 is a B on `3A+3C` (FP1+FM1) and an A\* on `3B+3D` (FS1+D1)** — three grades apart for the same mark on the same qualification. `gbOverallFor()` resolves the row from the student's track and `fmOptions`; with fewer or more than two options chosen it returns `null` rather than guessing, because no such row exists.
+- **`notAwarded` is data, not an omission.** The app carries 2020 and 2021 papers, but those exams were cancelled and Pearson published no boundaries, so the UI says why instead of showing a blank. 2019 likewise has no notional component `A*` — that year Pearson didn't publish one.
+
+Every figure is transcribed mechanically by [`scripts/extract-grade-boundaries.py`](scripts/extract-grade-boundaries.py) from Pearson's own PDFs (sources listed in the data file's header); none is hand-typed or estimated. `npm test` re-checks all 144 rows for ordering, range, and agreement with the paper maxima the app already derives from `PAPER_QUESTIONS`.
 
 ### 9.2 Topic taxonomy (full)
 
@@ -991,14 +1006,14 @@ Before `npm run deploy`, for the change you just made:
 
 Honest list of what doesn't work yet, so nothing here looks like a bug you have to rediscover.
 
-- **Grade boundaries are A-Level only.** `GRADE_BOUNDARIES` contains a single module (`alevel`), and `getGradeForMarks()` returns `null` for anything else. Logging an AS, Further Maths or legacy Core paper records the marks correctly but shows no grade — 120 of the 142 supported papers. Adding `as`, `fmcp` and the legacy boundaries is the highest-value data job outstanding.
+- ~~**Grade boundaries are A-Level only.**~~ **Fixed 2026-08-23 — and the data that was there was wrong.** The old table covered only `alevel`, and every figure in it matched no published source: 9MA0 2024 was recorded as A\* 220/300 against a real **251**, and all fifteen paper rows were out too. It is now 144 mechanically-extracted rows covering 9MA0, 8MA0 and 9FM0 (Core Pure + all four options) for 2019 and 2022–2026, resolved against the student's own track and option pair. **Still uncovered:** the legacy C1–C4 sittings from January 2005 to January 2018 (June 2018 is in). Those need one Pearson document per series — about 28 more — and they are unit boundaries on the old modular UMS system rather than the linear one, so they are a separate data job.
 - **Further Maths has no PMT page map.** `PRACTICE_LINKS` covers the 26 Pure chapters and `TOPIC_PMT_OVERRIDE` the 44 Stats/Mechanics topics, so 208 of 315 topics reach a real revision page; the remaining 107 are all FM clusters and fall through to the A-Level index. Adding them is data entry against PMT's Further Maths URLs.
 - **109 of 315 topics have no past-paper questions tagged** (mostly Further Maths, plus topics created by the Pure chapter split). Those topics can never appear in the Leaks report or its "revise first" ranking. `npm test` prints the current count on every run.
 - **Legacy M1 and S1 have no per-question breakdown**, and the practice sets (Madas, Naiker) are listed in the logger without per-question data.
 - **Accessibility — contrast, type, target sizes and focus management are done; live regions are not.** All three themes clear SC 1.4.3 AA on every token against all four surfaces, no text is under 11px, colour is no longer the sole cue for difficulty, every control clears SC 2.5.8's 24×24 except two documented exceptions, and as of 2026-08-18 all 23 dialogs trap Tab and restore focus to whatever opened them ([see below](#one-focus-manager-for-every-dialog)). Still outstanding: there is only one `aria-live` region, so most state changes are silent to a screen reader. SC 2.5.5 (AAA, 44×44) is met on touch via the `pointer:coarse` block but not on desktop.
 - **Light-mode default is arguably the better call and has not been made.** [Piepenbrock et al. (2013)](https://www.tandfonline.com/doi/full/10.1080/00140139.2013.790485) found positive polarity (dark text on light) gave better visual acuity for both younger (d=2.17) and older (d=0.58) adults and better proofreading accuracy, with the advantage growing as text shrinks. The app defaults to `rose-dark`. Dark mode is a genuine accessibility win for readers with cloudy ocular media (Legge et al. 1985), so the right answer is probably to default to the system preference rather than to either theme — currently there is no `prefers-color-scheme` handling at all.
 - ~~**Load cost.** `data/paper-questions.js` is 173 KB and parsed on every load, though it is only needed on the Papers tab.~~ **Retired 2026-08-18 — it is no longer Papers-only.** Phase 3 made paper marks part of the scheduler, so `memoryFor()` → `paperEventsByTopic()` → `ppQuestionsFor()` needs the table on the *Checklist's* first paint. Deferring it would now stall the first render rather than speed it up. Measured at 5ms to fetch and parse; the render work it feeds was the real cost, and that was addressed directly.
-- **`GRADE_BOUNDARIES.alevel.years['2024'].papers[1]`** is used as a generic "average grade gap" when estimating the Leaks headline. That is a deliberate approximation, not a per-module lookup.
+- **The Leaks headline's "roughly N grade boundaries' worth"** uses the average gap between adjacent grades on the most recent paper the student's own track sits, which is an approximation but no longer a hard-coded 9MA0 row — an FM option paper is out of 75, so the old figure overstated it by a third.
 - **Firestore security rules unverified.** One document per user, so a rule left in test mode would expose every student's data. Confirm it is `allow read, write: if request.auth.uid == uid`. (The `apiKey` in source is public by design and fine.)
 - ~~**The exam ramp never disengages once the exam has passed.**~~ **Fixed 2026-08-22.** `examDateForComponent()` returned the earliest active paper assessing a component whether or not it had been sat, and `targetRetention()` reads `dte <= 0` as "pin at `MAX_RETENTION`" — so 723 days after the exam a Pure topic still demanded 96.7%, with every interval permanently compressed and no escape but *Remove exam dates*. It now returns the earliest paper **still ahead**, and `''` once they have all been sat, so revision after the exam is ordinary revision again. The same word fixed a second bug nobody had noticed: Pure is examined by Paper 1 *and* Paper 2, and the fortnight between them used to answer with the passed Paper 1 and sit frozen at the ceiling instead of ramping toward the paper actually next. Pinned by [`scripts/fsrs-exam-ramp-test.mjs`](scripts/fsrs-exam-ramp-test.mjs) (35 assertions; 21 of them fail against the old code).
 - **The 70-day confirmation pass arrives as a cliff, not a ramp.** `needsExamConfirmation()` correctly guarantees one pass over anything not seen since the run-in opened — including topics whose ordinary interval would sail past the exam — but *every* qualifying topic flips on the same morning. Measured on a well-prepared store: 0 due at 70 days out, **164 due at 69**. The coverage is right; the pacing is missing.

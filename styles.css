@@ -1754,3 +1754,8 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important;}
 }
+
+/* Caveat under the grade-boundary table. Pearson is explicit that per-paper boundaries are
+   notional and "do not equate to actual grades"; quoting the numbers without that line would
+   misrepresent them. Muted, because it is a footnote, not a warning. */
+.gb-note{margin:14px 4px 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:62ch;}

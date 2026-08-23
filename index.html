@@ -607,7 +607,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   <div class="stats-panel">
     <div class="stats-hdr">
       <div class="stats-title">Grade Boundaries</div>
-      <span class="stats-subtitle">Edexcel 9MA0 A-Level Maths</span>
+      <span class="stats-subtitle" id="gb-spec-label">Edexcel</span>
       <button class="stats-close" id="papergb-close" aria-label="Close">&#10005;</button>
     </div>
     <div class="stats-body">
@@ -617,6 +617,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       </div>
       <div class="gb-grade-row" id="gb-grade-row"></div>
       <div id="gb-table"></div>
+      <p id="gb-note" class="gb-note"></p>
     </div>
   </div>
 </div>
@@ -1809,30 +1810,116 @@ function ppAllLoggableModules(){
 function ppModuleById(id){ return PAPER_MODULES.find(m=>m.id===id); }
 function ppPaper(moduleId,n){ const m=ppModuleById(moduleId); return m? m.papers.find(p=>p.n===n):null; }
 
-// ---- Grade boundaries (Edexcel 9MA0)
+/* ---- Grade boundaries -----------------------------------------------------------------
+   Two different things live under this name and confusing them gives wrong answers:
+
+   **Component boundaries** are Pearson's *notional* per-paper figures. Pearson says outright
+   that they "do not equate to actual grades" — a qualification is graded on the total, not
+   paper by paper. They are still the only honest answer to "what is this paper worth", which
+   is what a student wants after doing one, so the app uses them and labels them indicative.
+
+   **Overall boundaries** are the real ones, awarded on the aggregate. Which row applies is a
+   function of the student's own path: the track picks the table (8MA0 / 9MA0 / 9FM0) and, for
+   Further Maths, **the two options they sit pick the row** — Pearson publishes a separate
+   aggregate for every option pair, and they are far apart. In 2024, 3A+3C needed 270 for an A*
+   and 3B+3D needed 235: thirty-five marks between two students sitting "the same" A-Level.
+
+   Before 2026-08-23 all of this was one hard-coded `alevel` table whose numbers matched no
+   published source — 9MA0 2024 was recorded as A* 220/300 against a real 251, and every paper
+   row was out too. Everything here is now extracted mechanically from Pearson's PDFs; see the
+   header of data/grade-boundaries.js for the sources and scripts/extract-grade-boundaries.py
+   for the extractor. */
 
 const GB_GRADE_ORDER=['A*','A','B','C','D','E'];
 const GB_PAPER_NAMES={1:'Paper 1 — Pure Mathematics 1',2:'Paper 2 — Pure Mathematics 2',3:'Paper 3 — Statistics & Mechanics'};
-function getGradeForMarks(marks,moduleId,paperN,year){
-  if(moduleId!=='alevel')return null;
-  var yb=GRADE_BOUNDARIES.alevel.years[String(year)];if(!yb)return null;
-  var pb=yb.papers[paperN];if(!pb)return null;
-  for(var i=0;i<GB_GRADE_ORDER.length;i++){if(marks>=pb[GB_GRADE_ORDER[i]])return GB_GRADE_ORDER[i];}
+// Per-module paper labels, so the boundaries screen can name what it is showing.
+const GB_MODULE_PAPERS={
+  alevel:GB_PAPER_NAMES,
+  as:{1:'Paper 1 — Pure Mathematics',2:'Paper 2 — Statistics & Mechanics'},
+  fmcp:{1:'Core Pure Mathematics 1',2:'Core Pure Mathematics 2'},
+  fp1:{1:'Further Pure Mathematics 1'}, fs1:{1:'Further Statistics 1'},
+  fm1:{1:'Further Mechanics 1'},        d1:{1:'Decision Mathematics 1'},
+  oldc1:{1:'Core Mathematics C1'}, oldc2:{1:'Core Mathematics C2'},
+  oldc3:{1:'Core Mathematics C3'}, oldc4:{1:'Core Mathematics C4'}
+};
+// Raw boundaries for one paper of one module in one year, or null if none were published.
+function gbComponent(moduleId,paperN,year){
+  var y=String(year);
+  var mod=GRADE_BOUNDARIES.modules[moduleId]; if(!mod) return null;
+  if(mod.legacy){
+    var lg=GRADE_BOUNDARIES.legacy[y]; return (lg&&lg[moduleId])||null;
+  }
+  var yb=GRADE_BOUNDARIES.components[y]; if(!yb) return null;
+  var mb=yb[moduleId]; if(!mb) return null;
+  return mb[String(paperN)]||null;
+}
+// Why a year has no boundaries, when it legitimately has none. '' when it simply is not loaded.
+function gbNoAwardReason(year){ return GRADE_BOUNDARIES.notAwarded[String(year)]||''; }
+function gbGradeFrom(pb,marks){
+  if(!pb) return null;
+  for(var i=0;i<GB_GRADE_ORDER.length;i++){
+    var g=GB_GRADE_ORDER[i];
+    if(pb[g]!=null && marks>=pb[g]) return g;
+  }
   return 'U';
+}
+function getGradeForMarks(marks,moduleId,paperN,year){
+  return gbGradeFrom(gbComponent(moduleId,paperN,year),marks);
+}
+/* The overall table for the student's own qualification and options.
+   Returns {spec, key, bounds} or null. `key` is the option pair for Further Maths, so the UI
+   can say *which* combination it is quoting rather than implying there is only one. */
+function gbOverallFor(year,track,options){
+  var y=String(year);
+  var yb=GRADE_BOUNDARIES.overall[y]; if(!yb) return null;
+  var spec=GRADE_BOUNDARIES.tracks[track||getTrack()]; if(!spec) return null;
+  var tbl=yb[spec]; if(!tbl) return null;
+  if(tbl.max!=null) return {spec:spec,key:'',bounds:tbl};        // 8MA0 / 9MA0 — one row
+  // 9FM0 — the row depends on which two options are sat.
+  var opts=options||(typeof fmOptions!=='undefined'?fmOptions:new Set());
+  var papers=Array.from(opts).map(function(o){return GRADE_BOUNDARIES.optionPaper[o];})
+                  .filter(Boolean).sort();
+  if(papers.length!==2) return null;      // Pearson publishes a row per *pair*; 0/1/3 has none
+  var key=papers.join('+');
+  return tbl[key]?{spec:spec,key:key,bounds:tbl[key]}:null;
+}
+function gbOverallGrade(totalMarks,year,track,options){
+  var o=gbOverallFor(year,track,options);
+  return o?gbGradeFrom(o.bounds,totalMarks):null;
 }
 function gbBadgeClass(g){return 'gb-grade-badge gb-badge-'+(g==='A*'?'Astar':g);}
 
 // ---- Grade boundaries overlay state
 var gbActiveGrade='A';var gbActiveYear='2024';
 
+/* Which modules this student's track actually sits — the boundaries screen shows those and
+   nothing else, since a Maths-only student has no business being offered Core Pure. */
+function gbModulesForTrack(){
+  var tr=getTrack();
+  if(tr==='as') return ['as'];
+  var out=['alevel'];
+  if(tr==='fm'){
+    out.push('fmcp');
+    ['fp1','fs1','fm1','d1'].forEach(function(o){
+      if(typeof fmOptions!=='undefined'&&fmOptions.has(o)) out.push(o);
+    });
+  }
+  return out;
+}
 function openGradeBoundaries(){
   var overlay=document.getElementById('papergb-overlay');
   var ySel=document.getElementById('gb-year');
+  var mods=gbModulesForTrack();
+  // Offer only years that have boundaries for something this student sits.
+  var years=Object.keys(GRADE_BOUNDARIES.components).filter(function(y){
+    return mods.some(function(m){ return GRADE_BOUNDARIES.components[y][m]; });
+  }).sort().reverse();
   ySel.innerHTML='';
-  Object.keys(GRADE_BOUNDARIES.alevel.years).sort().reverse().forEach(function(y){
+  years.forEach(function(y){
     var o=document.createElement('option');o.value=y;o.textContent=y;ySel.appendChild(o);
   });
-  gbActiveYear=ySel.value;
+  if(years.indexOf(gbActiveYear)<0) gbActiveYear=years[0]||'';
+  ySel.value=gbActiveYear;
   renderGradeBoundaries();
   overlay.classList.add('open');document.body.style.overflow='hidden';
 }
@@ -1874,24 +1961,73 @@ function renderGbButtons(){
 function renderGbTable(){
   var table=document.getElementById('gb-table');if(!table)return;
   table.innerHTML='';
-  var yb=GRADE_BOUNDARIES.alevel.years[gbActiveYear];if(!yb)return;
   var wrap=document.createElement('div');wrap.className='gb-boundary-table';
-  [1,2,3].forEach(function(n){
-    var pb=yb.papers[n];if(!pb)return;
-    var mark=pb[gbActiveGrade],pct=Math.round(mark/pb.max*100);
-    var row=document.createElement('div');row.className='gb-row';
-    row.innerHTML='<span class="gb-row-label">'+GB_PAPER_NAMES[n]+'</span>'
-      +'<span class="gb-row-vals"><span class="gb-row-mark">'+mark+' / '+pb.max+'</span><span class="gb-row-pct">('+pct+'%)</span></span>';
+  var esc=(typeof tutorEsc==='function')?tutorEsc:function(s){return s;};
+  function addRow(label,pb,cls){
+    var mark=pb[gbActiveGrade];
+    var row=document.createElement('div');row.className='gb-row'+(cls?' '+cls:'');
+    if(mark==null){
+      // 2019 published no notional component A*; say so rather than showing a blank.
+      row.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
+        +'<span class="gb-row-vals"><span class="gb-row-pct">not published for '+gbActiveGrade+'</span></span>';
+    }else{
+      row.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
+        +'<span class="gb-row-vals"><span class="gb-row-mark">'+mark+' / '+pb.max+'</span>'
+        +'<span class="gb-row-pct">('+Math.round(mark/pb.max*100)+'%)</span></span>';
+    }
     wrap.appendChild(row);
+  }
+  var mods=gbModulesForTrack(), any=false;
+  mods.forEach(function(mod){
+    var names=GB_MODULE_PAPERS[mod]||{};
+    Object.keys(names).forEach(function(n){
+      var pb=gbComponent(mod,n,gbActiveYear); if(!pb) return;
+      addRow(names[n],pb); any=true;
+    });
   });
-  var ob=yb.overall,omark=ob[gbActiveGrade],opct=Math.round(omark/ob.max*100);
-  var orow=document.createElement('div');orow.className='gb-row gb-row-overall';
-  orow.innerHTML='<span class="gb-row-label">Overall (all 3 papers combined)</span>'
-    +'<span class="gb-row-vals"><span class="gb-row-mark">'+omark+' / '+ob.max+'</span><span class="gb-row-pct">('+opct+'%)</span></span>';
-  wrap.appendChild(orow);
+  /* The real thing: the aggregate. A Further Maths student sits *two* qualifications — the
+     A-Level Maths and the Further Maths — so they get both totals, not just the further one. */
+  var tr=getTrack(), ov=null;
+  if(tr==='fm'){
+    var mo=gbOverallFor(gbActiveYear,'alevel');
+    if(mo){ addRow('Overall — 9MA0 A-Level Mathematics',mo.bounds,'gb-row-overall'); any=true; }
+  }
+  ov=gbOverallFor(gbActiveYear);
+  if(ov){
+    var label='Overall — '+ov.spec;
+    if(ov.key){
+      var back={'3A':'FP1','3B':'FS1','3C':'FM1','3D':'D1'};
+      label+=' with '+ov.key.split('+').map(function(p){return back[p]||p;}).join(' + ');
+    }
+    addRow(label,ov.bounds,'gb-row-overall'); any=true;
+  }else if(tr==='fm'){
+    var note=document.createElement('div');note.className='gb-row gb-row-overall';
+    note.innerHTML='<span class="gb-row-label">Overall</span><span class="gb-row-vals">'
+      +'<span class="gb-row-pct">pick exactly two Further options in <b>My exams</b> — Edexcel sets a different aggregate for each pair</span></span>';
+    wrap.appendChild(note);
+  }
+  if(!any){
+    var why=gbNoAwardReason(gbActiveYear);
+    wrap.innerHTML='<div class="gb-row"><span class="gb-row-label">'
+      +esc(why||'No published boundaries for this year.')+'</span></div>';
+  }
   table.appendChild(wrap);
 }
-function renderGradeBoundaries(){renderGbButtons();renderGbTable();}
+function renderGradeBoundaries(){
+  var lbl=document.getElementById('gb-spec-label');
+  if(lbl){
+    var tr=getTrack();
+    lbl.textContent = tr==='as' ? 'Edexcel 8MA0 AS Maths'
+                    : tr==='fm' ? 'Edexcel 9MA0 + 9FM0 Maths & Further Maths'
+                                : 'Edexcel 9MA0 A-Level Maths';
+  }
+  renderGbButtons(); renderGbTable();
+  /* Pearson's own words about the per-paper figures, because quoting them without the caveat
+     would misrepresent what they are: a qualification is graded on the total, not paper by
+     paper, and these component boundaries are notional. */
+  var note=document.getElementById('gb-note');
+  if(note) note.textContent='Per-paper figures are Pearson\u2019s notional component boundaries \u2014 indicative only. The grade is awarded on the overall total.';
+}
 
 // ---- Live grade hint in paper logger
 function updatePlogGradeHint(){
@@ -5775,9 +5911,20 @@ function renderLeaks(){
   var top3=byLost.slice(0,3), top3Lost=top3.reduce(function(s,r){return s+r.lost;},0);
   var html='';
   if(totalLost>0){
-    var pb=GRADE_BOUNDARIES.alevel.years['2024'].papers[1], gaps=[];
-    for(var i=1;i<GB_GRADE_ORDER.length;i++) gaps.push(pb[GB_GRADE_ORDER[i-1]]-pb[GB_GRADE_ORDER[i]]);
-    var avgGap=Math.round(gaps.reduce(function(s,x){return s+x;},0)/gaps.length)||11;
+    /* "Roughly N grade boundaries' worth" needs a typical gap between adjacent grades. Take it
+       from the most recent paper this student actually sits, rather than from one hard-coded
+       row — an FM option paper is out of 75, so a 9MA0 gap would overstate it by a third. */
+    var gbMod=gbModulesForTrack()[0]||'alevel', pb=null;
+    Object.keys(GRADE_BOUNDARIES.components).sort().reverse().some(function(y){
+      pb=gbComponent(gbMod,1,y); return !!pb;
+    });
+    var gaps=[];
+    if(pb) for(var i=1;i<GB_GRADE_ORDER.length;i++){
+      var hi=pb[GB_GRADE_ORDER[i-1]], lo=pb[GB_GRADE_ORDER[i]];
+      if(hi!=null&&lo!=null) gaps.push(hi-lo);
+    }
+    var avgGap=gaps.length?Math.round(gaps.reduce(function(s,x){return s+x;},0)/gaps.length):11;
+    if(!avgGap) avgGap=11;
     var jumps=Math.max(1,Math.round(top3Lost/avgGap));
     html+='<div class="leak-head"><div class="leak-head-big">You’ve dropped <b>'+totalLost+'</b> marks across your logged papers</div>'+
       '<div class="leak-head-sub">Your top 3 leaks alone are <b>'+top3Lost+' marks</b> — roughly <b>'+jumps+' grade boundar'+(jumps>1?'ies':'y')+'</b>’ worth on a paper. Plug those first. <i class="ico" data-icon="wrench" aria-hidden="true"></i></div></div>';
