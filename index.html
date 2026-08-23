@@ -1894,31 +1894,44 @@ var gbActiveGrade='A';var gbActiveYear='2024';
 
 /* Which modules this student's track actually sits — the boundaries screen shows those and
    nothing else, since a Maths-only student has no business being offered Core Pure. */
-function gbModulesForTrack(){
-  var tr=getTrack();
-  if(tr==='as') return ['as'];
-  var out=['alevel'];
-  if(tr==='fm'){
-    out.push('fmcp');
-    ['fp1','fs1','fm1','d1'].forEach(function(o){
-      if(typeof fmOptions!=='undefined'&&fmOptions.has(o)) out.push(o);
-    });
-  }
-  return out;
+/* The three qualifications this app covers, each with the modules that make it up. All three
+   are always shown: someone on the Maths track still wants to see what Further Maths asks, and
+   the panel is a reference table, not a personalised report. The student's own track is marked
+   rather than being the only thing present — which is what it was until 2026-08-23, and the
+   reason a Maths-track student could see no Further Maths at all. */
+function gbQualifications(){
+  var picked=[];
+  ['fp1','fs1','fm1','d1'].forEach(function(o){
+    if(typeof fmOptions!=='undefined'&&fmOptions.has(o)) picked.push(o);
+  });
+  // Further Maths shows the options actually chosen; with none chosen it shows all four, so
+  // the table stays browsable rather than going blank.
+  var fmMods=['fmcp'].concat(picked.length?picked:['fp1','fs1','fm1','d1']);
+  return [
+    {id:'alevel', title:'A-Level Mathematics', spec:'9MA0', track:'alevel', mods:['alevel']},
+    {id:'as',     title:'AS Mathematics',      spec:'8MA0', track:'as',     mods:['as']},
+    {id:'fm',     title:'Further Mathematics', spec:'9FM0', track:'fm',     mods:fmMods,
+     picked:picked}
+  ];
 }
 function openGradeBoundaries(){
   var overlay=document.getElementById('papergb-overlay');
   var ySel=document.getElementById('gb-year');
-  var mods=gbModulesForTrack();
-  // Offer only years that have boundaries for something this student sits.
-  var years=Object.keys(GRADE_BOUNDARIES.components).filter(function(y){
-    return mods.some(function(m){ return GRADE_BOUNDARIES.components[y][m]; });
-  }).sort().reverse();
+  /* Every year the app knows about, including the ones with no boundaries. 2020 and 2021 are
+     deliberately listed: the exams were cancelled, and a year that silently vanishes from the
+     dropdown looks like a bug, where a year that explains itself is an answer. */
+  var years={};
+  Object.keys(GRADE_BOUNDARIES.components).forEach(function(y){ years[y]=1; });
+  Object.keys(GRADE_BOUNDARIES.overall).forEach(function(y){ years[y]=1; });
+  Object.keys(GRADE_BOUNDARIES.notAwarded).forEach(function(y){ if(/^\d{4}$/.test(y)) years[y]=1; });
+  var list=Object.keys(years).sort().reverse();
   ySel.innerHTML='';
-  years.forEach(function(y){
-    var o=document.createElement('option');o.value=y;o.textContent=y;ySel.appendChild(o);
+  list.forEach(function(y){
+    var o=document.createElement('option');o.value=y;o.textContent=y;
+    if(gbNoAwardReason(y)) o.textContent=y+' — no exams';
+    ySel.appendChild(o);
   });
-  if(years.indexOf(gbActiveYear)<0) gbActiveYear=years[0]||'';
+  if(list.indexOf(gbActiveYear)<0) gbActiveYear=list[0]||'';
   ySel.value=gbActiveYear;
   renderGradeBoundaries();
   overlay.classList.add('open');document.body.style.overflow='hidden';
@@ -1961,65 +1974,95 @@ function renderGbButtons(){
 function renderGbTable(){
   var table=document.getElementById('gb-table');if(!table)return;
   table.innerHTML='';
-  var wrap=document.createElement('div');wrap.className='gb-boundary-table';
   var esc=(typeof tutorEsc==='function')?tutorEsc:function(s){return s;};
-  function addRow(label,pb,cls){
+  var OPT_NAME={'3A':'FP1','3B':'FS1','3C':'FM1','3D':'D1'};
+  var wrap=document.createElement('div');wrap.className='gb-boundary-table';
+
+  // A year with no boundaries anywhere gets one honest sentence instead of empty sections.
+  var why=gbNoAwardReason(gbActiveYear);
+  if(why && !GRADE_BOUNDARIES.components[gbActiveYear] && !GRADE_BOUNDARIES.overall[gbActiveYear]){
+    var m=document.createElement('div');m.className='gb-empty';
+    m.textContent=why;
+    table.appendChild(m); return;
+  }
+
+  function row(label,pb,cls){
     var mark=pb[gbActiveGrade];
-    var row=document.createElement('div');row.className='gb-row'+(cls?' '+cls:'');
+    var r=document.createElement('div');r.className='gb-row'+(cls?' '+cls:'');
     if(mark==null){
       // 2019 published no notional component A*; say so rather than showing a blank.
-      row.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
+      r.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
         +'<span class="gb-row-vals"><span class="gb-row-pct">not published for '+gbActiveGrade+'</span></span>';
     }else{
-      row.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
+      r.innerHTML='<span class="gb-row-label">'+esc(label)+'</span>'
         +'<span class="gb-row-vals"><span class="gb-row-mark">'+mark+' / '+pb.max+'</span>'
         +'<span class="gb-row-pct">('+Math.round(mark/pb.max*100)+'%)</span></span>';
     }
-    wrap.appendChild(row);
+    return r;
   }
-  var mods=gbModulesForTrack(), any=false;
-  mods.forEach(function(mod){
-    var names=GB_MODULE_PAPERS[mod]||{};
-    Object.keys(names).forEach(function(n){
-      var pb=gbComponent(mod,n,gbActiveYear); if(!pb) return;
-      addRow(names[n],pb); any=true;
-    });
-  });
-  /* The real thing: the aggregate. A Further Maths student sits *two* qualifications — the
-     A-Level Maths and the Further Maths — so they get both totals, not just the further one. */
-  var tr=getTrack(), ov=null;
-  if(tr==='fm'){
-    var mo=gbOverallFor(gbActiveYear,'alevel');
-    if(mo){ addRow('Overall — 9MA0 A-Level Mathematics',mo.bounds,'gb-row-overall'); any=true; }
+  function note(text){
+    var n=document.createElement('div');n.className='gb-subnote';n.innerHTML=text;return n;
   }
-  ov=gbOverallFor(gbActiveYear);
-  if(ov){
-    var label='Overall — '+ov.spec;
-    if(ov.key){
-      var back={'3A':'FP1','3B':'FS1','3C':'FM1','3D':'D1'};
-      label+=' with '+ov.key.split('+').map(function(p){return back[p]||p;}).join(' + ');
+
+  var myTrack=getTrack(), drew=false;
+  gbQualifications().forEach(function(q){
+    var rows=[];
+    /* An AS qualification has no A* — it is graded A to E. That is a different statement from
+       "Pearson did not publish this one", which is what 2019's missing component A* is, so it
+       gets its own sentence rather than the generic not-published line. */
+    if(q.spec.charAt(0)==='8' && gbActiveGrade==='A*'){
+      var head0=document.createElement('div');head0.className='gb-section-head';
+      head0.innerHTML='<span class="gb-section-title">'+esc(q.title)+'</span>'
+        +'<span class="gb-section-spec">'+q.spec+(myTrack===q.track?' <b class="gb-yours">yours</b>':'')+'</span>';
+      wrap.appendChild(head0);
+      wrap.appendChild(note('An AS qualification is graded <b>A to E</b> — there is no A*.'));
+      drew=true; return;
     }
-    addRow(label,ov.bounds,'gb-row-overall'); any=true;
-  }else if(tr==='fm'){
-    var note=document.createElement('div');note.className='gb-row gb-row-overall';
-    note.innerHTML='<span class="gb-row-label">Overall</span><span class="gb-row-vals">'
-      +'<span class="gb-row-pct">pick exactly two Further options in <b>My exams</b> — Edexcel sets a different aggregate for each pair</span></span>';
-    wrap.appendChild(note);
-  }
-  if(!any){
-    var why=gbNoAwardReason(gbActiveYear);
-    wrap.innerHTML='<div class="gb-row"><span class="gb-row-label">'
-      +esc(why||'No published boundaries for this year.')+'</span></div>';
+    q.mods.forEach(function(mod){
+      var names=GB_MODULE_PAPERS[mod]||{};
+      Object.keys(names).forEach(function(n){
+        var pb=gbComponent(mod,n,gbActiveYear);
+        if(pb) rows.push(row(names[n],pb));
+      });
+    });
+    var ov=gbOverallFor(gbActiveYear,q.track,
+             q.id==='fm'?new Set(q.picked):undefined);
+    var tail=null;
+    if(ov){
+      var label='Overall';
+      if(ov.key) label+=' — '+ov.key.split('+').map(function(x){return OPT_NAME[x]||x;}).join(' + ');
+      tail=row(label,ov.bounds,'gb-row-overall');
+    }else if(q.id==='fm' && GRADE_BOUNDARIES.overall[gbActiveYear]
+             && GRADE_BOUNDARIES.overall[gbActiveYear]['9FM0']){
+      // The aggregate genuinely depends on the pair sat, so there is nothing to show until two
+      // are chosen. Say which two are needed rather than showing a wrong or averaged figure.
+      tail=note('Edexcel sets a <b>different overall boundary for each pair of options</b>. '
+        +'Choose the two you sit in <b>My exams</b> and your total appears here — in 2024 the '
+        +'same 240/300 was a <b>B</b> with FP1+FM1 and an <b>A*</b> with FS1+D1.');
+    }
+    if(!rows.length && !tail) return;
+    drew=true;
+    var head=document.createElement('div');head.className='gb-section-head';
+    head.innerHTML='<span class="gb-section-title">'+esc(q.title)+'</span>'
+      +'<span class="gb-section-spec">'+q.spec+(myTrack===q.track?' <b class="gb-yours">yours</b>':'')+'</span>';
+    wrap.appendChild(head);
+    rows.forEach(function(r){ wrap.appendChild(r); });
+    if(q.id==='fm' && q.picked && q.picked.length && q.picked.length!==2)
+      wrap.appendChild(note('Showing the '+q.picked.length+' option'+(q.picked.length===1?'':'s')+' you have chosen. Edexcel awards on a <b>pair</b>, so the overall row needs exactly two.'));
+    if(tail) wrap.appendChild(tail);
+  });
+
+  if(!drew){
+    var e=document.createElement('div');e.className='gb-empty';
+    e.textContent=why||'No published boundaries for this year.';
+    table.appendChild(e); return;
   }
   table.appendChild(wrap);
 }
 function renderGradeBoundaries(){
   var lbl=document.getElementById('gb-spec-label');
   if(lbl){
-    var tr=getTrack();
-    lbl.textContent = tr==='as' ? 'Edexcel 8MA0 AS Maths'
-                    : tr==='fm' ? 'Edexcel 9MA0 + 9FM0 Maths & Further Maths'
-                                : 'Edexcel 9MA0 A-Level Maths';
+    lbl.textContent='Edexcel 9MA0 · 8MA0 · 9FM0';
   }
   renderGbButtons(); renderGbTable();
   /* Pearson's own words about the per-paper figures, because quoting them without the caveat
