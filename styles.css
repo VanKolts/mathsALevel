@@ -261,12 +261,17 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    colour-flow machinery (.ic-paint parks off-icon on --nav-dir, the pill
    measures .active), none of which applies to a row that never activates. */
 .rail-sep-acct{margin-top:auto;}
+/* A card, not a bare row: --surface2 with a hairline and --r-md corners, so the account
+   reads as its own object at the foot of the rail rather than a fourth nav row. The
+   hairline is doing real work in the light themes, where --surface2 (#e8e8e8 / #fdf0f2)
+   sits close enough to --nav-plate (#ffffff) that the fill alone barely separates them. */
 .rail-acct{position:relative;z-index:1;display:flex;align-items:center;gap:9px;
-  width:100%;min-height:52px;padding:6px 10px;background:none;border:none;
+  width:100%;min-height:52px;padding:7px 9px;
+  background:var(--surface2);border:1px solid var(--border2);
   border-radius:var(--r-md);cursor:pointer;text-align:left;
   -webkit-tap-highlight-color:transparent;
-  transition:background var(--t-base),transform var(--t-fast);}
-.rail-acct:hover{background:var(--surface2);}
+  transition:background var(--t-base),border-color var(--t-base),transform var(--t-fast);}
+.rail-acct:hover{background:var(--surface3);border-color:rgba(var(--accent-rgb),.4);}
 .rail-acct:active{transform:scale(.97);}
 .rail-avatar{flex-shrink:0;width:30px;height:30px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
