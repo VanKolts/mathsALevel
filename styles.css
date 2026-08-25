@@ -261,17 +261,30 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    colour-flow machinery (.ic-paint parks off-icon on --nav-dir, the pill
    measures .active), none of which applies to a row that never activates. */
 .rail-sep-acct{margin-top:auto;}
-/* A card, not a bare row: --surface2 with a hairline and --r-md corners, so the account
-   reads as its own object at the foot of the rail rather than a fourth nav row. The
-   hairline is doing real work in the light themes, where --surface2 (#e8e8e8 / #fdf0f2)
-   sits close enough to --nav-plate (#ffffff) that the fill alone barely separates them. */
-.rail-acct{position:relative;z-index:1;display:flex;align-items:center;gap:9px;
+/* A card, not a bare row, wearing the same soft rainbow as the selector pill — same
+   gradient, same angle, same 0.17. The pill cannot simply be reused: it is one shared
+   absolutely-positioned element that JS moves to the active tab, and this row never
+   becomes active. So the tint is a pseudo-element, which also keeps the opacity off the
+   row's own contents. Keep the two numbers in step with .m-nav-pill and the 0.17 that
+   positionMNavPill() sets, or the footer and the selection stop matching.
+
+   No border. The pill has none, and the tint separates the card from the rail on its own
+   — which the flat --surface2 fill it replaced could not do (1.08:1 against the rail). */
+.rail-acct{position:relative;z-index:1;isolation:isolate;
+  display:flex;align-items:center;gap:9px;
   width:100%;min-height:52px;padding:7px 9px;
-  background:var(--surface2);border:1px solid var(--border2);
+  background:none;border:none;
   border-radius:var(--r-md);cursor:pointer;text-align:left;
   -webkit-tap-highlight-color:transparent;
-  transition:background var(--t-base),border-color var(--t-base),transform var(--t-fast);}
-.rail-acct:hover{background:var(--surface3);border-color:rgba(var(--accent-rgb),.4);}
+  transition:transform var(--t-fast);}
+.rail-acct::before{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;
+  background:linear-gradient(160deg,var(--spectrum));opacity:.17;
+  transition:opacity var(--t-base);}
+.rail-acct:hover::before{opacity:.28;}
+/* The tint is behind the row, so the contents need their own layer to sit on. `isolation`
+   above keeps that layer local: without it a negative z-index would escape the rail's
+   stacking context and paint behind the nav's own glass background. */
+.rail-acct > *{position:relative;z-index:1;}
 .rail-acct:active{transform:scale(.97);}
 .rail-avatar{flex-shrink:0;width:30px;height:30px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -282,14 +295,18 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
   stroke:var(--on-spectrum);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 /* flex:1 1 0 with min-width:0 so the name yields to the gear rather than
    pushing it out of the rail — the same row rule as .topic-name. */
+/* --text, not --muted, and the rainbow is why. Measured against the tint composited over
+   --nav-plate at both .17 and .28, across every stop of the ramp: --muted bottoms out at
+   3.16:1 (rose-dark, on --spec-3) and 3.83:1 (rose-light) — under the AA floor. --text
+   holds at 8.55 / 11.91 / 12.37:1. It is also what the nav itself does: a row wearing the
+   pill takes --text for its label, and this card wears the same tint. Hover is carried by
+   the ::before opacity rather than a colour change, exactly as the pill's rows are. */
 .rail-acct-name{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-family:'Inter',sans-serif;font-size:var(--fs-xs);font-weight:600;
-  color:var(--muted);line-height:1.3;transition:color var(--t-base);}
-.rail-acct:hover .rail-acct-name,.rail-acct:focus-visible .rail-acct-name{color:var(--text);}
+  color:var(--text);line-height:1.3;}
 .rail-acct-gear{flex-shrink:0;display:flex;align-items:center;}
-.rail-acct-gear svg{width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:1.85;
-  stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
-.rail-acct:hover .rail-acct-gear svg,.rail-acct:focus-visible .rail-acct-gear svg{stroke:var(--text);}
+.rail-acct-gear svg{width:18px;height:18px;fill:none;stroke:var(--text);stroke-width:1.85;
+  stroke-linecap:round;stroke-linejoin:round;}
 
 /* Mobile-only chrome — the ⋯ speed-dial. Shown in the mobile media query below. */
 .m-menu-btn,.m-menu,.m-menu-backdrop{display:none;}
