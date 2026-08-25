@@ -4909,6 +4909,22 @@ function toast(msg, duration){
 // EXPORT / IMPORT
 //                                                           
 // Manual backup file (data also auto-syncs to the cloud). Buttons live in Settings.
+/* Un-tombstone everything a restored backup contains, across all five kinds the export
+   carries. Deliberately not just 'sr': the same trap applies to a mistake, a paper, a
+   favourite or a note you deleted on another device — the merge would drop each one again
+   the moment it arrived. Fixing only the kind that prompted it would leave four branches of
+   the same bug, which is its own recorded mistake. */
+function mhRestoreFromBackup(data){
+  if(!data||typeof data!=='object')return;
+  var n=0;
+  function revive(kind,ids){ (ids||[]).forEach(function(id){ if(id!=null){ mhUntombstone(kind,id); n++; } }); }
+  revive('sr',    Object.keys(data.sr||{}));
+  revive('notes', Object.keys(data.notes||{}));
+  revive('favs',  Array.isArray(data.favourites)?data.favourites:[]);
+  revive('mistakes',(Array.isArray(data.mistakes)?data.mistakes:[]).map(function(m){return m&&m.id;}));
+  revive('papers',  (Array.isArray(data.paperLog)?data.paperLog:[]).map(function(p){return p&&p.id;}));
+  return n;
+}
 function doExport(){
   const data={sr,mistakes,favourites:[...favourites],notes,paperLog,exported:today()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -4929,6 +4945,18 @@ function doExport(){
         if(data.favourites) favourites=new Set(data.favourites);
         if(data.notes) notes=data.notes;
         if(data.paperLog) paperLog=data.paperLog;
+        /* Restoring a backup has to out-rank any tombstone covering what it restores, or the
+           import lands locally and is then deleted again by the next snapshot — silently, and
+           minutes later. A tombstoned record is dropped by the merge unless it is *newer* than
+           the tombstone, and a backup is by definition older, so nothing in the restored data
+           can win on its own.
+
+           This is the escape hatch for "Reset revision logs" (Export first, then change your
+           mind), which is why it matters: that button can tombstone all 315 topics at once,
+           where before only the study modal could tombstone one at a time. An `add` stamp of
+           now beats the `del` stamp on every device, which is the mechanism saveTopicStudied()
+           already uses to revive a topic you study again after resetting it. */
+        mhRestoreFromBackup(data);
         sanitizeAllSR();
         saveState();renderReviewPanel();renderAll();
         if(activeTab==='mistakes')renderMistakesTab();
