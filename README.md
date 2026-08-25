@@ -88,8 +88,9 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 |---|---|---|
 | Layout | fixed 172px **labelled left rail**, `flex-direction:column` | fixed **bottom bar**, `flex-direction:row` |
 | Label | **always visible**, inline beside the icon | caption under the active icon |
-| Groups | pages · hairline · Settings, Statistics, Tools | pages only — `.rail-tools` is hidden |
+| Groups | pages · hairline · Statistics, Tools · hairline · account footer | pages only — `.rail-tools`, `.rail-sep` and `.rail-acct` are all hidden |
 | Overflow | the Tools icon opens `#more-overlay` | the floating ⋯ opens the `.m-menu` speed-dial |
+| Settings | the account footer's row | the ⋯ speed-dial's first item |
 
 `body` is padded by `--rail-w` on desktop and by the bar's height on mobile, so nothing sits under the nav. A **due dot** (`.m-nav-badge`) on the Checklist icon marks overdue topics, with the count in the button's `title`.
 
@@ -104,6 +105,15 @@ Three knock-on details, each of which breaks if you only widen the rail:
 > **Measuring a themed colour with a `transition` on it gives the wrong answer.** `.m-nav-lbl` transitions `color`, so `getComputedStyle` immediately after flipping `data-theme` returns the mid-transition value — in practice one theme behind, which reported the labels at 2.96:1 and looked like a real AA failure. Inject `*{transition:none!important}` before auditing colour, or the audit measures the animation.
 
 > **Why one element.** This was two navs — a `.tab-bar` with text tabs for desktop, hidden outright below 900px in favour of `#m-nav` — which meant two icon sets, two active states, two click paths and two badges (the mobile one worked by reading the desktop badge's `textContent`). Divergence was the default: `#page-progress` sat orphaned for months partly because there were two places to wire a tab up and only one got done (it was deleted on 2026-08-18). Anything nav-shaped now has exactly one home.
+
+**The rail ends in an account footer** (`.rail-acct`, since 2026-08-25): a 30px rainbow disc with a person glyph, the account name, and a gear hard right. The gear **moved here out of `.rail-tools`**, which now holds Statistics and Tools only — so there is still exactly one way into Settings on desktop, and the ⋯ speed-dial remains the only one on mobile, where the whole footer is hidden alongside `.rail-sep` and `.rail-tools`. `margin-top: auto` on its separator carries both it and the row to the bottom, so neither needs a fixed height and the tool group above keeps its natural size.
+
+Four things about it are load-bearing:
+
+- **The whole row is the button, not the gear.** An 18px gear inside a 183px row that looks pressable is an 18px target; making the row the target is both the larger hit area and the honest one. The gear is a `<span>` affordance, not a second control — the same argument as `.m-nav-btn` covering its label.
+- **It is deliberately *not* a `.m-nav-btn`.** That class carries the icon-morph and colour-flow machinery — `.ic-paint` parks off-icon on `--nav-dir`, and `positionMNavPill()` measures `.active` — none of which applies to a row that never activates. The label-injection loop would also push a stray `.m-nav-lbl` into a row that has its own. It shares `railAct()` instead, which is the part worth sharing.
+- **There is no `displayName` in this app.** Sign-up is email and password only, so Firebase Auth holds `null` for every account. The name is the app's own synced state (`alevel-display-name-v1`), and falls back through a name derived from the email's local part (`nuta.koltsova@…` → "Nuta Koltsova"), then the raw email, then `This device` when no cloud stands behind the session at all — which is what test mode shows, since it takes the missing-SDK exit.
+- **Same surface pairing as the label above it**, so it inherits that audit: `--muted` resting and `--text` on hover/focus over `--nav-plate`. Measured 6.13 / 6.18 / 9.29:1 resting and 16.62 / 19.24 / 21:1 on hover across `rose-dark` / `rose-light` / `pure-white`. The row is 183×52, well clear of [SC 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html).
 
 **The Checklist's filter bar is two layers.** Six buttons on the left pick **one** component group — All, AS level, Pure, Applied, FM core, FM options — and are the coarse cut. Everything finer lives behind **Filter**, and stacks on top. `matchesFilter()` handles the six; `matchesFilterModal()` handles the rest; `matchesSearch()` narrows whatever those two leave. All three are applied in `visibleTopics()` *and* in the cluster-card builder, which are the two places topics are counted.
 
@@ -331,7 +341,19 @@ Each topic's **Worksheets on PMT** button resolves through `practiceLinkFor(name
   The `27 May` and `16 June` rows are both 2026-08-22 fixes; before that date the answer was 96.7% forever. `_examSig()` carries `today()` for exactly this reason — the memoised answer now changes at midnight without anything being edited.
 
   The planner window ranks each paper's topics by `_weakScore()`: 3 for overdue, 2 for due, 2.5 for never-started, plus `(1 − retrievability) × 2`, plus `mistakeLoad × 0.5`. It shows the top six per paper and a "Today's focus" of five drawn from the next two upcoming papers. It is a **ranked list, not a schedule** — no dates, no per-day allocation, nothing to tick off.
-- **Settings** (`#settings-overlay`, opened from the ⚙ icon in the nav's tool group) — account, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, and a **Sync diagnostics** panel with manual push/pull.
+- **Settings** (`#settings-overlay`, opened from the account footer at the foot of the nav rail, or the ⋯ speed-dial on mobile) — account, **display name**, theme picker, per-paper exam dates (which drive the scheduler's exam ramp), Further Maths options, keyboard shortcuts, plain-language mode, Gemini API key, JSON export/import, a **Sync diagnostics** panel with manual push/pull, and **Reset revision logs** below.
+
+  Dialogs opened *from* Settings need `z-index: 700` (`#fm-options-overlay`, `#shortcuts-modal`, `#resetlog-overlay`). A `.modal-overlay` is 500 by default and `#settings-overlay` is 600, so without it they open behind the panel that opened them.
+
+### 5a. Reset revision logs — `#resetlog-overlay`
+
+**Visual:** the one destructive card in Settings, last and marked as such. It lists each component that has a review history with its topic count, plus an *Everything* row that drives the rest; the Reset button stays disabled until something is picked, and a live line says how many topics it will clear.
+
+**Technical:** it clears **`alevel-sr-v5` only**. Mistakes and past-paper marks are deliberately untouched, and that is coherent rather than a compromise: `buildTimeline()` returns `[]` for a topic with no review event — *papers refine, they do not seed* — so once the reviews are gone neither channel contributes anything to memory, the topic reads *not started*, and it is indistinguishable from one never studied (`statusFor` → `null`, `strengthInfo` → "Not started"). Meanwhile the Mistakes page and the Leaks report keep every entry they had.
+
+- **Every cleared topic gets a `del` tombstone against `sr`**, exactly as the study modal's per-topic *Remove all study data* does. Without one the reset is silently undone by the next snapshot: review logs merge by union, so the other device's copy simply comes back. `mergeSr()` already honours it, including the guard that a tombstone never wipes study logged *after* the reset on another device — and `saveTopicStudied()` writes an `add` stamp, so re-studying a reset topic revives it rather than fighting the tombstone forever.
+- **Scope is per component**, resolved through the topic taxonomy. Records whose names are not in the taxonomy — study logged under a pre-rename name, or an import from another build — collect in an *Other topics* bucket, so "select everything" really does clear everything rather than stranding orphans.
+- **The study streak is an opt-in extra**, pre-ticked only on a full reset. It is a single global counter with no per-component meaning, so offering it alongside a partial selection would be a lie about what it does. Clearing it needed a change to the merge — see [the streak's reset stamp](#deletions-the-ledger).
 
 ---
 
@@ -465,7 +487,8 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-track` | which specification you're on |
 | `alevel-favs-v1` | favourited topics |
 | `alevel-notes-v1` | personal notes |
-| `alevel-streak-v1` | study-streak counter — still recorded and synced, but no longer displayed; the 🔥 chip was removed with the tab bar. `weeksMet` still feeds the Checklist's today-card line |
+| `alevel-streak-v1` | study-streak counter — still recorded and synced, but no longer displayed; the 🔥 chip was removed with the tab bar. `weeksMet` still feeds the Checklist's today-card line. Carries an optional `resetAt` (ms) — the streak's own tombstone, see [the merge](#how-the-merge-works) |
+| `alevel-display-name-v1` | the name shown in the nav rail's account footer. Absent means "derive it from the email"; cleared via a `keys` tombstone, since an absent key alone is indistinguishable from never-set |
 | `alevel-gemini-key-v1` | your Google Gemini API key |
 | `alevel-fm-options-v1` | Further Maths module choices |
 | `alevel-plainlang-v1` | plain-language toggle — **parked**: the setting is hidden and `loadPlainLang()` forces `false`, but the stored value is deliberately left intact so the preference survives until the feature is finished. It claimed to replace the technical memory vocabulary app-wide and actually reworded six strings |
@@ -516,12 +539,12 @@ Each kind of data gets the rule that actually fits it:
 | `mistakes`, `paperLog` | union by id; tombstones for deletes; newer `modified` wins an edit |
 | `alevel-favs-v1` | set union, minus anything tombstoned |
 | `alevel-notes-v1` | newer edit wins, compared on the `mod` stamps in the ledger |
-| `alevel-streak-v1` | union the `days`, take the max of the counters |
-| theme, track, exam dates, module choices | genuine last-write-wins on the store timestamp |
+| `alevel-streak-v1` | union the `days`, take the max of the counters — minus anything a `resetAt` predates |
+| theme, track, exam dates, display name, module choices | genuine last-write-wins on the store timestamp |
 
 The topic rule is the important one. `D` and `S` are not independent facts needing a winner — **FSRS derives them from the review history**, so two devices rating the same topic differently is not a conflict at all, it's two review events, which is exactly what the scheduler consumes. Both ratings count. (Replay uses the record's own `D` rather than `effectiveD()`, because mistake load differs per device and the merge has to reach the same answer on both.) The replay only runs when the two histories genuinely diverge; when one contains the other, the longer one is taken as-is.
 
-Three properties are load-bearing, and all three are covered by tests:
+Three properties are load-bearing, and all three are covered by [`scripts/streak-merge-test.mjs`](scripts/streak-merge-test.mjs):
 
 - **Commutative** — `merge(a,b) === merge(b,a)`, so the order updates arrive in cannot change the result.
 - **Idempotent** — merging an already-merged store is a no-op. This is what makes the devices *settle*: without it, each merge would produce a new value to push and the two devices would trade revisions forever.
@@ -537,6 +560,16 @@ Two consequences worth knowing:
 
 - **Pushes are `set()` without `merge:true`.** Firestore deep-merges nested maps, so under the old `{merge:true}` a key removed on a device survived in the cloud and was mirrored back down — the deletion could never land. Writing the whole store is safe *because* what gets pushed is the merged result, which already contains both devices' data. Subcollections (`mImages`) are untouched by a document write.
 - **A device never pushes before its first snapshot has been reconciled** (`gotFirst`), and never pushes an empty store. On a fresh install the loading code writes defaults the instant the page opens, and without that guard those defaults would overwrite the cloud copy before the real data arrived.
+
+**Not everything can use the ledger.** `mergeStores()` routes `alevel-streak-v1` to `mergeStreak()` before the scalar branch that consults `keys` tombstones ever runs, so a tombstone there would never be read. The streak therefore carries **its own**, as a `resetAt` timestamp inside the object (2026-08-25, for [Reset revision logs](#5a-reset-revision-logs--resetlog-overlay)). The rules mirror the per-topic `sr` tombstone:
+
+- the newer of the two `resetAt` values wins — commutative, because it is a `max`;
+- days at or before that calendar day are dropped from **both** sides, so study logged after the reset on a device that has not heard about it still survives;
+- `weeksMet` is taken only from sides at or after the merged reset. It is a cumulative total with no record of when each week was earned, so it cannot be split at the boundary: a stale side contributes `0`. That over-deletes by at most the weeks a device earned while offline across the reset, and it is the right way to be wrong — keeping it would let one stale device hold the counter up forever and the reset would never land;
+- `weekStart` is deliberately **not** cut. It is the Monday of the current week, and clearing it makes the next `_rolloverStreak()` see a week change and wipe `days` — throwing away the very post-reset study the filter just preserved;
+- a store with no `resetAt` reads as `0`, "never reset", so an older build stays additive-safe.
+
+> **`loadStreak()` rebuilds the object field by field, so a new field has to be added there too.** `resetAt` was dropped on the first pass, which lost the local reset stamp on the next page load and let the cloud's un-reset copy win — the reset appeared to work and then quietly undid itself.
 
 `applyRemote` no longer calls `location.reload()`. It re-reads state in place and re-renders — and defers the redraw while an input is focused, so an incoming sync can't swallow a half-typed note. The in-memory globals are always refreshed immediately regardless, since leaving them stale would let the next `saveState()` write the pre-merge copy back over the merged one.
 
@@ -801,6 +834,8 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 | `--prose` | `70ch` | reading measure for prose blocks |
 | `--rail-w` | `208px` | desktop nav rail width; `body` is padded by exactly this. Was 64px while the rail was icon-only |
 | `--tap` | `44px` | SC 2.5.5 (AAA) target; SC 2.5.8's 24px floor is enforced per-component |
+| `--on-overdue` | `#160b10` / `#ffffff` / `#ffffff` | text on an `--overdue` fill. Per-theme for the same reason as `--on-spectrum`: the ramp is light in the dark theme and dark in the two light ones, so one literal cannot stay legible. Measured on the fill: 6.97 / 5.74 / 6.27:1 |
+| `--overdue-rgb` | `248,113,113` / `200,30,30` / `189,28,28` | `--overdue` as rgb, for tinted borders — the same idiom as `--accent-rgb` |
 
 **AI:** `TUTOR_MODEL` = Gemini model id (`gemini-2.5-flash`); shared call timeout 60 s; 1 retry; `pqGenerate` temperature 0.9 / `pqVerify` temperature 0.
 
@@ -819,7 +854,9 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
 - **Exam dates:** `activePapers()`, `examDateForComponent(comp)` and `getPaperDates()` are each memoised against `_examSig()` — a cheap string built from raw reads of the track, the paper-date overrides, the FM options and a counter for the fetched defaults. Signature-keyed rather than invalidated by hand, so no future write path can forget to clear them.
 - **Dialogs:** `mhDialogStack` (open order), `mhCloseTopDialog()`, `mhReleaseScroll()` and the `MutationObserver` on `open` that maintains all three — see [One focus manager for every dialog](#one-focus-manager-for-every-dialog).
-- **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
+- **Shell & navigation:** `switchTab(tab)` — the only entry point; the nav buttons, the keyboard shortcuts and the mobile swipe handler all call it — plus `updateDueBadge()`, `positionMNavPill()`/`updateMNav()` and `railAct(a)` (the one dispatcher for every `data-act` in the rail) inside the app-shell IIFE, and `openMore()`/`closeMore()` for the Tools overlay. `updateFocusBtn()` no longer draws a button; it mirrors the timer's state onto the nav's Tools icon.
+- **Account footer:** `getDisplayName()` / `setDisplayName(v)` (tombstoned on clear), `mhNameFromEmail(email)`, `accountLabel()` — the fallback chain — and `renderRailAccount()`, which is in `refreshFromStorage()`'s redraw list and is called from both edges of `onAuthStateChanged`.
+- **Reset revision logs:** `resetGroups()` (studied names by component, orphans in `__other`), `renderResetList()`, `rlSelectedNames()`, `rlSync()` (the select-all cascade, the streak coupling and the live count), `openResetLog()` / `closeResetLog()`, `resetRevisionLogs(names, alsoStreak)`, `renderResetCurrent()`, and `resetStreak()` beside `saveStreak()`. Constants `RESET_COMP_LABELS` / `RESET_COMP_ORDER` / `RESET_OTHER`.
 - **Test mode:** `window.MSH_TEST` (set by the namespacing shim at the top of the file), `mshTestPrompt()`, `mshTestSetDay(n)`, `mshTestInspect(name)`, `mshTestPaint()`, `_testDayShift`. All inert unless the sandbox is running — see [Test mode](#test-mode).
 - **Canvas:** `drawDonut(canvas,entries,legendEl)` plus `_hidpiCanvas(canvas)` (device-pixel-ratio backing store, CSS size cached on the element) and `_themeColor(name,fallback)` (reads a CSS custom property, since a canvas cannot).
 - **Rendering helpers:** `tutorEsc`, `leakEsc` (local closure-safe escapers — note the global `esc()` is closure-scoped and not visible to injected/eval'd code).
@@ -1002,7 +1039,9 @@ Before `npm run deploy`, for the change you just made:
 
 ### What the tooling can and cannot check
 
-`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Four FSRS suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, and `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Five suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), and `streak-merge-test` (the merge's three properties). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+
+> **`npm test` is the single list.** CI and `scripts/deploy.sh` both call it rather than spelling the suites out again. They had each drifted into a *subset* of it — the icon-index check and the exam-ramp suite ran only on a developer's machine, so the 2026-08-22 exam-ramp work was unguarded everywhere it mattered. Two lists of the same thing is one list to forget.
 
 ---
 
@@ -1023,7 +1062,9 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 - **The 70-day confirmation pass arrives as a cliff, not a ramp.** `needsExamConfirmation()` correctly guarantees one pass over anything not seen since the run-in opened — including topics whose ordinary interval would sail past the exam — but *every* qualifying topic flips on the same morning. Measured on a well-prepared store: 0 due at 70 days out, **164 due at 69**. The coverage is right; the pacing is missing.
 - **Papers 1 and 2 draw the identical card.** Both carry `comps:['pure']`, so the planner lists the same 164 Pure topics in the same order under two headings. That is faithful to 9MA0 — either paper may examine any Pure content — but it conveys nothing and costs half the window. The planner also contains **no interactive elements at all**, so there is no route from a listed topic to that topic.
 - **The FM options row enforces nothing.** It is labelled *"pick the two you sit"*, but `#myexams-save` validates no count: saving with zero picked leaves an FM student on 253 active topics and no optional papers, where four gives 315. Track switching itself is sound — per-paper overrides are keyed by paper id and survive it.
-- **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites.
+- **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites. The streak's `resetAt` inherits this: two devices far enough out of step could disagree about which reset is newer.
+- **The display name is invisible on a phone.** It is set in Settings and shown in the rail's account footer, and the footer is desktop-only — the bottom bar is five icons wide with nowhere to put a name. So a student who only ever uses the PWA sets a name they will never see. Either the mobile speed-dial grows a header row, or the setting should say so.
+- **Reset revision logs has no undo**, beyond the ordinary Export you could have taken first. The tombstones make it propagate correctly, which also means it propagates *promptly* — every signed-in device clears within seconds. The dialog says so and requires a confirmation, but an "undo for the next 10 seconds" would be kinder than a warning.
 
 ---
 

@@ -245,10 +245,11 @@ fi
 # ---------------------------------------------------------------- 2. validate ----
 
 say "Validating…"
-node scripts/validate.mjs || fail "validation failed — nothing committed, nothing pushed"
-node scripts/fsrs-replay-test.mjs || fail "FSRS replay invariants failed — nothing committed, nothing pushed"
-node scripts/fsrs-mistake-test.mjs || fail "FSRS mistake-evidence invariants failed — nothing committed, nothing pushed"
-node scripts/fsrs-paper-test.mjs || fail "FSRS past-paper invariants failed — nothing committed, nothing pushed"
+# `npm test` rather than the suites listed again. This is the gate that actually stops a
+# broken build reaching the live site — CI can report a failure but cannot block a
+# branch-source Pages publish — so it must not be a subset of the test script. It had
+# become one: the icon-index check and the exam-ramp suite were in package.json only.
+npm test || fail "validation failed — nothing committed, nothing pushed"
 
 # ------------------------------------------------------- 3. commit message ----
 

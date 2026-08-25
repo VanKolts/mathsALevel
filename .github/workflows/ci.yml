@@ -22,5 +22,9 @@ jobs:
       # invariants the app depends on: paper marks summing to their real Edexcel totals, every
       # past-paper tag resolving to a canonical topic name, lvls/diff arrays matching their
       # topic lists, and the chapter-rename map staying idempotent.
+      #
+      # Deliberately `npm test` rather than the commands spelled out again. This step had
+      # drifted into a subset of it — the icon-index check and the exam-ramp suite ran only
+      # on a developer's machine — and two lists of the same thing is one list to forget.
       - name: Validate app and data
-        run: node scripts/validate.mjs && node scripts/fsrs-replay-test.mjs && node scripts/fsrs-mistake-test.mjs && node scripts/fsrs-paper-test.mjs
+        run: npm test

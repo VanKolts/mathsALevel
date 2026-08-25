@@ -8,6 +8,11 @@
   --y1-bg:rgba(52,211,153,0.08);--y2-bg:rgba(59,130,246,0.1);--fm-bg:rgba(244,114,182,0.08);
   --y1-bd:rgba(52,211,153,0.22);--y2-bd:rgba(59,130,246,0.25);--fm-bd:rgba(244,114,182,0.22);
   --overdue:#f87171;--due:#fbbf24;--upcoming:#fb923c;
+  /* Text on an --overdue fill, and --overdue as rgb for tinted borders. Both are
+     per-theme for the same reason --on-spectrum is: the ramp is light in the dark
+     theme and dark in the two light ones, so one literal cannot stay legible.
+     Measured on the fill: 6.74:1 here, 5.74:1 rose-light, 6.33:1 pure-white. */
+  --on-overdue:#160b10;--overdue-rgb:248,113,113;
   --d1:#34d399;--d2:#fbbf24;--d3:#f87171;
   --grad:linear-gradient(135deg,var(--spectrum));
   --glow:0 0 20px rgba(244,63,94,.25);
@@ -240,6 +245,46 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .m-nav-btn.rail-live::after{background:var(--overdue);animation:rail-pulse 1.9s var(--ease) infinite;}
 .m-nav-btn.rail-paused::after{background:var(--muted);}
 @keyframes rail-pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ── Account footer ──────────────────────────────────────────────────────
+   Pinned to the bottom of the rail: avatar, name, gear. margin-top:auto on
+   the separator carries both it and the row down, so neither needs a fixed
+   height and the tool group above keeps its natural size.
+
+   The whole row is the button, not just the gear — the same argument as
+   .m-nav-btn above. A 18px gear is a 18px target inside a 184px row that
+   looks pressable; making the row the target is both the larger hit area
+   (SC 2.5.8) and the honest one. The gear is the affordance, not a second
+   control, so it is a <span> and the row carries the label.
+
+   Deliberately NOT .m-nav-btn: that class is wired into the icon-morph and
+   colour-flow machinery (.ic-paint parks off-icon on --nav-dir, the pill
+   measures .active), none of which applies to a row that never activates. */
+.rail-sep-acct{margin-top:auto;}
+.rail-acct{position:relative;z-index:1;display:flex;align-items:center;gap:9px;
+  width:100%;min-height:52px;padding:6px 10px;background:none;border:none;
+  border-radius:var(--r-md);cursor:pointer;text-align:left;
+  -webkit-tap-highlight-color:transparent;
+  transition:background var(--t-base),transform var(--t-fast);}
+.rail-acct:hover{background:var(--surface2);}
+.rail-acct:active{transform:scale(.97);}
+.rail-avatar{flex-shrink:0;width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,var(--spectrum));}
+/* --on-spectrum is the ramp's own text colour — light in the dark theme, dark
+   in the two light ones. One hardcoded colour cannot stay legible across both. */
+.rail-avatar svg{width:17px;height:17px;flex-shrink:0;fill:none;
+  stroke:var(--on-spectrum);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+/* flex:1 1 0 with min-width:0 so the name yields to the gear rather than
+   pushing it out of the rail — the same row rule as .topic-name. */
+.rail-acct-name{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-family:'Inter',sans-serif;font-size:var(--fs-xs);font-weight:600;
+  color:var(--muted);line-height:1.3;transition:color var(--t-base);}
+.rail-acct:hover .rail-acct-name,.rail-acct:focus-visible .rail-acct-name{color:var(--text);}
+.rail-acct-gear{flex-shrink:0;display:flex;align-items:center;}
+.rail-acct-gear svg{width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:1.85;
+  stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-base);}
+.rail-acct:hover .rail-acct-gear svg,.rail-acct:focus-visible .rail-acct-gear svg{stroke:var(--text);}
 
 /* Mobile-only chrome — the ⋯ speed-dial. Shown in the mobile media query below. */
 .m-menu-btn,.m-menu,.m-menu-backdrop{display:none;}
@@ -902,8 +947,9 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
     border-right:none;border-top:1px solid var(--border);}
   /* display:contents so the page buttons stay direct flex children and keep flex:1 1 0 */
   .m-nav-group{display:contents;}
-  /* Settings/Stats/Tools are the ⋯ speed-dial's job down here */
-  .rail-sep,.rail-tools{display:none;}
+  /* Settings/Stats/Tools are the ⋯ speed-dial's job down here, and so is the
+     account row — the bar is 5 icons wide, with no room for a name. */
+  .rail-sep,.rail-tools,.rail-acct{display:none;}
   /* sliding rainbow indicator that flows behind the active icon */
   .m-nav-pill{background:linear-gradient(90deg,var(--spectrum));
     transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) ease,width var(--t-slow) var(--ease-spring),height var(--t-slow) ease,opacity var(--t-base);}
@@ -1264,6 +1310,43 @@ html[data-show-icons] .ico{
 .settings-btn{font-size:var(--fs-sm);padding:8px 12px;border-radius:var(--r-sm);background:var(--grad);border:none;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;white-space:nowrap;}
 .settings-btn:hover{opacity:.9;filter:brightness(1.08);}
 .settings-current{margin-top:12px;font-size:var(--fs-sm);color:var(--accent2);font-family:'JetBrains Mono',monospace;}
+/* Same box as .tutor-input, but Inter rather than mono — a name is prose, not a token. */
+.settings-input{flex:1;min-width:180px;font-family:'Inter',sans-serif;font-size:var(--fs-sm);
+  padding:8px 12px;border-radius:var(--r-sm);border:1px solid var(--border2);
+  background:var(--surface);color:var(--text);}
+.settings-input:focus{outline:none;border-color:var(--accent);}
+.settings-input::placeholder{color:var(--dim);}
+
+/* ── The one destructive card ────────────────────────────────────────────
+   --overdue is the app's existing "this needs your attention" hue and is
+   contrast-checked per theme, so the danger state reuses it rather than
+   introducing a red that no theme has re-tinted. Colour is not the only
+   cue: the card is the last one, its button says what it does, and the
+   dialog behind it requires a choice before its own button enables. */
+.settings-danger{border-color:rgba(var(--overdue-rgb),.45);}
+.settings-btn-danger{background:none;border:1px solid var(--overdue);color:var(--overdue);}
+.settings-btn-danger:hover{background:var(--overdue);color:var(--on-overdue);filter:none;opacity:1;}
+
+/*   RESET REVISION LOGS   */
+.rl-modal{width:min(560px,96vw);}
+.rl-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+.rl-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border2);
+  border-radius:var(--r-sm);cursor:pointer;transition:border-color var(--t-fast),background var(--t-fast);}
+.rl-row:hover{border-color:rgba(var(--accent-rgb),.4);background:var(--surface2);}
+.rl-row input{width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--accent);}
+.rl-row-name{flex:1 1 0;min-width:0;font-size:var(--fs-sm);color:var(--text);}
+.rl-row-count{flex-shrink:0;font-size:var(--fs-xs);color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.rl-row-all{border-style:dashed;}
+.rl-row-all .rl-row-name{font-weight:600;}
+.rl-streak{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:9px 12px;
+  border:1px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;}
+.rl-streak input{width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:var(--accent);}
+.rl-streak span{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-sm);color:var(--text);}
+.rl-streak small{font-size:var(--fs-xs);color:var(--muted);line-height:1.45;}
+.rl-warn{margin-top:14px;font-size:var(--fs-sm);color:var(--muted);line-height:1.5;min-height:1.5em;}
+.rl-warn.armed{color:var(--overdue);}
+.rl-go{background:var(--overdue);color:var(--on-overdue);}
+.rl-go:disabled{opacity:.45;cursor:not-allowed;}
 
 .fm-opt-list{display:flex;flex-direction:column;gap:6px;}
 .fm-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;transition:border-color var(--t-fast),background var(--t-fast);}
@@ -1323,6 +1406,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
      Re-tinted to clear SC 1.4.11's 3:1 floor for meaningful graphics, and 4.5:1
      where the token is used as text. */
   --overdue:#c81e1e;--due:#975c07;--upcoming:#a63709;   /* --upcoming also backs .sr-badge on a 9% tint */
+  --on-overdue:#ffffff;--overdue-rgb:200,30,30;
   --d1:#047857;--d2:#975c07;--d3:#c81e1e;
   --y1:#03603f;--y2:#1a45bd;--fm:#a3134f;   /* deepened: these sit on 9% tints of themselves in .lvl-badge, which composited to ~4.4:1 */
   --y1-bg:rgba(3,96,63,0.09);--y2-bg:rgba(26,69,189,0.09);--fm-bg:rgba(163,19,79,0.09);
@@ -1342,6 +1426,7 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
   --y1-bg:rgba(5,150,105,0.1);--y2-bg:rgba(29,78,216,0.1);--fm-bg:rgba(190,24,93,0.1);
   --y1-bd:rgba(5,150,105,0.28);--y2-bd:rgba(29,78,216,0.28);--fm-bd:rgba(190,24,93,0.28);
   --overdue:#bd1c1c;--due:#8a5406;--upcoming:#aa390b;   /* --due was #d97706, 2.85:1 on --surface */
+  --on-overdue:#ffffff;--overdue-rgb:189,28,28;
   --d1:#046e50;--d2:#8a5406;--d3:#bd1c1c;
   /* The spectrum is re-tinted per theme rather than shared. On white it measured
      1.2-2.8:1 against the surfaces, which matters because it is not purely
@@ -1374,8 +1459,11 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 .tab-switching .page.active{animation:tabFadeIn .18s ease both;}
 @keyframes mTabFromRight{from{opacity:.4;transform:translateX(26px);}to{opacity:1;transform:translateX(0);}}
 @keyframes mTabFromLeft{from{opacity:.4;transform:translateX(-26px);}to{opacity:1;transform:translateX(0);}}
+/* Dialogs launched from inside Settings. A .modal-overlay is z-index 500 by default and
+   #settings-overlay is 600, so without this they open *behind* the panel that opened them. */
 #fm-options-overlay{z-index:700;}
 #shortcuts-modal{z-index:700;}
+#resetlog-overlay{z-index:700;}
 
 /* ===================================================================== */
 /*   PAST PAPERS REDESIGN                                                 */

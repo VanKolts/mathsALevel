@@ -655,6 +655,22 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           <button class="settings-btn" id="logout-btn">Log out</button>
         </div>
       </div>
+      <!-- Its own card rather than a row inside Account, because the account card is
+           hidden when the cloud SDK never loaded — and the rail still shows a name in
+           that state, so the control that sets it has to stay reachable. -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-title">Display name</div>
+            <div class="settings-row-sub">The name shown beside your avatar at the bottom of the sidebar. Leave it empty to go back to the name taken from your email address.</div>
+          </div>
+        </div>
+        <div class="tutor-key-row">
+          <input type="text" class="settings-input" id="display-name-input" placeholder="Your name" maxlength="32" autocomplete="off" spellcheck="false">
+          <button class="settings-btn" id="display-name-save">Save</button>
+        </div>
+        <div class="settings-current" id="display-name-current"></div>
+      </div>
       <div class="settings-card" id="sync-card" style="display:none">
         <div class="settings-row">
           <div class="settings-row-info">
@@ -763,6 +779,36 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         </div>
         <div id="theme-picker-wrap"></div>
       </div>
+      <!-- Last, and marked as destructive. Everything above changes how the app behaves;
+           this is the only card that throws data away. -->
+      <div class="settings-card settings-danger">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-title">Reset revision logs</div>
+            <div class="settings-row-sub">Start the schedule again — for every topic, or just one component. Your logged mistakes and past-paper marks are not touched.</div>
+          </div>
+          <button class="settings-btn settings-btn-danger" id="open-resetlog-btn">Reset revision logs</button>
+        </div>
+        <div class="settings-current" id="resetlog-current"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESET REVISION LOGS -->
+<div class="modal-overlay" id="resetlog-overlay">
+  <div class="modal rl-modal">
+    <div class="modal-title">Reset revision logs</div>
+    <div class="modal-sub">Clears your review history — memory strength, due dates, reps and lapses — and puts the topics you pick back to <b>not started</b>. Your logged mistakes and past-paper marks stay exactly as they are.</div>
+    <div class="rl-list" id="rl-list"></div>
+    <label class="rl-streak">
+      <input type="checkbox" id="rl-streak">
+      <span><b>Also reset my study streak</b><small id="rl-streak-sub">Clears the days logged this week and the weekly goals you have hit.</small></span>
+    </label>
+    <div class="rl-warn" id="rl-warn"></div>
+    <div class="modal-btns">
+      <button class="modal-btn" id="rl-cancel">Cancel</button>
+      <button class="modal-btn rl-go" id="rl-go" disabled>Reset</button>
     </div>
   </div>
 </div>
@@ -1131,9 +1177,6 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   </div>
   <span class="rail-sep" aria-hidden="true"></span>
   <div class="m-nav-group rail-tools">
-    <button class="m-nav-btn rail-act" data-act="settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
     <button class="m-nav-btn rail-act" data-act="stats" aria-label="Statistics">
       <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
     </button>
@@ -1141,6 +1184,19 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.7"/></svg>
     </button>
   </div>
+  <!-- Account footer — avatar, name, gear; the whole row opens Settings. The gear
+       moved here from the tool group above, so there is still exactly one way in.
+       Desktop only: the mobile bar reaches Settings through the ⋯ speed-dial. -->
+  <span class="rail-sep rail-sep-acct" aria-hidden="true"></span>
+  <button class="rail-acct" id="rail-acct" data-act="settings" aria-label="Account and settings">
+    <span class="rail-avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.75"/><path d="M4.75 20.25a7.25 7.25 0 0 1 14.5 0"/></svg>
+    </span>
+    <span class="rail-acct-name" id="rail-acct-name">Account</span>
+    <span class="rail-acct-gear" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </span>
+  </button>
 </nav>
 
 <!-- MORE TOOLS OVERLAY — the rail's grid icon; mobile uses the ⋯ speed-dial instead -->
@@ -2419,7 +2475,11 @@ function loadStreak(){
   let raw; try{raw=JSON.parse(localStorage.getItem('alevel-streak-v1')||'null');}catch(e){raw=null;}
   if(!raw){ streakData={days:[],weekStart:'',goal:WEEK_GOAL,weeksMet:0,last:''}; return; }
   if(raw.days){ // already new shape
+    // resetAt has to survive the rebuild. Dropping it here would lose the local reset
+    // stamp on the next load and let the cloud's un-reset copy win the merge — the
+    // reset would appear to work and then quietly undo itself.
     streakData={days:raw.days||[],weekStart:raw.weekStart||'',goal:raw.goal||WEEK_GOAL,weeksMet:raw.weeksMet||0,last:raw.last||''};
+    if(raw.resetAt) streakData.resetAt=raw.resetAt;
   } else { // migrate legacy {count,last}
     const last=raw.last||'';
     streakData={days:last?[last]:[],weekStart:last?_weekStart(last):'',goal:WEEK_GOAL,weeksMet:0,last:last};
@@ -2439,6 +2499,14 @@ function bumpStreak(){
   streakData.days=streakData.days||[];
   if(streakData.days.indexOf(td)===-1) streakData.days.push(td);
   streakData.last=td;
+  saveStreak();
+}
+/* Clearing the streak is a deletion, and the merge unions `days` and takes the max of the
+   counters — so without a marker the other device's copy simply comes back. `resetAt` is
+   the streak's own tombstone: mergeStreak() keeps the newer of the two and drops everything
+   it predates, the same shape as the per-topic 'sr' tombstone. */
+function resetStreak(){
+  streakData={days:[],weekStart:'',goal:WEEK_GOAL,weeksMet:0,last:'',resetAt:Date.now()};
   saveStreak();
 }
 loadStreak();
@@ -3650,18 +3718,33 @@ function switchTab(tab){
 (function(){
   // One nav for both orientations: page buttons carry data-tab, tool buttons carry data-act.
   // The label doubles as the mobile caption and the desktop rail's hover tooltip.
+  // One dispatcher for every data-act in the rail, so the tool group and the account
+  // footer cannot drift apart the way the two navs did before 2026-08-17.
+  function railAct(a){
+    if(a==='settings'&&typeof openSettings==='function')openSettings();
+    else if(a==='stats'&&typeof openStats==='function')openStats();
+    else if(a==='more')openMore();
+  }
   document.querySelectorAll('.m-nav-btn').forEach(function(b){
     var lbl=document.createElement('span'); lbl.className='m-nav-lbl'; lbl.textContent=b.getAttribute('aria-label')||''; b.appendChild(lbl);
     var tab=b.getAttribute('data-tab');
     b.addEventListener('click',function(){
       if(navigator.vibrate)navigator.vibrate(7);
       if(tab){ switchTab(tab); return; }
-      var a=b.getAttribute('data-act');
-      if(a==='settings'&&typeof openSettings==='function')openSettings();
-      else if(a==='stats'&&typeof openStats==='function')openStats();
-      else if(a==='more')openMore();
+      railAct(b.getAttribute('data-act'));
     });
   });
+  /* The account row is deliberately not a .m-nav-btn — that class carries the
+     icon-morph and colour-flow machinery, and the loop above would inject an
+     .m-nav-lbl into a row that already has its own label. It shares the
+     dispatcher instead, which is the part worth sharing. */
+  (function(){
+    var acct=document.getElementById('rail-acct'); if(!acct)return;
+    acct.addEventListener('click',function(){
+      if(navigator.vibrate)navigator.vibrate(7);
+      railAct(acct.getAttribute('data-act'));
+    });
+  })();
   function positionMNavPill(){
     var nav=document.getElementById('m-nav'), pill=document.getElementById('m-nav-pill');
     var act=nav&&nav.querySelector('.m-nav-btn.active'); if(!nav||!pill||!act)return;
@@ -4241,6 +4324,57 @@ document.getElementById('sc-modal-close').addEventListener('click',closeShortcut
 document.getElementById('shortcuts-modal').addEventListener('click',function(e){if(e.target===this)closeShortcutsModal();});
 document.getElementById('open-shortcuts-btn').addEventListener('click',openShortcutsModal);
 
+/* ---- Display name -------------------------------------------------------------------
+   Sign-up is email and password only, so Firebase Auth never holds a displayName — it is
+   null on every account. The name is therefore the app's own state: an ordinary synced
+   scalar, defaulting to the email's local part so the rail reads as something human on a
+   brand-new account without stopping to ask for anything. */
+const DISPLAY_NAME_KEY='alevel-display-name-v1';
+const DISPLAY_NAME_MAX=32;
+function mhNameFromEmail(email){
+  if(!email)return '';
+  var local=String(email).split('@')[0]||'';
+  // nuta.koltsova / nuta_koltsova / nuta-koltsova -> "Nuta Koltsova". A trailing run of
+  // digits is nearly always a disambiguator rather than part of a name, so it goes.
+  local=local.replace(/[._+\-]+/g,' ').replace(/\s*\d+\s*$/,'').trim();
+  if(!local)return '';
+  return local.split(/\s+/).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1); })
+              .join(' ').slice(0,DISPLAY_NAME_MAX);
+}
+function getDisplayName(){ try{ return (localStorage.getItem(DISPLAY_NAME_KEY)||'').trim(); }catch(e){ return ''; } }
+function setDisplayName(v){
+  v=(v||'').trim().replace(/\s+/g,' ').slice(0,DISPLAY_NAME_MAX);
+  try{
+    // Clearing the field is a real choice ("just use my email"), and an absent key is
+    // indistinguishable from never-set once it reaches the merge — hence the tombstone,
+    // the same shape setExamDate() uses.
+    if(v){ localStorage.setItem(DISPLAY_NAME_KEY,v); mhUntombstone('keys',DISPLAY_NAME_KEY); }
+    else { localStorage.removeItem(DISPLAY_NAME_KEY); mhTombstone('keys',DISPLAY_NAME_KEY); }
+  }catch(e){}
+  renderRailAccount();
+}
+/* What the rail shows, in order: the name you set, the one derived from your email, the
+   email itself, and finally a plain statement that no account stands behind this device. */
+function accountLabel(){
+  var email=(typeof window.mhCurrentEmail==='function')?window.mhCurrentEmail():null;
+  var set=getDisplayName();
+  if(set) return {name:set, title:email?(set+' — '+email):set};
+  var derived=mhNameFromEmail(email);
+  if(derived) return {name:derived, title:email};
+  if(email)   return {name:email, title:email};
+  return {name:'This device', title:'No account — progress is saved on this device only'};
+}
+function renderRailAccount(){
+  var el=document.getElementById('rail-acct-name'); if(!el)return;
+  var a=accountLabel();
+  // Written only when it actually changes, for the same reason _syncGreeting() is:
+  // an incoming sync redraw must not thrash a row the pointer may be resting on.
+  if(el.textContent!==a.name) el.textContent=a.name;
+  var btn=document.getElementById('rail-acct');
+  if(btn) btn.title=a.title||'';
+}
+renderRailAccount();
+
 function openSettings(){
   renderSettings();
   // Account card: show signed-in email + log-out (only when cloud sync is active)
@@ -4264,6 +4398,179 @@ function openSettings(){
   if(lb)lb.addEventListener('click',function(){
     if(typeof window.mhSignOut!=='function')return;
     if(confirm('Log out? Your progress is safely saved to your account — you can log back in any time, on any device.'))window.mhSignOut();
+  });
+})();
+
+/* ---- Display name card (Settings) ----
+   Seeded from state on every open, never read back off the input: browsers restore
+   form-control values across a same-URL navigation, which is the same trap that
+   silently resurrected a 200-day minimum in the Checklist's filter modal. */
+function renderDisplayNameCard(){
+  var inp=document.getElementById('display-name-input'); if(!inp)return;
+  if(document.activeElement!==inp) inp.value=getDisplayName();
+  var cur=document.getElementById('display-name-current');
+  if(cur){
+    var set=getDisplayName();
+    var email=(typeof window.mhCurrentEmail==='function')?window.mhCurrentEmail():null;
+    cur.textContent = set ? ('Showing: '+set)
+      : (email ? ('Showing: '+accountLabel().name+' — taken from '+email)
+               : 'Showing: '+accountLabel().name);
+  }
+}
+(function(){
+  var inp=document.getElementById('display-name-input'), btn=document.getElementById('display-name-save');
+  function save(){
+    if(!inp)return;
+    setDisplayName(inp.value);
+    renderDisplayNameCard();
+    if(typeof toast==='function') toast(getDisplayName()?'Display name saved':'Display name cleared');
+  }
+  if(btn)btn.addEventListener('click',save);
+  if(inp)inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); save(); } });
+})();
+
+/* ==== RESET REVISION LOGS =================================================================
+   Clears the review history and nothing else. Mistakes and past-paper marks are deliberately
+   left in place, and that is coherent rather than a compromise: buildTimeline() returns []
+   for a topic with no review event ("papers refine, they do not seed"), so once the reviews
+   are gone neither channel contributes anything to memory and the topic reads "not started"
+   — while the Mistakes page and the Leaks report keep every entry they had.
+
+   Every cleared topic gets a `del` tombstone against 'sr', exactly as the study modal's
+   per-topic "Remove all study data" does. Without one the reset is silently undone by the
+   next snapshot: review logs merge by union, so the other device's copy comes straight back.
+   mergeSr() already honours the tombstone, including the guard that it never wipes study
+   logged *after* the reset on another device.                                              */
+const RESET_COMP_LABELS={pure:'Pure',stats:'Statistics',mech:'Mechanics',corepure:'Core Pure',
+  fp1:'FP1 · Further Pure 1',fs1:'FS1 · Further Statistics 1',
+  fm1:'FM1 · Further Mechanics 1',d1:'D1 · Decision 1'};
+const RESET_COMP_ORDER=['pure','stats','mech','corepure','fp1','fs1','fm1','d1'];
+const RESET_OTHER='__other';
+/* Studied topic names grouped by component. A name with no entry in the taxonomy — study
+   logged under a pre-rename name, or an import from another build — lands in __other, so
+   "select everything" really does clear everything rather than stranding orphan records. */
+function resetGroups(){
+  var g=Object.create(null);
+  Object.keys(sr||{}).forEach(function(name){
+    var t=(typeof topicByName==='function')?topicByName(name):null;
+    var c=(t&&t.component&&RESET_COMP_LABELS[t.component])?t.component:RESET_OTHER;
+    (g[c]=g[c]||[]).push(name);
+  });
+  return g;
+}
+function renderResetCurrent(){
+  var el=document.getElementById('resetlog-current'); if(!el)return;
+  var n=Object.keys(sr||{}).length;
+  el.textContent = n ? (n+' topic'+(n===1?'':'s')+' with a review history') : 'No review history yet';
+}
+var _rlGroups=null;
+function renderResetList(){
+  var list=document.getElementById('rl-list'); if(!list)return;
+  list.innerHTML='';
+  _rlGroups=resetGroups();
+  var comps=RESET_COMP_ORDER.filter(function(c){ return _rlGroups[c]&&_rlGroups[c].length; });
+  if(_rlGroups[RESET_OTHER]&&_rlGroups[RESET_OTHER].length) comps.push(RESET_OTHER);
+  if(!comps.length){
+    var p=document.createElement('div'); p.className='rl-warn';
+    p.textContent='There is no review history to reset yet.';
+    list.appendChild(p); return;
+  }
+  function row(val,name,count,isAll){
+    var lab=document.createElement('label'); lab.className='rl-row'+(isAll?' rl-row-all':'');
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.value=val;
+    if(isAll)cb.id='rl-all'; else cb.className='rl-comp';
+    var nm=document.createElement('span'); nm.className='rl-row-name'; nm.textContent=name;
+    var ct=document.createElement('span'); ct.className='rl-row-count';
+    ct.textContent=count+' topic'+(count===1?'':'s');
+    lab.append(cb,nm,ct); list.appendChild(lab); return cb;
+  }
+  var total=comps.reduce(function(n,c){ return n+_rlGroups[c].length; },0);
+  row('__all','Everything',total,true);
+  comps.forEach(function(c){
+    row(c, c===RESET_OTHER?'Other topics (no longer in the syllabus)':RESET_COMP_LABELS[c], _rlGroups[c].length,false);
+  });
+}
+function rlSelectedNames(){
+  var out=[];
+  document.querySelectorAll('#rl-list .rl-comp:checked').forEach(function(cb){
+    (_rlGroups&&_rlGroups[cb.value]||[]).forEach(function(n){ out.push(n); });
+  });
+  return out;
+}
+function rlSync(){
+  var boxes=[].slice.call(document.querySelectorAll('#rl-list .rl-comp'));
+  var all=document.getElementById('rl-all');
+  var everything=boxes.length>0&&boxes.every(function(b){return b.checked;});
+  if(all){ all.checked=everything; all.indeterminate=!everything&&boxes.some(function(b){return b.checked;}); }
+  var names=rlSelectedNames(), n=names.length;
+  var go=document.getElementById('rl-go'); if(go)go.disabled=!n;
+  /* The streak is a single global counter, so it has no per-component meaning. It is
+     offered either way — it is the student's data — but only pre-ticked on a full reset,
+     where clearing it is the obvious intent. */
+  var st=document.getElementById('rl-streak'), stSub=document.getElementById('rl-streak-sub');
+  if(st&&st.dataset.touched!=='1') st.checked=everything;
+  if(stSub) stSub.textContent = everything
+    ? 'Clears the days logged this week and the weekly goals you have hit.'
+    : 'The streak counts study days across the whole app, so it is not tied to the components above.';
+  var warn=document.getElementById('rl-warn');
+  if(warn){
+    if(!n){ warn.textContent='Pick at least one component.'; warn.classList.remove('armed'); }
+    else{
+      warn.textContent='This clears the review history for '+n+' topic'+(n===1?'':'s')
+        +(st&&st.checked?', and your study streak':'')+'. It cannot be undone.';
+      warn.classList.add('armed');
+    }
+  }
+}
+function openResetLog(){
+  var st=document.getElementById('rl-streak');
+  if(st){ st.checked=false; st.dataset.touched='0'; }
+  renderResetList();
+  rlSync();
+  document.getElementById('resetlog-overlay').classList.add('open');
+}
+function closeResetLog(){ document.getElementById('resetlog-overlay').classList.remove('open'); }
+function resetRevisionLogs(names,alsoStreak){
+  names.forEach(function(n){ mhTombstone('sr',n); delete sr[n]; });
+  if(alsoStreak&&typeof resetStreak==='function') resetStreak();
+  // saveState() calls invalidateMistakeLoad(), which drops the memory cache too, so every
+  // derived read below recomputes against the emptied log rather than a stale memo.
+  saveState();
+}
+(function(){
+  var ob=document.getElementById('open-resetlog-btn');
+  if(ob)ob.addEventListener('click',openResetLog);
+  var ov=document.getElementById('resetlog-overlay');
+  if(ov)ov.addEventListener('click',function(e){ if(e.target===ov)closeResetLog(); });
+  var cx=document.getElementById('rl-cancel');
+  if(cx)cx.addEventListener('click',closeResetLog);
+  var st=document.getElementById('rl-streak');
+  if(st)st.addEventListener('change',function(){ st.dataset.touched='1'; rlSync(); });
+  // Delegated: renderResetList() replaces the whole list, so per-box listeners would be
+  // re-bound on every open — the same argument as the Statistics cluster toggles.
+  var list=document.getElementById('rl-list');
+  if(list)list.addEventListener('change',function(e){
+    var t=e.target; if(!t||t.tagName!=='INPUT')return;
+    if(t.id==='rl-all'){
+      document.querySelectorAll('#rl-list .rl-comp').forEach(function(b){ b.checked=t.checked; });
+    }
+    rlSync();
+  });
+  var go=document.getElementById('rl-go');
+  if(go)go.addEventListener('click',function(){
+    var names=rlSelectedNames(); if(!names.length)return;
+    var alsoStreak=!!(st&&st.checked);
+    var what=names.length+' topic'+(names.length===1?'':'s')+(alsoStreak?' and your study streak':'');
+    if(!confirm('Reset the review history for '+what+'?\n\nYour logged mistakes and past-paper marks are not affected. This cannot be undone.'))return;
+    resetRevisionLogs(names,alsoStreak);
+    closeResetLog();
+    renderResetCurrent();
+    // Statistics is not in this list on purpose: openStats() renders on open, so a
+    // closed overlay has nothing to refresh.
+    ['renderAll','renderReviewPanel','updateDueBadge'].forEach(function(fn){
+      if(typeof window[fn]==='function'){ try{ window[fn](); }catch(e){} }
+    });
+    if(typeof toast==='function') toast('Review history cleared for '+names.length+' topic'+(names.length===1?'':'s'));
   });
 })();
 
@@ -4376,6 +4683,8 @@ function renderSettings(){
   const chosen=COMPONENTS.fm.filter(c=>c.opt&&fmOptions.has(c.id)).map(c=>c.name);
   cur.textContent = chosen.length ? ('Currently studying: Core Pure + '+chosen.join(', ')) : 'Currently studying: Core Pure only';
   if(typeof renderMyExamsCurrent==='function') renderMyExamsCurrent();
+  if(typeof renderDisplayNameCard==='function') renderDisplayNameCard();
+  if(typeof renderResetCurrent==='function') renderResetCurrent();
   renderThemePicker();
 }
 function renderFmOptList(){
@@ -7908,7 +8217,7 @@ if(window.MSH_TEST) (function(){
   var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
     'alevel-favs-v1','alevel-notes-v1','alevel-fm-options-v1','alevel-streak-v1',
     'alevel-exam-date','alevel-onboarded-v1','alevel-plainlang-v1','alevel-pomo-presets-v1',
-    'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1',
+    'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1','alevel-display-name-v1',
     // The tombstone/edit ledger has to travel with the data it describes, or deletions
     // can't propagate. 'alevel-exam-off' was simply missing: turning exam ramping off on
     // one device left every other device still ramping.
@@ -8081,16 +8390,50 @@ if(window.MSH_TEST) (function(){
     });
     return out;
   }
+  /* A union can never express a deletion, and this one unions `days` and takes the max of
+     the counters — so "reset my streak" was undone by the very next snapshot. `resetAt` is
+     the streak's own tombstone, the same shape as the per-topic 'sr' one above:
+
+       • the newer of the two resetAt values wins        -> commutative (it is a max)
+       • days at or before that day are dropped from BOTH sides, so study logged after the
+         reset on another device still survives          -> the same rule as mergeSr's tombDay
+       • weeksMet is taken only from sides that are at or after the merged reset; at least
+         one side always is, since the max came from one of them
+       • merging the result with itself changes nothing  -> idempotent
+
+     A device on an older build writes no resetAt, which reads as 0 — "never reset" — so the
+     whole branch collapses to the previous behaviour. Additive-safe. */
   function mergeStreak(a,b){
     if(!a)return b; if(!b)return a;
+    var rst=Math.max(num(a.resetAt),num(b.resetAt));
+    var cut=rst?ymd(new Date(rst)):'';                 // a local calendar day, like rec.last
     var seen={},days=[];
-    (a.days||[]).concat(b.days||[]).forEach(function(d){ if(!seen[d]){ seen[d]=1; days.push(d); } });
+    (a.days||[]).concat(b.days||[]).forEach(function(d){
+      if(cut&&!(d>cut))return;                          // logged before the reset — gone
+      if(!seen[d]){ seen[d]=1; days.push(d); }
+    });
     days.sort();
-    return { days:days,
-             weekStart:((a.weekStart||'')>(b.weekStart||''))?a.weekStart:b.weekStart,
-             goal:Math.max(num(a.goal),num(b.goal))||(typeof WEEK_GOAL!=='undefined'?WEEK_GOAL:4),
-             weeksMet:Math.max(num(a.weeksMet),num(b.weeksMet)),
-             last:((a.last||'')>=(b.last||''))?(a.last||''):(b.last||'') };
+    /* weeksMet is a cumulative total with no record of when each week was earned, so it
+       cannot be split at the reset boundary: a side that has not heard about the reset
+       contributes 0 rather than a figure that is part pre-reset. That over-deletes by at
+       most the weeks a device earned while offline across the reset, and it is the right
+       way to be wrong — the alternative is one stale device holding the counter up forever
+       and the reset never landing at all. */
+    function live(s,v){ return num(s.resetAt)>=rst?num(v):0; }
+    /* weekStart is deliberately NOT cut. It is the Monday of the current week, and clearing
+       it would make the next _rolloverStreak() see a week change and wipe `days` — throwing
+       away the very post-reset study the filter above just preserved. Taking the later of
+       the two is safe in both directions: after a full reset `days` is already empty, so the
+       rollover it triggers has nothing to clear. */
+    var ws=((a.weekStart||'')>(b.weekStart||''))?a.weekStart:b.weekStart;
+    var lst=((a.last||'')>=(b.last||''))?(a.last||''):(b.last||'');
+    var out={ days:days,
+              weekStart:ws||'',
+              goal:Math.max(num(a.goal),num(b.goal))||(typeof WEEK_GOAL!=='undefined'?WEEK_GOAL:4),
+              weeksMet:Math.max(live(a,a.weeksMet),live(b,b.weeksMet)),
+              last:(cut&&!(lst>cut))?'':lst };
+    if(rst) out.resetAt=rst;
+    return out;
   }
 
   var LIST_KINDS={'alevel-mistakes-v2':'mistakes','alevel-paperlog-v1':'papers'};
@@ -8215,7 +8558,7 @@ if(window.MSH_TEST) (function(){
     var th=null; try{ th=localStorage.getItem('msh-theme'); }catch(e){}
     if(th&&typeof applyTheme==='function'){ try{ applyTheme(th); }catch(e){} }
     ['renderAll','renderReviewPanel','renderMistakesTab','renderResources',
-     'renderSettings','updateDueBadge','syncExamInputs','applyPlainLang'
+     'renderSettings','renderRailAccount','updateDueBadge','syncExamInputs','applyPlainLang'
     ].forEach(function(fn){
       if(typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ console.warn('[cloud] '+fn+' failed',e); } }
     });
@@ -8349,6 +8692,9 @@ if(window.MSH_TEST) (function(){
   auth.onAuthStateChanged(function(user){
     currentUser=user;
     if(unsub){ try{unsub();}catch(e){} unsub=null; }
+    // The rail's account row falls back to the email when no name is set, and the email
+    // only exists once auth has resolved — so it has to redraw on both edges of sign-in.
+    if(typeof renderRailAccount==='function'){ try{ renderRailAccount(); }catch(e){} }
     if(!user){ showForm(); return; }
     hide();
     attachListener(user.uid);   // realtime listener reconciles cloud↔local and keeps them in sync
