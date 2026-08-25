@@ -1164,8 +1164,8 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
           <rect class="ic-mv ic-hole" x="5" y="3.5" width="14" height="17" rx="1" fill="#000"/>
         </mask>
         <rect class="ic-plate" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
-        <!-- Carries .ic-paint/.ic-rain so it flows in on exactly the same slide as the
-             border rather than fading independently; .ic-dim is what holds it back.
+        <!-- Carries .ic-paint/.ic-rain so it fades in on exactly the same curve as the
+             border rather than fading independently; .ic-dim is what holds it to 35%.
              All three page icons carry this layer now — see .ic-dim in styles.css. -->
         <rect class="ic-paint ic-rain ic-dim" x="-4" y="-4" width="32" height="32" mask="url(#ic-paper-sil)"/>
         <g mask="url(#ic-paper-cut)">
@@ -1177,11 +1177,25 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
   </div>
   <span class="rail-sep" aria-hidden="true"></span>
   <div class="m-nav-group rail-tools">
+    <!-- Solid shapes in the page icons' style, but deliberately ONE state: these open
+         overlays, they never become the active page, so there is nothing for a knockout
+         to morph into and no rainbow to arrive. That means no masks and no layers — the
+         shape itself is painted, which is safe here precisely because nothing animates:
+         the "always a full-bleed rect through a mask" rule exists to stop two antialiased
+         edges multiplying, and with a single painted shape there is only ever one.
+
+         The triangle's corners are arcs on the path rather than a stroke trick, so the
+         silhouette stays the size it is drawn at. Tangent length for a 60° vertex at r=2
+         is r/tan(30°) = 3.464, which is what sets the numbers below. -->
     <button class="m-nav-btn rail-act" data-act="stats" aria-label="Statistics">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <svg class="ic-fill ic-solid" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13.732 4 L19.794 14.5 A2 2 0 0 1 18.062 17.5 L5.938 17.5 A2 2 0 0 1 4.206 14.5 L10.268 4 A2 2 0 0 1 13.732 4 Z"/>
+      </svg>
     </button>
     <button class="m-nav-btn rail-act" data-act="more" id="rail-more-btn" aria-label="More tools" aria-haspopup="dialog">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.7"/></svg>
+      <svg class="ic-fill ic-solid" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.2"/>
+      </svg>
     </button>
   </div>
   <!-- Account footer — avatar, name, gear; the whole row opens Settings. The gear
@@ -3780,44 +3794,24 @@ function switchTab(tab){
   setTimeout(positionMNavPill,300);
   // Keep the nav highlight in sync with every tab change (wrap the existing fn)
   var _origSwitch=switchTab;
-  var FLOW_MS=400;   // keep in step with the .ic-paint transition in styles.css
+  /* The pill is the only thing that travels. The icon's colour fades in and its
+     geometry morphs, both 180ms behind it, so the selector arrives and the icon
+     resolves just after — see the colour section in styles.css.
+
+     This used to be twenty-odd lines: the rainbow slid in from the side the pill
+     came from, which needed a --nav-dir custom property, a forced style flush to
+     resolve the incoming icon's parked position against the new direction, a
+     .nav-leaving class on the outgoing button and a timer to release it. All of
+     that existed to serve a direction. A fade has no direction, so the outgoing
+     icon simply fades out when .active is removed and nothing has to be cleaned
+     up afterwards — which also removes the two bugs that machinery produced (the
+     colour entering from the wrong side on every switch after the first, and
+     .nav-leaving and .active landing on the same button when you returned to a
+     tab inside the release window). */
   switchTab=function(t){
     var oi=TAB_ORDER.indexOf(activeTab), ni=TAB_ORDER.indexOf(t);
     if(ni>=0&&oi>=0&&ni!==oi){
       document.body.classList.toggle('mtab-fwd',ni>oi); document.body.classList.toggle('mtab-back',ni<oi);
-      /* Hand the rainbow over rather than switching it on. --nav-dir tells the
-         icons which way the pill is travelling, so the colour leaves the old
-         one and enters the new one from the same side — it reads as being
-         carried by the selector. The direction is already known here, so this
-         costs no new state. */
-      document.documentElement.style.setProperty('--nav-dir', ni>oi?1:-1);
-      var inBtn=document.querySelector('.m-nav-btn[data-tab="'+t+'"]');
-      /* (1) Returning to a tab you just left, inside the release window, used to leave
-         .nav-leaving AND .active on the same button. They have equal specificity, so source
-         order decides and .nav-leaving — declared later — won: the icon parked off-screen
-         with no colour at all until the timer fired, then snapped on. Clear it, and its
-         pending timer, before it becomes the active one. */
-      if(inBtn){ clearTimeout(inBtn._navLeaveT); inBtn.classList.remove('nav-leaving'); }
-      /* (2) Resolve the incoming icon's parked position against the NEW direction *here*,
-         between setting the variable and anything else touching a class. Otherwise the
-         browser never computes style in between, the transition's "before" snapshot is still
-         last frame's — where --nav-dir held whatever the previous move set — and the colour
-         enters from the wrong side. The entry side was therefore inverted on every switch
-         after the first, while the leaving side stayed right, because a leaving icon starts
-         at translateY(0) and 0 does not depend on the direction. On screen: the pill arrives
-         from one side while the fill rises from the other, which reads as a stray flow
-         outside the icon fighting the one inside it.
-         The flush has to sit *after* the variable and *before* prev gains .nav-leaving — flush
-         later and prev's own before-state becomes its end-state, so it stops animating out. */
-      if(inBtn){ var _r=inBtn.querySelector('.ic-rain'); if(_r) void getComputedStyle(_r).transform; }
-      var prev=document.querySelector('.m-nav-btn.active');
-      if(prev&&prev!==inBtn){
-        prev.classList.add('nav-leaving');
-        clearTimeout(prev._navLeaveT);
-        /* Dropping .nav-leaving also drops the transition, so it snaps back to
-           the entry side ready for next time — off-icon, so never seen. */
-        prev._navLeaveT=setTimeout(function(){ prev.classList.remove('nav-leaving'); }, FLOW_MS+40);
-      }
     }
     _origSwitch(t); updateMNav();
   };
@@ -7968,7 +7962,10 @@ if(window.MSH_TEST) (function(){
       speedStyle.textContent = mult===1 ? '' : (mult===0
         ? '*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;animation-delay:0s!important;transition-delay:0s!important;}'
         : '.m-nav-btn .ic-paint,.ic-mv,.m-nav-pill,.page,.modal,.stats-panel{transition-duration:'+(400*mult)+'ms!important;transition-delay:'+(180*mult)+'ms!important;}'
-          +'.m-nav-pill,.m-nav-btn .ic-paint{transition-delay:0ms!important;}');
+          /* Only the pill starts immediately. The colour used to be exempt here too,
+             back when it had no delay of its own; it now shares the shape's 180ms so
+             the icon resolves behind the selector rather than alongside it. */
+          +'.m-nav-pill{transition-delay:0ms!important;}');
       [].forEach.call(document.querySelectorAll('#msh-test-speed button'),function(b){ b.classList.toggle('on',+b.dataset.m===mult); });
     }
     SPEEDS.forEach(function(sp){

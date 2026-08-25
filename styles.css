@@ -171,12 +171,14 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    them read as clean negative space, exactly as drawn in the source SVG. */
 .ic-plate{fill:var(--nav-plate);}
 .ic-base{fill:var(--muted);transition:fill var(--t-base);}
-/* Hover brightens the icon — but NOT while it is the one the colour is flowing
-   into or out of. You click with the pointer still on the button, so without
+/* Hover brightens the icon — but not the active one, which the rainbow is
+   already covering. You click with the pointer still on the button, so without
    the :not() the base underneath the arriving rainbow was --text: the icon
-   filled from white in dark mode and from near-black in light. The rainbow
-   should always be seen sliding over the resting muted colour. */
-.m-nav-btn:not(.active):not(.nav-leaving):hover .ic-base{fill:var(--text);}
+   appeared from white in dark mode and from near-black in light. The rainbow
+   should always arrive over the resting muted colour.
+   (The old :not(.nav-leaving) half went with the colour flow — the leaving icon
+   no longer carries a class, it just fades out when .active is removed.) */
+.m-nav-btn:not(.active):hover .ic-base{fill:var(--text);}
 .ic-rain{fill:url(#m-rainbow);}
 /* All three page icons: a dimmed rainbow across the whole silhouette, so each
    one's interior reads as tinted rainbow rather than flat rail colour. It sits
@@ -189,7 +191,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    Checked at the real rendered size in all three themes: the X and the ring
    both hold, and three icons that treat their interiors differently read as
    three unrelated icons, which cost more than the contrast did. */
-.ic-dim{opacity:.35;}
+/* The dimmed layer's opacity is now a *state*, not a constant — see the colour
+   section below, where the rainbow fades in rather than sliding in. Inactive it
+   is 0 along with the full-strength layer; active it settles at .35. */
 
 /* Shape morph — 400ms ease-out, 180ms behind the pill so the icon resolves
    just as the pill finishes arriving. Deliberately not the pill's curve:
@@ -205,24 +209,25 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .m-nav-btn.active .ic-hole{transform:scale(1);}
 .m-nav-btn.active .ic-rh-hole{transform:rotate(45deg) scale(1);}
 
-/* Colour flow — the rainbow layer slides in rather than switching on, and
-   --nav-dir (+1 down the rail, -1 up) makes it enter from the side the pill is
-   arriving from while the icon it just left releases its colour the same way.
-   The colour therefore travels with the selector instead of each icon
-   flickering on the spot. --nav-dir is set by switchTab(), which already
-   computes the direction for the page slide.
+/* Colour — the rainbow fades in on the spot. Same 400ms, and now the same 180ms
+   delay as the shape above, so the pill is the only thing that travels: it slides
+   to the new row first, and the icon resolves its colour and its geometry together
+   just behind it. (It used to slide in too, from the side the pill was arriving
+   from, with --nav-dir carrying the direction. That read as two things moving at
+   once and cost a lot of machinery — a direction variable, a forced style flush to
+   resolve the parked position, a .nav-leaving class and a release timer, and a rule
+   that idle icons must never carry a transition. A fade needs none of it.)
 
-   Only the two icons taking part in a hand-off may carry a transition. An idle
-   icon must not: its parked position depends on --nav-dir, so flipping that
-   would animate its rainbow straight across its own face — every icon in the
-   rail flashing on every tab change. Parked is off-icon either way, so
-   snapping there is invisible. */
-.ic-paint{transition:none;}
-.m-nav-btn.active .ic-paint,.m-nav-btn.nav-leaving .ic-paint{
-  transition:transform 400ms cubic-bezier(.2,0,0,1);}
-.ic-rain{transform:translateY(calc(-30px * var(--nav-dir,1)));}
-.m-nav-btn.active .ic-rain{transform:translateY(0);}
-.m-nav-btn.nav-leaving .ic-rain{transform:translateY(calc(30px * var(--nav-dir,1)));}
+   Because the parked state is now a plain opacity:0 rather than a position that
+   depends on a variable, every layer can carry the transition unconditionally —
+   an idle icon has nothing to animate, so it cannot flash. The leaving icon fades
+   out on its own the moment .active is removed, with no class and no timer. */
+.ic-paint{transition:opacity 400ms cubic-bezier(.2,0,0,1) 180ms;}
+.ic-rain{opacity:0;}
+.m-nav-btn.active .ic-rain{opacity:1;}
+/* The dimmed interior layer settles at .35 rather than 1, but fades on the same
+   curve. Higher specificity than the rule above, so it wins for that one layer. */
+.m-nav-btn.active .ic-rain.ic-dim{opacity:.35;}
 /* Same element in both orientations: inline text on the rail, caption under the
    icon on the bottom bar (restyled in the mobile query). It was a hover tooltip
    on the rail until 2026-08-17; permanently visible is the point of widening. */
@@ -237,9 +242,20 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .m-nav-badge{position:absolute;top:11px;left:32px;right:auto;width:9px;height:9px;border-radius:50%;
   background:var(--overdue);border:1.5px solid var(--surface-glass);display:none;z-index:2;}
 .m-nav-badge.show{display:block;}
+/* The two tool icons: solid shapes in the page icons' style, one state only. They open
+   overlays rather than becoming the active page, so they never take the rainbow and
+   never morph — no masks, no plate, no rain layer, just a painted shape that brightens
+   on hover the same way .ic-base does. */
+.m-nav-btn svg.ic-solid>*{fill:var(--muted);transition:fill var(--t-base);}
+.m-nav-btn:hover svg.ic-solid>*{fill:var(--text);}
+
 /* A running Focus timer used to count down in the tab bar. It lives in the Tools overlay
-   now, so the Tools icon carries the state instead — otherwise it vanishes when you close it. */
+   now, so the Tools icon carries the state instead — otherwise it vanishes when you close it.
+   The square is filled, not stroked, so the live state has to paint the fill: the old
+   `stroke:url(#m-rainbow)` had nothing to colour once the grid became a solid shape. */
 .m-nav-btn.rail-live svg{stroke:url(#m-rainbow);}
+.m-nav-btn.rail-live svg.ic-solid>*,
+.m-nav-btn.rail-live:hover svg.ic-solid>*{fill:url(#m-rainbow);}
 .m-nav-btn.rail-live::after,.m-nav-btn.rail-paused::after{content:'';position:absolute;top:11px;left:33px;right:auto;
   width:8px;height:8px;border-radius:50%;border:1.5px solid var(--surface-glass);}
 .m-nav-btn.rail-live::after{background:var(--overdue);animation:rail-pulse 1.9s var(--ease) infinite;}
@@ -258,8 +274,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
    control, so it is a <span> and the row carries the label.
 
    Deliberately NOT .m-nav-btn: that class is wired into the icon-morph and
-   colour-flow machinery (.ic-paint parks off-icon on --nav-dir, the pill
-   measures .active), none of which applies to a row that never activates. */
+   colour machinery (.ic-rain sits at opacity 0 until .active, the pill measures
+   .active, the label-injection loop appends an .m-nav-lbl), none of which
+   applies to a row that never activates and already has its own label. */
 .rail-sep-acct{margin-top:auto;}
 /* A card, not a bare row, wearing the same soft rainbow as the selector pill — same
    gradient, same angle, same 0.17. The pill cannot simply be reused: it is one shared
@@ -989,15 +1006,13 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   .m-nav-btn:hover svg{stroke:var(--muted);}
   .m-nav-btn.active:hover svg{stroke:url(#m-rainbow);}
   /* Hover is meaningless on touch. These must carry at least as much specificity as the
-     :not(.active):not(.nav-leaving):hover rule above, or that one wins here despite coming
-     first — specificity beats source order, and a phone would brighten icons on tap. */
-  .m-nav-btn:not(.active):not(.nav-leaving):hover .ic-base,
+     :not(.active):hover rule above, or that one wins here despite coming first —
+     specificity beats source order, and a phone would brighten icons on tap. */
+  .m-nav-btn:not(.active):hover .ic-base,
   .m-nav-btn.active:hover .ic-base{fill:var(--muted);}
-  /* The bar runs left-to-right down here, so the colour has to travel along X.
-     Same --nav-dir, same hand-off — only the axis changes. */
-  .ic-rain{transform:translateX(calc(-30px * var(--nav-dir,1)));}
-  .m-nav-btn.active .ic-rain{transform:translateX(0);}
-  .m-nav-btn.nav-leaving .ic-rain{transform:translateX(calc(30px * var(--nav-dir,1)));}
+  /* Nothing to restate for the colour any more. It used to travel along X down here
+     rather than Y, since the bar runs left-to-right; a fade has no axis, so the rail's
+     rule already covers both orientations. */
   /* Icons are centred in a column down here, so the dot goes back to the icon's
      corner measured from the centre — the rail's fixed 28px offset is wrong. */
   .m-nav-badge{top:6px;right:auto;left:calc(50% + 8px);}
