@@ -124,11 +124,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 /* The pill is positioned in JS from the active icon's box, so it works in either axis. */
 .m-nav-pill{position:absolute;border-radius:var(--r-md);background:linear-gradient(160deg,var(--spectrum));
   opacity:0;pointer-events:none;z-index:0;
-  /* 400ms with only a hint of overshoot (1.08, was --ease-spring at 1.4 over
-     320ms). The old curve visibly bounced past the row and settled back; this
-     one arrives and stops. It also matches the icon colour-flow duration, so
-     the pill and the colour it carries move as one thing. */
-  transition:left .4s cubic-bezier(.32,1.08,.5,1),top .4s cubic-bezier(.32,1.08,.5,1),width .4s ease,height .4s ease,opacity var(--t-base);}
+  /* Moves on `transform` alone. It used to transition left/top/width/height — four
+     layout properties, so every frame of the 400ms re-laid-out and repainted the nav on
+     the main thread, competing with the render switchTab() kicks off in the same moment.
+     A transform runs on the compositor and is unaffected by a busy main thread.
+     will-change promotes it to its own layer up front rather than at the first frame.
+
+     400ms with only a hint of overshoot (1.08, was --ease-spring at 1.4 over 320ms). The
+     old curve visibly bounced past the row and settled back; this one arrives and stops. */
+  will-change:transform;
+  transition:transform .4s cubic-bezier(.32,1.08,.5,1),opacity var(--t-base);}
 /* A full-width row: icon, then label, left-aligned. The button is the whole row
    rather than a 44px square, so the pill, the hover state and the click target
    all cover the label too — a label you can read but not click is a trap. */
@@ -797,7 +802,20 @@ main{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .trend-svg{width:100%;overflow:visible;display:block;}
 .trend-tooltip{position:absolute;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:4px 8px;font-size:var(--fs-xs);color:var(--text);pointer-events:none;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);transform:translateX(-50%);transition:opacity var(--t-fast);z-index:10;}
 .mistake-list{display:flex;flex-direction:column;gap:6px;}
-.m-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 12px;display:flex;gap:8px;align-items:flex-start;}
+/* content-visibility lets the browser skip layout and paint for cards that are off
+   screen. The mistakes list is not paginated — a full log renders every card, which on a
+   heavy store is 400 of them and 6,750 nodes, and the browser laid the lot out in the
+   frame the tab became visible. Measured: that was the one dropped frame left in a tab
+   switch, ~57ms, after the nav animation had been taken off the main thread entirely.
+
+   `auto` on contain-intrinsic-size makes the browser remember each card's real height
+   once it has measured it, so the scrollbar settles instead of drifting as you scroll.
+   73px is the measured median (p90 102, max 120) and only matters for cards never yet
+   displayed. Safe here specifically because no card has an absolutely-positioned
+   descendant to be clipped by the containment — checked, there are none. Unsupported
+   browsers ignore both properties and simply keep the old cost. */
+.m-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 12px;display:flex;gap:8px;align-items:flex-start;
+  content-visibility:auto;contain-intrinsic-size:auto 73px;}
 .m-card-left{flex:1;min-width:0;}
 .m-card-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}
 .m-topic-badge{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:var(--r-xs);background:rgba(var(--accent-rgb),.12);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.25);}
@@ -990,8 +1008,9 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
      account row — the bar is 5 icons wide, with no room for a name. */
   .rail-sep,.rail-tools,.rail-acct{display:none;}
   /* sliding rainbow indicator that flows behind the active icon */
-  .m-nav-pill{background:linear-gradient(90deg,var(--spectrum));
-    transition:left var(--t-slow) var(--ease-spring),top var(--t-slow) ease,width var(--t-slow) var(--ease-spring),height var(--t-slow) ease,opacity var(--t-base);}
+  /* Only the gradient's angle changes down here — the bar runs left-to-right. The
+     transition itself is inherited from the rail rule; a transform covers both axes. */
+  .m-nav-pill{background:linear-gradient(90deg,var(--spectrum));}
   .m-nav-btn{flex:1 1 0;flex-direction:column;justify-content:center;gap:2px;
     width:auto;height:auto;min-height:54px;max-width:92px;padding:4px 0;}
   .m-nav-lbl{position:static;transform:none;opacity:0;background:none;border:none;box-shadow:none;
@@ -1877,7 +1896,11 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce){
-  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important;}
+  /* transition-delay is zeroed as well as duration. Collapsing the duration alone leaves a
+     delay intact, so the nav icon's colour and shape — both 180ms behind the pill — would
+     sit unchanged for a fifth of a second and then snap. That is not less motion, it is the
+     same motion with a stutter in front of it. */
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;animation-delay:0ms!important;transition-duration:.001ms!important;transition-delay:0ms!important;scroll-behavior:auto!important;}
 }
 
 /* Caveat under the grade-boundary table. Pearson is explicit that per-paper boundaries are

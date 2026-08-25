@@ -27,6 +27,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 3. [The surfaces, feature by feature](#the-surfaces-feature-by-feature)
 4. [The spaced-repetition engine (deep dive)](#the-spaced-repetition-engine-deep-dive)
 5. [Where the render time actually goes](#where-the-render-time-actually-goes)
+   - [Making the switch smooth](#making-the-switch-smooth)
 6. [Data model & storage](#data-model--storage)
    - [Topic renames & the remap](#topic-renames--the-remap)
 7. [Cloud sync architecture](#cloud-sync-architecture)
@@ -80,7 +81,7 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
 
 ## The visual layer
 
-**Shell.** **One nav element** (`#m-nav`) navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each page is a `<div class="page" id="page-…">`; `switchTab()` toggles which one is visible, and a rainbow `.m-nav-pill` slides behind the active icon (positioned in JS from that icon's bounding box, so it works along either axis).
+**Shell.** **One nav element** (`#m-nav`) navigates the three main pages — Checklist, Mistakes, Past Papers (`TAB_ORDER`). Each page is a `<div class="page" id="page-…">`; `switchTab()` toggles which one is visible, and a rainbow `.m-nav-pill` slides behind the active icon — measured in JS from that icon's bounding box so it works along either axis, then moved with `transform` so the slide itself runs on the compositor. See [Making the switch smooth](#making-the-switch-smooth).
 
 **CSS alone decides which orientation**:
 
@@ -470,6 +471,27 @@ Two rules came out of this that are worth keeping:
 > **Cache on a signature, not on an invalidation call.** Every cache added here re-reads its cheap inputs and compares; none of them relies on a future writer remembering to call an invalidate function. `applyChapterRenames()` is in the codebase precisely because a one-shot flag was trusted and sync pushed stale data in behind it.
 
 > **Measure before optimising, and measure the helper, not the feature.** The instinct was to blame the FSRS replay or the 173 KB paper table. Both were nearly free. The cost was in a date formatter and a hidden container.
+
+### Making the switch smooth
+
+Changing tab used to drop frames — measured on the heavy seed (315 topics, 400 mistakes, 60 papers; 10,657 nodes), **two dropped frames totalling 183ms** out of a 400ms animation, i.e. roughly eleven frames lost. It read as the animation freezing and then catching up. Three causes, none of them the animation's own timing:
+
+| | Before | After |
+|---|--:|--:|
+| `checklist → mistakes` | 183ms of stall | **0** |
+| `mistakes → papers` | dropped frames | **0** |
+| `papers → checklist` | dropped frames | **0** |
+
+*Nine consecutive switches, zero dropped frames, every interval 16.6–16.8ms.*
+
+- **The pill animated four layout properties.** `transition: left, top, width, height` means a re-layout and repaint of the nav on every frame, on the main thread, at exactly the moment `switchTab()` is rendering the destination page. It moves on `transform` now, which the compositor owns. The three page targets measure identically in both orientations, so the size never changes between tabs — `positionMNavPill()` writes `width`/`height` only when they actually differ (an orientation flip or a resize) and otherwise writes nothing but a `translate3d`. `will-change: transform` promotes the layer up front.
+- **The destination's render ran in the same task as the style change.** A CSS transition does not begin when you change the style — it begins at the first frame **painted** afterwards, when the browser assigns its `startTime` and hands it to the compositor. So 47–70ms of `renderMistakesTab()` in that same task simply delayed the start; the animation was not janky so much as late. Verified directly: blocking the thread for 250ms straight after the style change leaves the transition at `startTime: null`, `currentTime: 0` — not begun at all.
+
+  > **`requestAnimationFrame` alone does not fix this, and that is the trap.** rAF callbacks run *before* the paint, so deferring the render by one rAF still lands it inside the window where the transition has not started. It must be `requestAnimationFrame(() => setTimeout(fn, 0))` — a timeout scheduled from inside a rAF runs after that frame is painted. Only then is the transition on the compositor and immune to whatever the main thread does next.
+
+- **6,750 nodes laid out in the frame the tab became visible.** The mistakes list is not paginated: a full log renders every card. `.m-card` carries `content-visibility: auto` with `contain-intrinsic-size: auto 73px` (the measured median; p90 102, max 120), so the browser skips layout and paint for cards off screen. The `auto` keyword makes it remember each card's real height once measured — document height is stable to the pixel across a full scroll, so the scrollbar does not drift. Safe here specifically because no card has an absolutely-positioned descendant for the containment to clip.
+
+Two correctness details came out of the same work. `switchTab` carries a **sequence guard** (`switchTab._seq`) so that tapping through three tabs quickly cannot let a superseded render paint into a page nobody is on, or position the Mistakes and Papers sub-pills against the wrong layout. And the `prefers-reduced-motion` block now zeroes `transition-delay` as well as duration — collapsing the duration alone left the icon's 180ms delay intact, which is not less motion, it is the same motion with a stutter in front of it.
 
 ---
 

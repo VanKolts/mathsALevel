@@ -3728,11 +3728,41 @@ function switchTab(tab){
     const page=document.getElementById('page-'+t);
     if(page)page.classList.toggle('active',t===tab);
   });
-  if(tab==='mistakes'){renderMistakesTab();requestAnimationFrame(()=>requestAnimationFrame(()=>positionPill('mv-tabs','mv-pill')));}
-  if(tab==='papers'){renderPaperBrowser();requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));}
-  setTimeout(syncSpringSliders,50);
+  /* The destination's body render is deferred by one frame, and the order matters more
+     than the delay does. Everything cheap — the page classes here, the nav's active class
+     and the pill's new transform in updateMNav() — happens in this task, so the browser
+     paints the first frame of the transition immediately. The expensive render then runs
+     in the next frame and blocks the main thread (measured at 47-70ms for Mistakes on the
+     heavy seed, against 4-8ms for the other two), but the pill and the icon fade are
+     compositor animations by now, so they keep running at 60fps straight through it.
+
+     Rendering first, as this used to, meant the click produced nothing at all for ~66ms
+     and the animation only began afterwards. The work is the same either way; what
+     changes is that the nav answers the tap before it starts. */
+  const seq=++switchTab._seq;
+  /* rAF-then-setTimeout, not rAF alone. A CSS transition does not begin at the style
+     change — it begins at the first frame *painted* after it, which is when the browser
+     assigns its startTime and hands it to the compositor. rAF callbacks run BEFORE that
+     paint, so deferring the render by one rAF still drops it inside the window where the
+     transition has not started yet, and it simply starts late instead. Verified directly:
+     blocking the thread for 250ms straight after the style change leaves the transition
+     at startTime null, currentTime 0 — it had not begun at all.
+
+     setTimeout(0) from inside a rAF lands after that frame has been painted. By then the
+     transition owns a compositor layer and runs to completion regardless of what the main
+     thread is doing, which is the whole reason the pill moved to `transform` first. */
+  requestAnimationFrame(()=>setTimeout(()=>{
+    /* A faster switch supersedes this one. Without the guard, tapping through three tabs
+       quickly queues three renders and the last two paint into a page nobody is on —
+       and the mistakes/papers sub-pills get positioned against the wrong layout. */
+    if(seq!==switchTab._seq||activeTab!==tab)return;
+    if(tab==='mistakes'){renderMistakesTab();requestAnimationFrame(()=>requestAnimationFrame(()=>positionPill('mv-tabs','mv-pill')));}
+    if(tab==='papers'){renderPaperBrowser();requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));}
+    syncSpringSliders();
+  },0));
   setTimeout(()=>document.body.classList.remove('tab-switching'),300);
 }
+switchTab._seq=0;
 
 /* ===== Mobile app-shell: bottom icon nav + three-dots overflow menu ===== */
 (function(){
@@ -3778,10 +3808,40 @@ function switchTab(tab){
     var target=vertical?act:act.querySelector('svg'); if(!target)return;
     var nr=nav.getBoundingClientRect(), sr=target.getBoundingClientRect(); if(!sr.width)return; // SVG has no offset* props
     var pad=vertical?0:9;
-    pill.style.left=(sr.left-nr.left-pad)+'px';
-    pill.style.top=(sr.top-nr.top-pad)+'px';
-    pill.style.width=(sr.width+pad*2)+'px';
-    pill.style.height=(sr.height+pad*2)+'px';
+    var w=sr.width+pad*2, h=sr.height+pad*2;
+    var x=sr.left-nr.left-pad, y=sr.top-nr.top-pad;
+    /* The pill moves on `transform`, not `left`/`top`/`width`/`height`. Those four are
+       layout properties: transitioning them made the browser re-lay-out and repaint the
+       whole nav on every one of the 400ms of frames, on the main thread, at exactly the
+       moment switchTab() is also rendering the destination page. Measured on the heavy
+       seed, that cost two dropped frames of 66.7ms and 116.6ms — a 183ms freeze out of a
+       400ms animation. A transform animation runs on the compositor instead, so a busy
+       main thread no longer stalls it at all.
+
+       Size is written only when it actually changes. Among the three page tabs it never
+       does — all three targets measure identically in both orientations — so in normal
+       use this branch runs once and every later switch is a single transform write. */
+    var resized=(pill._w!==w||pill._h!==h);
+    if(resized){
+      pill.style.width=w+'px'; pill.style.height=h+'px';
+      pill.style.left='0px'; pill.style.top='0px';   // position now comes from the transform
+      pill._w=w; pill._h=h;
+    }
+    /* Jump rather than glide in two cases, and only these two: the first placement, where
+       the previous transform is the initial `none` and animating would slide the pill
+       diagonally out of the nav's corner as it fades up; and a size change, which means
+       the rail just became the bottom bar (or the window resized), where the pill is being
+       re-seated rather than moved and the size is snapping anyway. Every ordinary tab
+       switch takes the else branch and animates. */
+    if(pill._x===undefined||resized){
+      pill.style.transition='none';
+      pill.style.transform='translate3d('+x+'px,'+y+'px,0)';
+      void pill.offsetWidth;                          // resolve it before the transition returns
+      pill.style.transition='';
+    }else{
+      pill.style.transform='translate3d('+x+'px,'+y+'px,0)';
+    }
+    pill._x=x; pill._y=y;
     pill.style.opacity='0.17';
   }
   function updateMNav(){
