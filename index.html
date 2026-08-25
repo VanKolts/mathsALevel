@@ -3720,6 +3720,7 @@ function updateDueBadge(){
 
 const TAB_ORDER=['checklist','mistakes','papers'];
 let activeTab='checklist';
+let _switchSeq=0;
 function switchTab(tab){
   if(tab===activeTab)return;
   activeTab=tab;
@@ -3739,7 +3740,13 @@ function switchTab(tab){
      Rendering first, as this used to, meant the click produced nothing at all for ~66ms
      and the animation only began afterwards. The work is the same either way; what
      changes is that the nav answers the tap before it starts. */
-  const seq=++switchTab._seq;
+  /* A plain module-scope counter, NOT a property on switchTab. The app-shell IIFE lower
+     down does `var _origSwitch=switchTab; switchTab=function(...)`, so by the time this
+     body runs the global `switchTab` is the *wrapper* — a different object from the one a
+     `switchTab._seq = 0` initialiser would have been attached to. `++switchTab._seq` was
+     therefore `++undefined` = NaN, and the guard below compared NaN !== NaN, which is
+     always true, so the deferred render never ran once. */
+  const seq=++_switchSeq;
   /* rAF-then-setTimeout, not rAF alone. A CSS transition does not begin at the style
      change — it begins at the first frame *painted* after it, which is when the browser
      assigns its startTime and hands it to the compositor. rAF callbacks run BEFORE that
@@ -3755,14 +3762,14 @@ function switchTab(tab){
     /* A faster switch supersedes this one. Without the guard, tapping through three tabs
        quickly queues three renders and the last two paint into a page nobody is on —
        and the mistakes/papers sub-pills get positioned against the wrong layout. */
-    if(seq!==switchTab._seq||activeTab!==tab)return;
+    if(seq!==_switchSeq||activeTab!==tab)return;
     if(tab==='mistakes'){renderMistakesTab();requestAnimationFrame(()=>requestAnimationFrame(()=>positionPill('mv-tabs','mv-pill')));}
     if(tab==='papers'){renderPaperBrowser();requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));}
     syncSpringSliders();
   },0));
   setTimeout(()=>document.body.classList.remove('tab-switching'),300);
 }
-switchTab._seq=0;
+
 
 /* ===== Mobile app-shell: bottom icon nav + three-dots overflow menu ===== */
 (function(){
