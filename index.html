@@ -7643,6 +7643,30 @@ document.getElementById('gb-year').addEventListener('change',function(){gbActive
 document.getElementById('plog-marks').addEventListener('input',updatePlogGradeHint);
 document.querySelectorAll('#pp-type-seg .pp-type-btn').forEach(function(b){b.addEventListener('click',function(){ppSetType(b.getAttribute('data-type'));});});
 requestAnimationFrame(()=>requestAnimationFrame(positionPpPill));
+
+/* ---- keep every segmented control's pill on its active button ----
+   The three strips span their column now, so their width tracks the window; their pills
+   are positioned in JS from the active button's offsetLeft/offsetWidth, and nothing was
+   repositioning them on a resize. That never showed while the strips were fit-content —
+   their size barely changed — but full-width means a resize strands every one of them.
+
+   An observer rather than a resize listener, for the same reason the exam caches key off a
+   signature rather than an invalidate call: it catches every cause, not the one cause
+   somebody remembered. A window resize, the orientation flip between rail and bottom bar,
+   a webfont finishing and re-measuring the labels, or the buttons themselves changing all
+   look identical to it. The pill is absolutely positioned inside the strip, so moving it
+   cannot resize the strip and feed the observer its own output. */
+(function(){
+  if(typeof ResizeObserver!=='function')return;   // older Safari simply keeps today's behaviour
+  var STRIPS=[['mv-tabs','mv-pill'],['trend-range-tabs','trend-range-pill'],['pp-type-seg','pp-pill']];
+  var ro=new ResizeObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.target.id==='pp-type-seg'){ positionPpPill(); return; }
+      for(var i=0;i<STRIPS.length;i++) if(STRIPS[i][0]===e.target.id) positionPill(STRIPS[i][0],STRIPS[i][1]);
+    });
+  });
+  STRIPS.forEach(function(s){ var el=document.getElementById(s[0]); if(el) ro.observe(el); });
+})();
 document.getElementById('paperperf-close').addEventListener('click',closePaperPerf);
 document.getElementById('paperperf-overlay').addEventListener('click',function(e){if(e.target===this)closePaperPerf();});
 document.getElementById('perf-module').addEventListener('change',renderPerfCharts);

@@ -770,8 +770,12 @@ main,.tab-content{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .img-preview{width:60px;height:60px;object-fit:cover;border-radius:var(--r-xs);border:1px solid var(--border2);}
 .add-btn{align-self:flex-end;font-size:var(--fs-sm);padding:6px 16px;border-radius:var(--r-sm);background:var(--grad);border:none;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:filter var(--t-fast);}
 .add-btn:hover{filter:brightness(1.1);}
-.mv-tabs{display:flex;gap:0;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden;margin-bottom:16px;width:fit-content;position:relative;}
-.mv-tab{font-size:var(--fs-xs);padding:4px 12px;background:transparent;border:none;color:var(--muted);cursor:pointer;transition:color var(--t-base);font-family:'Inter',sans-serif;position:relative;z-index:1;}
+/* Spans the column like every other section on the page. It was width:fit-content, so on
+   a wide window it sat as a 310px stub against 1136px of content beside it — the most
+   visible way Mistakes failed to match the Checklist. Five short labels, so equal shares
+   fit at any width the rail leaves. */
+.mv-tabs{display:flex;gap:0;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden;margin-bottom:16px;width:100%;position:relative;}
+.mv-tab{flex:1 1 0;min-width:0;white-space:nowrap;font-size:var(--fs-xs);padding:4px 12px;background:transparent;border:none;color:var(--muted);cursor:pointer;transition:color var(--t-base);font-family:'Inter',sans-serif;position:relative;z-index:1;}
 .mv-tab.active{background:linear-gradient(90deg,var(--spectrum));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600;}
 .mv-pill{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(248,113,113,.18),rgba(251,146,60,.12),rgba(251,191,36,.1),rgba(52,211,153,.12),rgba(96,165,250,.18));pointer-events:none;z-index:0;transition:left var(--t-base) var(--ease),width var(--t-base) var(--ease);}
 .reason-chart{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;}
@@ -1548,8 +1552,13 @@ html{scroll-behavior:smooth;scrollbar-gutter:stable;}
 
 /* top action bar */
 .pp-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
-.pp-type-seg{display:inline-flex;position:relative;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);padding:2px;gap:2px;margin-bottom:16px;}
-.pp-type-btn{font-family:'Inter',sans-serif;font-size:var(--fs-sm);font-weight:500;padding:8px 16px;border-radius:var(--r-sm);border:none;background:transparent;color:var(--muted);cursor:pointer;transition:color var(--t-base);position:relative;z-index:1;}
+/* display:flex, not inline-flex — inline-flex shrink-wraps, which left this at 611px
+   beside 1136px of content. The buttons grow to share whatever room there is and never
+   shrink below their own text, so a window too narrow for all six scrolls instead of
+   crushing them; the mobile block already sets that up and it now applies at every width. */
+.pp-type-seg{display:flex;overflow-x:auto;scrollbar-width:none;position:relative;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);padding:2px;gap:2px;margin-bottom:16px;}
+.pp-type-btn{flex:1 1 auto;min-width:max-content;white-space:nowrap;font-family:'Inter',sans-serif;font-size:var(--fs-sm);font-weight:500;padding:8px 16px;border-radius:var(--r-sm);border:none;background:transparent;color:var(--muted);cursor:pointer;transition:color var(--t-base);position:relative;z-index:1;}
+.pp-type-seg::-webkit-scrollbar{display:none;}
 .pp-type-btn:hover{color:var(--text);}
 .pp-type-btn.active{background:transparent;color:#fff;}
 .pp-pill{position:absolute;top:3px;bottom:3px;border-radius:var(--r-sm);background:var(--grad);pointer-events:none;z-index:0;transition:left var(--t-base) var(--ease),width var(--t-base) var(--ease);}
