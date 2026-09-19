@@ -2919,9 +2919,15 @@ function tutorGoPractise(topic){
   if(typeof switchTab==='function')switchTab('checklist');
   if(typeof openModal==='function')openModal(topic,false);
 }
+/* The tutor assessed an A-Level topic, so the mistake it hands over belongs in the A-Level
+   logbook — whichever one the Mistakes page happened to be left on. Without this the topic
+   below is written into a hidden select and ignored, and the entry lands untagged in a custom
+   logbook: the one place a logbook can reach outside its own page, because it is the only
+   caller that fills this form from elsewhere. */
 function tutorLogMistake(topic){
   closeTutor();
   if(typeof switchTab==='function')switchTab('mistakes');
+  if(typeof mkSetActive==='function' && !mkIsMain(mkActive)) mkSetActive(MK_MAIN);
   setTimeout(function(){
     var sel=document.getElementById('m-topic-sel');
     if(sel){ sel.value=topic; if(sel.value!==topic){ /* topic not in active list */ } }
@@ -8589,7 +8595,10 @@ if(window.MSH_TEST) (function(){
     if(c){
       const studied=activeTopics().filter(t=>sr[t.name]).length;
       const due=activeTopics().filter(t=>{const s=statusFor(t.name);return s==='due'||s==='overdue';}).length;
-      c.textContent=studied+' studied · '+due+' due/overdue · '+mistakes.length+' mistakes · '+paperLog.length+' papers';
+      // A-Level count, to match the three figures beside it. A custom logbook contributes
+      // nothing to any of them, so including its entries here made the row disagree with itself.
+      const mkN=mkEntries(MK_MAIN).length, otherN=mistakes.length-mkN;
+      c.textContent=studied+' studied · '+due+' due/overdue · '+mkN+' mistakes'+(otherN?(' (+'+otherN+' other logbooks)'):'')+' · '+paperLog.length+' papers';
     }
     const sel=document.getElementById('msh-test-topic');
     if(sel&&sel.value) mshTestInspect(sel.value);

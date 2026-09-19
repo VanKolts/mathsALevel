@@ -191,6 +191,41 @@ const NINE  = [UKMT(0),UKMT(1),UKMT(2),UKMT(3),UKMT(4),UKMT(5),UKMT(6),UKMT(7),U
     'it merges through mergeList as kind "logbooks", not as a last-write-wins blob');
 }
 
+/* ---- 10. no NEW unscoped read of the mistake list --------------------------
+   The gates above cover the two functions that reach FSRS. They say nothing about the next
+   feature someone writes, and the whole class of bug here is a read that forgets to scope —
+   `mistakes.forEach(...)` where `mkEntries(...)` was meant. That failure is silent: the count
+   is simply too high, or an A-Level surface quietly includes UKMT entries.
+
+   So every *aggregate* read of the raw binding is enumerated. Scoped reads go through
+   mkEntries(); by-id reads (find / findIndex / an index) are inherently safe because they
+   address one record. What is left is short enough to list, and a new entry has to be added
+   here deliberately — which is the point: the check cannot tell right from wrong, but it can
+   refuse to let one appear without someone looking at it. */
+{
+  const RISK = /(?:\[\.\.\.mistakes\]|\bof\s+mistakes\b|\bmistakes\s*\.\s*(?:forEach|length|map|reduce|sort|some|every|slice|filter|concat))/;
+  // signature → why this one is allowed to read every logbook
+  const ALLOWED = [
+    ['function mkEntries',        'the scoping helper itself'],
+    ['for(const m of mistakes){', 'mistakeLoad + mistakeEventsByTopic — both gate on col in their first line'],
+    ['mkColOf(m)!==gone',         'deleting a logbook, which deliberately spans the whole list'],
+    ['return m.img;',             'migrating legacy inline photos — a storage concern, logbook-blind on purpose'],
+    ['x.id!==m.id',               'deleting one entry by id'],
+    ['mistakes.length-mkN',       'the sandbox counter, which reports the other logbooks separately'],
+  ];
+  const lines = html.split('\n');
+  const hits = [];
+  lines.forEach((l,i)=>{ if(RISK.test(l)) hits.push({n:i+1, t:l.trim()}); });
+  const unexplained = hits.filter(h => !ALLOWED.some(a => h.t.includes(a[0])));
+  check(unexplained.length===0,
+    'every aggregate read of `mistakes` is accounted for — unlisted: ' +
+      (unexplained.map(h=>'line '+h.n+' «'+h.t.slice(0,70)+'»').join('; ') || 'none'));
+  // and the list must not rot the other way: an entry here that matches nothing is a stale rule
+  const dead = ALLOWED.filter(a => !hits.some(h => h.t.includes(a[0])));
+  check(dead.length===0,
+    'no stale entries in the allow-list — unmatched: ' + (dead.map(a=>a[0]).join('; ') || 'none'));
+}
+
 console.log('\nLogbook isolation — only the A-Level logbook reaches the engine\n');
 fails.forEach(f=>console.log('  FAIL  '+f));
 if(!fail) console.log('  ok   all '+pass+' assertions passed\n');

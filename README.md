@@ -335,6 +335,18 @@ Three things the implementation has to get right:
 
 Two consequences worth knowing. A mistake dated **before the topic's first review** is a no-op either way — `buildTimeline()` has nothing for it to modify — so moving it changes nothing and the toast says nothing. And a move **is** an edit: it bumps `modified`, so the merge propagates it to every device as an ordinary last-write-wins edit on one record, with no new key and no tombstone.
 
+#### What a custom logbook reaches — the full audit
+
+Every read of the mistake list, walked 2026-09-19. **Isolated:** both FSRS channels (`mistakeEventsByTopic`, `mistakeLoad`) and therefore everything downstream of `memoryFor()` — recall, due date, status, mastery, Checklist ordering, the nav due badge, the review panel, the study modal's forecast, its evidence trail and its `renderEvidenceQuality()` line, the Statistics overlay, and the planner's `_weakScore()`; the Leaks report and the topic wheel (`mkEntries(MK_MAIN)`); Log, Reasons, Trend and the re-attempt pool (scoped to the logbook on screen); `applyChapterRenames()`, which skips a record whose `topic` is `''`; mistakes created by the per-question paper logger, written with no `col`; and the **study streak**, which `bumpStreak()` advances only from `saveTopicStudied()` — logging a mistake in any logbook has never touched it.
+
+**Two leaks were found and fixed, and one is inherent:**
+
+- **`tutorLogMistake()` was the real one.** The AI tutor's *"✕ Log a mistake here"* is the only caller that fills the add form from outside the Mistakes page: it switched tab and wrote the assessed topic into `#m-topic-sel`. With a custom logbook open that select is hidden and `topic` is written as `''`, so a mistake the tutor raised about *9.1 The cosine rule* landed in **UKMT practice, untagged, never reaching the engine** — reproduced before fixing. It now forces `mkSetActive(MK_MAIN)` first.
+- **The test-mode sandbox counter** printed a cross-logbook `mistakes.length` beside three A-Level figures, so the row disagreed with itself. It reports the A-Level count, with any others named separately.
+- **Storage and sync bytes are genuinely shared** and cannot not be: custom entries live in `alevel-mistakes-v2`, so they occupy the same localStorage quota and ride in the same Firestore document. Measured on the heavy seed, 4 custom entries were **1,153 bytes of 51,877** (~2%), plus 196 bytes for the logbook list. Photos stay in IndexedDB and never enter either.
+
+**The guard against the next one.** An unscoped read is silent — a count merely too high — so the suite now enumerates every *aggregate* read of the raw binding (`forEach`, `length`, `map`, `filter`, spread, `for…of`) against an allow-list of six, each with a stated reason. Adding a seventh fails the build until someone writes down why it is allowed; deleting one fails it as a stale rule. By-id reads are exempt, being inherently single-record.
+
 ### 4. 📉 "Where I lost marks" (Leaks report) — inside Progress/Mistakes
 **Visual:** turns all your logged papers into a ranked report — **marks lost per topic**, a **grade-impact headline** ("these leaks cost you ~1 grade"), and a **"revise first" ordering** by how often each topic bleeds marks.
 
