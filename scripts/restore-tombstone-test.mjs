@@ -13,7 +13,7 @@
  * offers was the one that did not work.
  *
  * The fix is `mhRestoreFromBackup()`: an `add` stamp of now for every id in the backup,
- * across all five kinds the export carries. That is the same mechanism `saveTopicStudied()`
+ * across all six kinds the export carries. That is the same mechanism `saveTopicStudied()`
  * already uses to revive a topic you study again after resetting it — an add stamp newer
  * than the del stamp beats it on every device, not just this one.
  *
@@ -86,11 +86,12 @@ const backup = {
   paperLog: [{ id:'p1', date:'2026-06-05', module:'alevel' }],
   favourites: ['res-7'],
   notes: { [TOPIC]: 'watch the discriminant' },
+  logbooks: [{ id:'lb1', name:'UKMT practice', date:'2026-05-20', modified: 1 }],
 };
 // The other device's copy — it never heard about the reset and still holds everything.
 const remote = {
   sr: backup.sr, mistakes: backup.mistakes, paperLog: backup.paperLog,
-  favs: backup.favourites, notes: backup.notes,
+  favs: backup.favourites, notes: backup.notes, logbooks: backup.logbooks,
 };
 
 /* ---- 1. the hazard is real: a tombstone alone kills the restored record ---- */
@@ -111,9 +112,10 @@ const remote = {
   A.mhTombstone('favs', 'res-7');
   A.mhTombstone('mistakes', 'm1');
   A.mhTombstone('papers', 'p1');
+  A.mhTombstone('logbooks', 'lb1');
 
   const n = A.mhRestoreFromBackup(backup);
-  check(n === 5, `restore must revive all five kinds, revived ${n}`);
+  check(n === 6, `restore must revive all six kinds, revived ${n}`);
 
   const meta = A.mergeMeta(ctx.syncMeta, {});
   check(!!A.mergeSr(backup.sr, remote.sr, meta)[TOPIC],
@@ -124,6 +126,10 @@ const remote = {
     'papers: the restored paper must survive the merge');
   check(A.mergeSet(backup.favourites, remote.favs, meta, 'favs').length === 1,
     'favs: the restored favourite must survive the merge');
+  /* A logbook is the sixth kind, and the one whose loss is worst: the entries pointing at it
+     survive the merge on their own but have nothing left to name them. */
+  check(A.mergeList(backup.logbooks, remote.logbooks, meta, 'logbooks').length === 1,
+    'logbooks: the restored logbook must survive the merge');
 }
 
 /* ---- 3. it must beat the tombstone on the OTHER device too ----------------- */
@@ -158,7 +164,7 @@ const remote = {
 {
   reset();
   const n = A.mhRestoreFromBackup(backup);
-  check(n === 5, 'restoring with nothing tombstoned is still well-defined');
+  check(n === 6, 'restoring with nothing tombstoned is still well-defined');
   const meta = A.mergeMeta(ctx.syncMeta, {});
   check(!!A.mergeSr(backup.sr, remote.sr, meta)[TOPIC], 'and changes nothing about the outcome');
   reset();
@@ -172,7 +178,7 @@ const remote = {
 console.log(`\nBackup-restore vs tombstones\n`);
 if(fail===0){
   console.log('  ok  the trap is real: a tombstone alone drops a restored record');
-  console.log('  ok  restoring revives all five kinds the export carries');
+  console.log('  ok  restoring revives all six kinds the export carries');
   console.log('  ok  the add stamp beats the tombstone on the other device, in both merge orders');
   console.log('  ok  a restore does not resurrect what the backup never had');
   console.log('  ok  harmless on a clean ledger, and on partial or malformed input');

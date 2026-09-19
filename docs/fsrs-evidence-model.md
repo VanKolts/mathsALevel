@@ -435,6 +435,35 @@ Verified: the modal's per-grade forecast is now bit-identical to what Save write
 
 `scripts/fsrs-replay-test.mjs` runs 500 randomised histories and is wired into `npm test`, `scripts/deploy.sh` and CI. It asserts order-independence under the `(date,id)` sort that sync depends on, purity of `applyReview`, and — structurally — that all three call sites delegate rather than keeping a second copy of the model. It was mutation-tested against three regressions (a re-inlined step in `saveTopicStudied`, a reintroduced `effectiveD`, and a hidden accumulator); all three are caught.
 
+### What is *not* evidence — logbooks, 2026-09-19
+
+The model above asks how much each signal should move the needle. It never asked which
+mistakes are signals at all, because until now every mistake in the app was about an A-Level
+topic by construction — the form had a 315-item dropdown and nothing else.
+
+[Logbooks](../README.md#logbooks--parallel-mistake-logs) break that. A mistake in a custom
+logbook (UKMT practice, an olympiad, another subject) is a *record*, not an observation about
+the student's memory of a specification topic: it has no topic, and the retrieval it failed
+was not a retrieval of anything on the timeline. So it is excluded before the timeline is
+built, rather than weighted low.
+
+That is the right shape, not a compromise. A near-zero `MISTAKE_EVIDENCE` entry would have
+been a claim that a UKMT slip is weak evidence about an A-Level topic; the truth is that it is
+evidence about a different thing entirely, and §2's timeline has no place to put it. The
+exclusion is two `continue` statements, in `mistakeEventsByTopic()` (the stability channel of
+§3) and `mistakeLoad()` (the soft channel of §6) — the only two functions that read the
+mistake list on behalf of the engine.
+
+Sync (§7) is untouched: the field rides on a record the merge already handles whole, and
+replay stays pure because `col` is a constant of the record, not a function of `today()`.
+Migration (§8) is likewise a no-op — an absent `col` reads as A-Level, which is what every
+record written before this change was.
+
+`scripts/logbook-isolation-test.mjs` pins it, and its fixtures deliberately give each custom
+entry a **real topic name** so they distinguish the `col` check from the cheaper `!m.topic`
+one that would pass by coincidence today. It carries a control as well, since "memory is
+unchanged" would also pass against an engine that ignored mistakes altogether.
+
 ---
 
 *Sources: [Newman's Error Analysis (ERIC)](https://files.eric.ed.gov/fulltext/EJ1488529.pdf) · [A technical explanation of FSRS](https://expertium.github.io/Algorithm.html) · [srs-benchmark](https://github.com/open-spaced-repetition/srs-benchmark)*

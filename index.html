@@ -205,6 +205,26 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
 <!--            MISTAKES TAB             -->
 <div class="page" id="page-mistakes">
   <div class="tab-content">
+    <!-- Logbooks. Parallel mistake logs living in the same array, told apart by `col`.
+         The built-in A-Level one is the only one wired to the memory engine; a custom
+         logbook (UKMT practice, an olympiad, another subject) has no topic and never
+         reaches the scheduler, but keeps everything else - photo, answer, category,
+         severity, the re-attempt loop. -->
+    <div class="mk-book-bar" id="mk-book-bar">
+      <span class="mk-book-lbl">Logbook</span>
+      <div class="mk-book-chips" id="mk-book-chips" role="tablist" aria-label="Mistake logbook"></div>
+      <div class="mk-book-acts">
+        <button class="mk-book-act" id="mk-book-new">+ New</button>
+        <button class="mk-book-act" id="mk-book-rename" style="display:none">Rename</button>
+        <button class="mk-book-act mk-book-danger" id="mk-book-delete" style="display:none">Delete</button>
+      </div>
+    </div>
+    <div class="mk-book-edit" id="mk-book-edit" style="display:none">
+      <input type="text" class="form-input" id="mk-book-name" maxlength="40" placeholder="e.g. UKMT practice" aria-label="Logbook name"/>
+      <button class="mk-book-save" id="mk-book-save">Save</button>
+      <button class="mk-book-cancel" id="mk-book-cancel">Cancel</button>
+    </div>
+    <div class="mk-book-note" id="mk-book-note" style="display:none"></div>
     <!-- Re-attempt loop: a random detailed mistake with a photo, surfaced to redo -->
     <div class="reattempt-card" id="m-reattempt" style="display:none">
       <div class="reattempt-hdr">
@@ -234,7 +254,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       </div>
       <div class="m-mode-hint" id="m-mode-hint">A fast note — just the topic and what went wrong.</div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="m-topic-group">
           <label class="form-lbl">Topic</label>
           <select class="form-select" id="m-topic-sel"></select>
         </div>
@@ -1017,7 +1037,7 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
     </div>
     <div class="stats-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="em-topic-group">
           <label class="form-lbl">Topic</label>
           <select class="form-select" id="em-topic-sel"></select>
         </div>
@@ -2360,6 +2380,31 @@ function applyChapterRenames(){
 }
 applyChapterRenames();
 let sr={}, mistakes=[], favourites=new Set(), notes={}, fmOptions=new Set(), paperLog=[];
+/* ---- LOGBOOKS ---------------------------------------------------------------------
+   A logbook is a parallel mistake log. There is one built-in, `alevel`, and any number of
+   custom ones the student adds (UKMT practice, an olympiad, another subject).
+
+   They live in the SAME array, told apart by an optional `col` field. That is deliberate:
+   `alevel-mistakes-v2` already merges by id with tombstones, already exports, already
+   restores, and already has its images in IndexedDB. A second storage key would have had to
+   reimplement every one of those, and each reimplementation is a place for the two to drift.
+   An absent `col` means the built-in logbook, so every record written before this existed
+   keeps working untouched and there is no migration.
+
+   The one hard rule: **only the built-in logbook reaches the memory engine.** A UKMT slip is
+   not evidence about an A-Level topic's stability - it has no topic at all. The gate lives in
+   exactly two functions, mistakeEventsByTopic() and mistakeLoad(), because those are the only
+   two doors from the mistake list into FSRS. */
+const MK_MAIN='alevel';
+const MK_MAIN_NAME='A-Level Maths';
+let mkLogbooks=[];          // custom logbooks only; the built-in one is implicit
+let mkActive=MK_MAIN;       // which one the Mistakes page is showing
+function mkColOf(m){ return (m&&m.col)||MK_MAIN; }
+function mkIsMain(id){ return !id||id===MK_MAIN; }
+function mkBook(id){ return mkIsMain(id)?null:mkLogbooks.find(function(b){return b.id===id;}); }
+function mkNameOf(id){ if(mkIsMain(id))return MK_MAIN_NAME; var b=mkBook(id); return b?b.name:'Unknown logbook'; }
+// Entries in one logbook. Defaults to the one on screen, which is what every view wants.
+function mkEntries(id){ var want=id||mkActive; return mistakes.filter(function(m){ return mkColOf(m)===want; }); }
 /* ---- Sync metadata: tombstones + modification stamps ------------------------------
    Two devices are merged by unioning their records, and a union can never express a
    deletion: anything you remove locally is simply re-added from the other device's copy.
@@ -2418,6 +2463,9 @@ loadSyncMeta();
 
 function loadState(){
   try{mistakes=JSON.parse(localStorage.getItem('alevel-mistakes-v2')||'[]');}catch(e){mistakes=[];}
+  try{mkLogbooks=JSON.parse(localStorage.getItem('alevel-mistake-logbooks-v1')||'[]');}catch(e){mkLogbooks=[];}
+  if(!Array.isArray(mkLogbooks))mkLogbooks=[];
+  mkLogbooks=mkLogbooks.filter(function(b){ return b&&b.id&&b.id!==MK_MAIN&&typeof b.name==='string'; });
   try{paperLog=JSON.parse(localStorage.getItem('alevel-paperlog-v1')||'[]');}catch(e){paperLog=[];}
   try{const f=JSON.parse(localStorage.getItem('alevel-favs-v1')||'[]');favourites=new Set(f);}catch(e){favourites=new Set();}
   try{notes=JSON.parse(localStorage.getItem('alevel-notes-v1')||'{}');}catch(e){notes={};}
@@ -2459,6 +2507,7 @@ function saveState(){
   const batch=[
     ['alevel-sr-v5',JSON.stringify(sr)],
     ['alevel-mistakes-v2',JSON.stringify(mistakes)],
+    ['alevel-mistake-logbooks-v1',JSON.stringify(mkLogbooks)],
     ['alevel-paperlog-v1',JSON.stringify(paperLog)],
     ['alevel-favs-v1',JSON.stringify([...favourites])],
     ['alevel-notes-v1',JSON.stringify(notes)],
@@ -3137,6 +3186,7 @@ function mistakeLoad(name){
   if(hit!==undefined) return hit;
   let load=0;
   for(const m of mistakes){
+    if(mkColOf(m)!==MK_MAIN) continue;   // only the A-Level logbook is evidence about A-Level memory
     if(m.topic!==name) continue;
     const catSev=(MISTAKE_SEVERITY[m.cat]!=null)?MISTAKE_SEVERITY[m.cat]:0.4;
     const userSev=(m.severity||3)/3; // 1→0.33×, 3→1×, 5→1.67×
@@ -3521,6 +3571,10 @@ function mistakeEventsByTopic(){
   if(_mistIdx) return _mistIdx;
   const idx=Object.create(null);
   for(const m of mistakes){
+    /* The two gates in this file. A custom logbook has no topic, so `!m.topic` would skip it
+       anyway - but relying on that would mean the isolation held by accident, and the day a
+       logbook gains a topic field it would break silently. Say it. */
+    if(mkColOf(m)!==MK_MAIN) continue;
     if(!m||!m.topic||typeof m.date!=='string') continue;
     const E=(MISTAKE_EVIDENCE[m.cat]!=null)?MISTAKE_EVIDENCE[m.cat]:MISTAKE_EVIDENCE_DEFAULT;
     (idx[m.topic]||(idx[m.topic]=[])).push({date:m.date,id:String(m.id||''),E:E,cat:m.cat});
@@ -4976,7 +5030,7 @@ function toast(msg, duration){
 // EXPORT / IMPORT
 //                                                           
 // Manual backup file (data also auto-syncs to the cloud). Buttons live in Settings.
-/* Un-tombstone everything a restored backup contains, across all five kinds the export
+/* Un-tombstone everything a restored backup contains, across all six kinds the export
    carries. Deliberately not just 'sr': the same trap applies to a mistake, a paper, a
    favourite or a note you deleted on another device — the merge would drop each one again
    the moment it arrived. Fixing only the kind that prompted it would leave four branches of
@@ -4989,11 +5043,15 @@ function mhRestoreFromBackup(data){
   revive('notes', Object.keys(data.notes||{}));
   revive('favs',  Array.isArray(data.favourites)?data.favourites:[]);
   revive('mistakes',(Array.isArray(data.mistakes)?data.mistakes:[]).map(function(m){return m&&m.id;}));
+  // Sixth kind. A restored logbook hits the same wall as a restored mistake: the tombstone from
+  // its deletion is newer than the backup, so without an add stamp the next snapshot deletes it
+  // again - and takes the entries pointing at it out of reach with it.
+  revive('logbooks', (Array.isArray(data.logbooks)?data.logbooks:[]).map(function(b){return b&&b.id;}));
   revive('papers',  (Array.isArray(data.paperLog)?data.paperLog:[]).map(function(p){return p&&p.id;}));
   return n;
 }
 function doExport(){
-  const data={sr,mistakes,favourites:[...favourites],notes,paperLog,exported:today()};
+  const data={sr,mistakes,logbooks:mkLogbooks,favourites:[...favourites],notes,paperLog,exported:today()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='alevel-maths-backup-'+today()+'.json';a.click();
@@ -5009,6 +5067,7 @@ function doExport(){
         const data=JSON.parse(e.target.result);
         if(data.sr) sr=data.sr;
         if(data.mistakes) mistakes=data.mistakes;
+        if(Array.isArray(data.logbooks)) mkLogbooks=data.logbooks.filter(function(b){return b&&b.id&&b.id!==MK_MAIN;});
         if(data.favourites) favourites=new Set(data.favourites);
         if(data.notes) notes=data.notes;
         if(data.paperLog) paperLog=data.paperLog;
@@ -5025,8 +5084,10 @@ function doExport(){
            already uses to revive a topic you study again after resetting it. */
         mhRestoreFromBackup(data);
         sanitizeAllSR();
+        if(!mkIsMain(mkActive)&&!mkBook(mkActive)) mkActive=MK_MAIN;
         saveState();renderReviewPanel();renderAll();
-        if(activeTab==='mistakes')renderMistakesTab();
+        mkApplyFormMode();mkApplyTabs();
+        if(activeTab==='mistakes')renderMistakesTab(); else renderLogbookBar();
         if(activeTab==='resources')renderResources();
         alert('Data imported successfully!');
       }catch(err){alert('Could not read file. Make sure it is a valid backup JSON.');}
@@ -6054,6 +6115,154 @@ function populateMistakeTopics(){
 }
 populateMistakeTopics();
 msel.addEventListener('change',function(){ rememberMistakeTopic(msel.value); });
+
+/* ===================== LOGBOOKS - the bar, the form, the tabs =====================
+   Everything below decides what the Mistakes page shows for the logbook on screen. The
+   data rules live with the data (mkColOf / mkEntries, near the declarations); this is
+   presentation only.
+
+   Which logbook is open is a UI preference, so it is device-local on purpose — the same
+   reasoning as msh-last-mistake-topic. The logbooks themselves *are* synced: a record
+   tagged to a logbook the other device has never heard of would otherwise render under
+   "Unknown logbook" until you re-created it by hand. */
+const MK_ACTIVE_KEY='msh-mistake-logbook';
+function mkEmptyText(){
+  return mkIsMain(mkActive) ? 'No mistakes logged yet.'
+                            : 'Nothing logged in '+mkNameOf(mkActive)+' yet.';
+}
+function mkAllBooks(){ return [{id:MK_MAIN,name:MK_MAIN_NAME}].concat(mkLogbooks); }
+
+function renderLogbookBar(){
+  const chips=document.getElementById('mk-book-chips'); if(!chips)return;
+  chips.innerHTML='';
+  mkAllBooks().forEach(function(b){
+    const btn=document.createElement('button');
+    btn.className='mk-book-chip'+(b.id===mkActive?' active':'');
+    btn.textContent=b.name;
+    btn.setAttribute('role','tab');
+    btn.setAttribute('aria-selected',b.id===mkActive?'true':'false');
+    const n=mkEntries(b.id).length;
+    if(n){ const c=document.createElement('span');c.className='mk-book-n';c.textContent=n;btn.appendChild(c); }
+    btn.addEventListener('click',function(){ mkSetActive(b.id); });
+    chips.appendChild(btn);
+  });
+  const custom=!mkIsMain(mkActive);
+  document.getElementById('mk-book-rename').style.display=custom?'':'none';
+  document.getElementById('mk-book-delete').style.display=custom?'':'none';
+  const note=document.getElementById('mk-book-note');
+  note.style.display=custom?'':'none';
+  note.textContent=custom
+    ? mkNameOf(mkActive)+' is kept separately: no topics, and nothing here changes what the Checklist tells you to revise.'
+    : '';
+}
+
+/* The topic select is the one field a custom logbook does not have. Hiding it is not
+   cosmetic — finishAddMistake() writes an empty topic for these, so a visible-but-ignored
+   dropdown would be a control that silently does nothing. */
+function mkApplyFormMode(){
+  const main=mkIsMain(mkActive);
+  const tg=document.getElementById('m-topic-group'); if(tg)tg.style.display=main?'':'none';
+  setMistakeMode(mMode);   // re-writes the hint, which names the topic on the main logbook
+}
+
+/* Two of the five breakdown tabs are about the syllabus: the topic wheel and the leaks
+   report, which reads marks lost per A-Level topic. Neither can say anything about a
+   logbook with no topics, so they are removed rather than shown empty. */
+const MK_MAIN_ONLY_PANELS=['topics','leaks'];
+function mkApplyTabs(){
+  const main=mkIsMain(mkActive);
+  MK_MAIN_ONLY_PANELS.forEach(function(v){
+    const b=document.getElementById('mv-'+v+'-btn'); if(b)b.style.display=main?'':'none';
+  });
+  const gt=document.querySelector('.mk-filter-btn[data-group="topic"]');
+  if(gt)gt.style.display=main?'':'none';
+  if(!main&&mkGroup==='topic'){
+    mkGroup='none';
+    document.querySelectorAll('.mk-filter-btn[data-group]').forEach(function(x){
+      x.classList.toggle('active',x.getAttribute('data-group')==='none');
+    });
+  }
+  if(!main&&MK_MAIN_ONLY_PANELS.indexOf(mvView)>=0) switchMvTab('log');
+  else positionPill('mv-tabs','mv-pill');
+}
+
+function mkSetActive(id){
+  if(!mkIsMain(id)&&!mkBook(id)) id=MK_MAIN;
+  mkActive=id;
+  try{ localStorage.setItem(MK_ACTIVE_KEY,id); }catch(e){}
+  mkCancelEdit();
+  mkApplyFormMode();
+  mkApplyTabs();
+  renderMistakesTab();
+}
+
+// ---- new / rename, through one inline row rather than a prompt() ----
+let mkEditing=null;   // null = closed, 'new' = creating, otherwise the id being renamed
+function mkOpenEdit(mode){
+  mkEditing=mode;
+  const row=document.getElementById('mk-book-edit'), input=document.getElementById('mk-book-name');
+  row.style.display='flex';
+  input.value=(mode==='new')?'':mkNameOf(mode);
+  input.focus(); input.select();
+}
+function mkCancelEdit(){
+  mkEditing=null;
+  const row=document.getElementById('mk-book-edit'); if(row)row.style.display='none';
+}
+function mkCommitEdit(){
+  const input=document.getElementById('mk-book-name');
+  const name=(input.value||'').trim();
+  if(!name){ input.focus(); return; }
+  const clash=mkAllBooks().some(function(b){ return b.id!==mkEditing && b.name.toLowerCase()===name.toLowerCase(); });
+  if(clash){ if(typeof toast==='function')toast('You already have a logbook called that'); input.focus(); return; }
+  if(mkEditing==='new'){
+    const b={id:mhUid(),name:name,date:today(),modified:Date.now()};
+    mkLogbooks.push(b);
+    if(!saveState())return;
+    mkCancelEdit();
+    mkSetActive(b.id);
+    if(typeof toast==='function')toast('Logbook "'+name+'" created');
+  } else {
+    const b=mkBook(mkEditing); if(!b){ mkCancelEdit(); return; }
+    b.name=name; b.modified=Date.now();
+    mhTouch('logbooks',b.id);
+    if(!saveState())return;
+    mkCancelEdit();
+    renderLogbookBar(); mkApplyFormMode(); renderMistakesTab();
+  }
+}
+(function(){
+  document.getElementById('mk-book-new').addEventListener('click',function(){ mkOpenEdit('new'); });
+  document.getElementById('mk-book-rename').addEventListener('click',function(){ mkOpenEdit(mkActive); });
+  document.getElementById('mk-book-save').addEventListener('click',mkCommitEdit);
+  document.getElementById('mk-book-cancel').addEventListener('click',mkCancelEdit);
+  document.getElementById('mk-book-name').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); mkCommitEdit(); }
+    else if(e.key==='Escape'){ e.preventDefault(); mkCancelEdit(); }
+  });
+  /* Deleting a logbook deletes its entries with it. A tombstone per entry, not just a local
+     splice: a union merge cannot express absence, so without them every other device would
+     re-add the lot within seconds. The logbook record itself gets one too. */
+  document.getElementById('mk-book-delete').addEventListener('click',function(){
+    if(mkIsMain(mkActive))return;
+    const name=mkNameOf(mkActive), doomed=mkEntries(mkActive);
+    const msg=doomed.length
+      ? 'Delete the logbook "'+name+'" and its '+doomed.length+' entr'+(doomed.length===1?'y':'ies')+'? This cannot be undone.'
+      : 'Delete the empty logbook "'+name+'"?';
+    if(!confirm(msg))return;
+    const gone=mkActive;
+    doomed.forEach(function(m){ mhForgetImage(m.qImgId); mhTombstone('mistakes',m.id); });
+    mistakes=mistakes.filter(function(m){ return mkColOf(m)!==gone; });
+    mkLogbooks=mkLogbooks.filter(function(b){ return b.id!==gone; });
+    mhTombstone('logbooks',gone);
+    saveState();
+    mkSetActive(MK_MAIN);
+    if(typeof toast==='function')toast('Logbook "'+name+'" deleted');
+  });
+  try{ mkActive=localStorage.getItem(MK_ACTIVE_KEY)||MK_MAIN; }catch(e){ mkActive=MK_MAIN; }
+  if(!mkIsMain(mkActive)&&!mkBook(mkActive)) mkActive=MK_MAIN;
+  renderLogbookBar();
+})();
 document.getElementById('m-date').value=today();
 // Severity slider — add form
 sevUpdateUI(3,'m-sev-lbl','m-sev-pips');
@@ -6169,7 +6378,8 @@ function setMistakeMode(mode){
   document.getElementById('m-detailed-fields').style.display=mode==='detailed'?'block':'none';
   document.getElementById('m-mode-hint').textContent=mode==='detailed'
     ? 'A full record — the question, your worked answer & a photo. These feed the re-attempt loop above.'
-    : 'A fast note — just the topic and what went wrong.';
+    : (mkIsMain(mkActive) ? 'A fast note — just the topic and what went wrong.'
+                          : 'A fast note — what the question was about and what went wrong.');
 }
 document.getElementById('m-mode-quick').addEventListener('click',()=>setMistakeMode('quick'));
 document.getElementById('m-mode-detailed').addEventListener('click',()=>setMistakeMode('detailed'));
@@ -6204,13 +6414,17 @@ document.getElementById('m-img-clear').addEventListener('click',function(){
 
 document.getElementById('add-mistake-btn').addEventListener('click',function(){
   const btn=this;
-  const topic=document.getElementById('m-topic-sel').value;
+  const main=mkIsMain(mkActive);
+  // Outside the A-Level logbook there is no topic, and writing the hidden select's value
+  // would tag a UKMT slip to whichever topic happened to be selected last.
+  const topic=main?document.getElementById('m-topic-sel').value:'';
   const cat=document.getElementById('m-cat-sel').value;
   const text=document.getElementById('m-text').value.trim();
   const date=document.getElementById('m-date').value||today();
   const severity=+document.getElementById('m-severity').value||3;
   if(!text){document.getElementById('m-text').focus();return;}
   const m={id:mhUid(),topic,cat,text,date,severity,modified:Date.now()};
+  if(!main) m.col=mkActive;
   if(mMode==='detailed'){
     const question=document.getElementById('m-question').value.trim();
     const answer=document.getElementById('m-answer').value.trim();
@@ -6310,16 +6524,18 @@ document.querySelectorAll('.trend-range-btn').forEach(b=>b.addEventListener('cli
   positionPill('trend-range-tabs','trend-range-pill');
   renderTrendChart(mvTrendRange);
 }));
+mkApplyFormMode(); mkApplyTabs();
 setTimeout(()=>{positionPill('mv-tabs','mv-pill');positionPill('trend-range-tabs','trend-range-pill');},120);
 
 function renderReasonChart(){
   const el=document.getElementById('mv-reasons');
-  if(!mistakes.length){el.innerHTML='<div class="mistakes-empty">No mistakes logged yet.</div>';return;}
+  const rows=mkEntries();
+  if(!rows.length){el.innerHTML='<div class="mistakes-empty">'+mkEmptyText()+'</div>';return;}
   const counts={};
-  mistakes.forEach(m=>{counts[m.cat]=(counts[m.cat]||0)+1;});
+  rows.forEach(m=>{counts[m.cat]=(counts[m.cat]||0)+1;});
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   const max=entries[0][1];
-  const total=mistakes.length;
+  const total=rows.length;
   let html='<div class="reason-chart">';
   entries.forEach(([cat,n])=>{
     const pct=(n/max*100).toFixed(1);
@@ -6365,7 +6581,7 @@ function leakRows(){
     var s=paperTopicStats[tp], r=ensure(tp);
     r.got=s.got; r.max=s.max; r.lost=Math.max(0,s.max-s.got); r.attempts=s.attempts.length;
   });
-  mistakes.forEach(function(m){ if(!m.topic)return; var r=ensure(m.topic); r.mistakes++; if(m.cat)r.causes[m.cat]=(r.causes[m.cat]||0)+1; });
+  mkEntries(MK_MAIN).forEach(function(m){ if(!m.topic)return; var r=ensure(m.topic); r.mistakes++; if(m.cat)r.causes[m.cat]=(r.causes[m.cat]||0)+1; });
   var list=Object.keys(rows).map(function(tp){
     var r=rows[tp];
     r.topCause=Object.keys(r.causes).sort(function(a,b){return r.causes[b]-r.causes[a];})[0]||null;
@@ -6476,6 +6692,7 @@ function niceTicks(max,target){
 }
 function renderTrendChart(range){
   const wrap=document.getElementById('mv-trend-chart');
+  const rows=mkEntries();
   const now=new Date();
   const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -6486,7 +6703,7 @@ function renderTrendChart(range){
       const key=ymd(d);   // must match m.date, which is a local calendar day
       buckets.push({key,label:d.getDate()+'',tooltip:DAYS[d.getDay()]+', '+d.getDate()+' '+MN[d.getMonth()],count:0});
     }
-    mistakes.forEach(m=>{const b=buckets.find(x=>x.key===m.date);if(b)b.count++;});
+    rows.forEach(m=>{const b=buckets.find(x=>x.key===m.date);if(b)b.count++;});
   } else if(range==='quarter'){
     for(let i=12;i>=0;i--){
       const end=new Date(now);end.setDate(end.getDate()-i*7);
@@ -6498,7 +6715,7 @@ function renderTrendChart(range){
       buckets.push({start:ymd(s),end:ymd(e),
         label:i%3===0?wkLabel:'',tooltip:'Week of '+rangeStr,count:0});
     }
-    mistakes.forEach(m=>{const b=buckets.find(x=>m.date>=x.start&&m.date<=x.end);if(b)b.count++;});
+    rows.forEach(m=>{const b=buckets.find(x=>m.date>=x.start&&m.date<=x.end);if(b)b.count++;});
   } else {
     for(let i=11;i>=0;i--){
       const d=new Date(now.getFullYear(),now.getMonth()-i,1);
@@ -6506,9 +6723,9 @@ function renderTrendChart(range){
       buckets.push({key,label:MN[d.getMonth()]+(d.getMonth()===0?' '+d.getFullYear():''),
         tooltip:MN[d.getMonth()]+' '+d.getFullYear(),count:0});
     }
-    mistakes.forEach(m=>{const b=buckets.find(x=>m.date.slice(0,7)===x.key);if(b)b.count++;});
+    rows.forEach(m=>{const b=buckets.find(x=>m.date.slice(0,7)===x.key);if(b)b.count++;});
   }
-  if(!mistakes.length){wrap.innerHTML='<div class="mistakes-empty">No mistakes logged yet.</div>';return;}
+  if(!rows.length){wrap.innerHTML='<div class="mistakes-empty">'+mkEmptyText()+'</div>';return;}
   _mvTrendBuckets=buckets;
   const maxC=Math.max(1,...buckets.map(b=>b.count));
   /* Mistake counts are small integers, and quartiles of a small integer repeat: a maximum of
@@ -6570,7 +6787,9 @@ function renderTrendChart(range){
 // (A superseded duplicate implementation was removed here 2026-06-29: it attached a
 //  second click listener to #m-reattempt-ai, causing double Gemini calls after Shuffle.)
 var reattemptCurrent=null;
-function reattemptPool(){ return mistakes.filter(function(m){ return m.answer && (m.qImgId||m.img); }); }
+// Scoped to the logbook on screen: re-attempting a UKMT question while reading the A-Level
+// log would be a surprise, and the card sits inside that logbook's page.
+function reattemptPool(){ return mkEntries().filter(function(m){ return m.answer && (m.qImgId||m.img); }); }
 function renderReattempt(pick){
   var card=document.getElementById('m-reattempt'); if(!card)return;
   var pool=reattemptPool();
@@ -6579,7 +6798,7 @@ function renderReattempt(pick){
   var m=pick||reattemptCurrent;
   if(!m||pool.indexOf(m)<0) m=pool[Math.floor(Math.random()*pool.length)];
   reattemptCurrent=m;
-  document.getElementById('m-reattempt-topic').textContent=m.topic+(m.date?(' · logged '+fmtDate(m.date)):'');
+  document.getElementById('m-reattempt-topic').textContent=(m.topic||mkNameOf(mkColOf(m)))+(m.date?(' · logged '+fmtDate(m.date)):'');
   document.getElementById('m-reattempt-q').textContent=m.question||'(no question text — see the photo)';
   var imgEl=document.getElementById('m-reattempt-img'); imgEl.style.display='none'; imgEl.removeAttribute('src');
   mhResolveImage(m).then(function(src){ if(src&&reattemptCurrent===m){ imgEl.src=src; imgEl.style.display='block'; } });
@@ -6621,16 +6840,18 @@ async function reattemptExplainAI(btn){
 }
 
 function renderMistakesTab(){
+  renderLogbookBar();   // the chips carry per-logbook counts
   renderReattempt();
+  const rows=mkEntries();
   const logList=document.getElementById('mistake-list');logList.innerHTML='';
-  if(!mistakes.length){
-    const em=document.createElement('div');em.className='mistakes-empty';em.textContent='No mistakes logged yet.';logList.appendChild(em);
+  if(!rows.length){
+    const em=document.createElement('div');em.className='mistakes-empty';em.textContent=mkEmptyText();logList.appendChild(em);
     if(mvView==='topics')renderPieChart('mistake');
     if(mvView==='reasons')renderReasonChart();
     if(mvView==='trend')renderTrendChart(mvTrendRange);
     return;
   }
-  const sorted=[...mistakes].sort((a,b)=>{
+  const sorted=[...rows].sort((a,b)=>{
     if(mkSort==='oldest')return a.date.localeCompare(b.date)||a.id-b.id;
     if(mkSort==='sev-high')return ((b.severity||3)-(a.severity||3))||b.date.localeCompare(a.date);
     if(mkSort==='sev-low')return ((a.severity||3)-(b.severity||3))||b.date.localeCompare(a.date);
@@ -6640,14 +6861,16 @@ function renderMistakesTab(){
     const card=document.createElement('div');card.className='m-card';
     const left=document.createElement('div');left.className='m-card-left';
     const topRow=document.createElement('div');topRow.className='m-card-top';
-    const tb=document.createElement('span');tb.className='m-topic-badge';tb.textContent=m.topic;
     const cb=document.createElement('span');cb.className='m-cat-badge';cb.textContent=m.cat;
     const sev=m.severity||3;
     const sevEl=document.createElement('div');sevEl.className='m-card-sev';
     sevEl.title=SEV_LABELS[sev];
     sevEl.innerHTML=Array.from({length:5},(_,i)=>
       `<span class="sev-pip" style="width:6px;height:6px;border-radius:50%;background:${i<sev?SEV_COLORS[sev]:'var(--border2)'}"></span>`).join('');
-    topRow.append(tb,cb,sevEl);
+    // A custom logbook has no topic, so the badge that would name it is simply absent —
+    // rather than an empty chip, which reads as a missing value instead of an inapplicable one.
+    if(m.topic){ const tb=document.createElement('span');tb.className='m-topic-badge';tb.textContent=m.topic;topRow.appendChild(tb); }
+    topRow.append(cb,sevEl);
     const txt=document.createElement('div');txt.className='m-text';txt.textContent=m.text;
     const dt=document.createElement('div');dt.className='m-date';dt.textContent=fmtDate(m.date);
     left.append(topRow);
@@ -6677,7 +6900,7 @@ function renderMistakesTab(){
     card.append(left,actions);
     return card;
   }
-  if(mkGroup==='none'){
+  if(mkGroup==='none'||(mkGroup==='topic'&&!mkIsMain(mkActive))){
     sorted.forEach(m=>logList.appendChild(buildCard(m)));
   } else {
     const key=mkGroup==='type'?'cat':'topic';
@@ -6710,10 +6933,15 @@ function openEditMistake(id){
   if(!m)return;
   editMistakeId=id;
   editPendingImg=null;
+  /* An entry in a custom logbook has no topic, and cannot gain one here: the select would
+     be the only way to move it onto the A-Level timeline, which is a different decision
+     from editing it. Delete and re-log if it is in the wrong logbook. */
+  const emMain=mkIsMain(mkColOf(m));
+  const emtg=document.getElementById('em-topic-group'); if(emtg)emtg.style.display=emMain?'':'none';
   // populate topic select fresh (FM options may have changed)
   const emsel=document.getElementById('em-topic-sel');
   emsel.innerHTML=document.getElementById('m-topic-sel').innerHTML;
-  emsel.value=m.topic;
+  emsel.value=m.topic||'';
   document.getElementById('em-cat-sel').value=m.cat;
   document.getElementById('em-text').value=m.text;
   document.getElementById('em-date').value=m.date||today();
@@ -6777,8 +7005,8 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   let newImg=existing.img||null, newImgId=existing.qImgId||null;
   if(editPendingImg==='clear'){ mhForgetImage(newImgId); newImg=null; newImgId=null; }
   else if(editPendingImg){ newImgId=newImgId||('mq_'+existing.id); mhStoreImage(newImgId,editPendingImg); newImg=null; }
-  mistakes[idx]=Object.assign({},existing,{   // keep question/answer (re-attempt data)
-    topic:document.getElementById('em-topic-sel').value,
+  mistakes[idx]=Object.assign({},existing,{   // keep question/answer, the photo id and `col`
+    topic:mkIsMain(mkColOf(existing))?document.getElementById('em-topic-sel').value:(existing.topic||''),
     cat:document.getElementById('em-cat-sel').value,
     text,
     date:document.getElementById('em-date').value||today(),
@@ -6803,10 +7031,11 @@ function renderPieChart(type){
     const canvas=document.getElementById('pie-canvas');
     const legend=document.getElementById('pie-legend');legend.innerHTML='';
     const ps=document.getElementById('pie-section');
-    if(!mistakes.length){ps.innerHTML='<div class="pie-empty">No mistakes yet.</div>';return;}
+    const rows=mkEntries(MK_MAIN);   // the wheel is by syllabus cluster, so A-Level only
+    if(!rows.length){ps.innerHTML='<div class="pie-empty">No mistakes yet.</div>';return;}
     const counts={};
     activeClusters().forEach(c=>{counts[c.id]=0;});
-    mistakes.forEach(m=>{const t=topicByName(m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
+    rows.forEach(m=>{const t=topicByName(m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
     const entries=activeClusters().map((c,i)=>({id:c.id,name:c.name,count:counts[c.id]||0,color:PIE_COLORS[i%PIE_COLORS.length]})).filter(e=>e.count>0);
     drawDonut(canvas,entries,legend);
   }
@@ -8336,7 +8565,12 @@ if(window.MSH_TEST) (function(){
   }catch(e){ console.warn('[cloud] persistence threw:', e); }
 
   // Everything is synced EXCEPT the Gemini API key, which stays device-local on purpose.
-  var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-paperlog-v1',
+  /* 'alevel-mistake-logbooks-v1' has to travel with 'alevel-mistakes-v2', for the same
+     reason the tombstone ledger does: a record tagged `col:'<id>'` is meaningless on a device
+     that has never seen the logbook that id names. Additive-safe — a device on an older build
+     pushes a store without the key at all, and the merge reads an absent key as "the other
+     side's value stands", never as "clear it". */
+  var SYNC_KEYS=['alevel-sr-v5','alevel-sr-v4','alevel-mistakes-v2','alevel-mistake-logbooks-v1','alevel-paperlog-v1',
     'alevel-favs-v1','alevel-notes-v1','alevel-fm-options-v1','alevel-streak-v1',
     'alevel-exam-date','alevel-onboarded-v1','alevel-plainlang-v1','alevel-pomo-presets-v1',
     'alevel-shortcuts-v1','msh-theme','alevel-track','alevel-paper-dates-v1','alevel-display-name-v1',
@@ -8558,7 +8792,12 @@ if(window.MSH_TEST) (function(){
     return out;
   }
 
-  var LIST_KINDS={'alevel-mistakes-v2':'mistakes','alevel-paperlog-v1':'papers'};
+  /* Logbooks merge as a list, not as a scalar blob. Whole-blob last-write-wins would lose one
+     of two logbooks created on two devices on the same evening - exactly the shape record-level
+     merging exists to avoid. They carry `id`, `date` and `modified`, so mergeList works on them
+     unchanged: union by id, tombstones for deletes, newer `modified` wins a rename. */
+  var LIST_KINDS={'alevel-mistakes-v2':'mistakes','alevel-paperlog-v1':'papers',
+                  'alevel-mistake-logbooks-v1':'logbooks'};
   function mergeStores(local,remote,localMs,remoteMs){
     local=local||{}; remote=remote||{};
     var metaA=pj(local,'alevel-syncmeta-v1',{}), metaB=pj(remote,'alevel-syncmeta-v1',{});

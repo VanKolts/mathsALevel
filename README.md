@@ -296,6 +296,24 @@ The **exam timer opens paused** (`timerState.running=false`, button reads `Start
 
 **Technical:** mistakes live in `localStorage['alevel-mistakes-v2']`. Crucially, they **feed back into scheduling** — since phase 2 of the [evidence model](docs/fsrs-evidence-model.md), each mistake is a dated *observation* replayed on the same timeline as reviews, and it moves the topic's stability directly. The **category**, not the severity, sets how far: one concept gap drops a well-learned topic from 96% to 82% and makes it overdue immediately; a method error takes about three; silly slips barely register. So logging a mistake genuinely changes what the app tells you to revise — see [the engine section](#mistakes-are-evidence-not-just-a-nudge).
 
+#### Logbooks — parallel mistake logs
+
+The page opens on one **logbook** at a time, chosen from a chip bar at the top. There is one built-in, **A-Level Maths** (id `alevel`), and the student can add any number of their own — *UKMT practice*, an olympiad, another subject. A custom logbook is the A-Level one in every respect **except two**: it has no topic selector, and **nothing in it reaches the memory engine**. Everything else is the same form and the same machinery — the eight error categories, the 1–5 severity, Quick and Detailed modes, the question photo in IndexedDB, the worked answer, the re-attempt loop, Explain with AI, edit and delete.
+
+| | A-Level Maths | a custom logbook |
+|---|---|---|
+| Topic selector | yes, 315 topics | none — records are written with `topic:''` |
+| Feeds FSRS | yes (stability + the soft channel) | **no** |
+| Breakdown tabs | Log · Topics · Reasons · Trend · Leaks | Log · Reasons · Trend |
+| Group the log by | none / category / topic | none / category |
+| Photo, answer, re-attempt, AI | yes | yes |
+
+**One array, not two.** A logbook is an optional `col` field on the mistake record; absent means `alevel`. `alevel-mistakes-v2` already merges by id with tombstones, already exports, already restores, and already keeps its photos in IndexedDB — a second storage key would have had to reimplement all four, and each reimplementation is somewhere the two can drift. It also means **no migration**: every record written before logbooks existed reads as A-Level.
+
+**The gate is two lines, in two functions.** `mistakeEventsByTopic()` and `mistakeLoad()` are the only doors from the mistake list into FSRS, and both now skip anything whose `col` is not `alevel`. The check is on `col`, not on `!m.topic` — a topicless record would be skipped downstream anyway, but then the isolation would hold *by accident* and would break silently the day a logbook gained a label field. [`scripts/logbook-isolation-test.mjs`](scripts/logbook-isolation-test.mjs) pins it with fixtures that give every custom entry a **real topic name**, so they fail against the `!m.topic` version. Measured in the running app on the heavy seed: 20 custom entries on real topics at the harshest category leave average recall at **48.8983%**, unchanged to four decimals; the same 20 untagged move it to **47.2574%**.
+
+The **Leaks report and the topic wheel stay A-Level-only** wherever they appear, since both are cut by syllabus topic. The logbook list itself is `alevel-mistake-logbooks-v1`, synced — see [storage](#storage-keys) and [the merge](#how-the-merge-works).
+
 ### 4. 📉 "Where I lost marks" (Leaks report) — inside Progress/Mistakes
 **Visual:** turns all your logged papers into a ranked report — **marks lost per topic**, a **grade-impact headline** ("these leaks cost you ~1 grade"), and a **"revise first" ordering** by how often each topic bleeds marks.
 
@@ -364,7 +382,7 @@ Each topic's **Worksheets on PMT** button resolves through `practiceLinkFor(name
 - **Scope is per component**, resolved through the topic taxonomy. Records whose names are not in the taxonomy — study logged under a pre-rename name, or an import from another build — collect in an *Other topics* bucket, so "select everything" really does clear everything rather than stranding orphans.
 - **The study streak is an opt-in extra**, pre-ticked only on a full reset. It is a single global counter with no per-component meaning, so offering it alongside a partial selection would be a lie about what it does. Clearing it needed a change to the merge — see [the streak's reset stamp](#deletions-the-ledger).
 
-> **Export is the reset's only undo, so importing has to actually work.** It did not. A tombstoned record is dropped by the merge unless it is *newer* than the tombstone (`recDate(rec) > tombDay`), and a backup is by definition older — so Export → Reset → change your mind → Import put everything back on screen and the next snapshot deleted it again, minutes later and silently. `mhRestoreFromBackup()` now writes an `add` stamp for every id the backup carries, across all five kinds the export holds — not just `sr`, since a deleted mistake, paper, favourite or note restored from a backup hits exactly the same wall. Pinned by [`scripts/restore-tombstone-test.mjs`](scripts/restore-tombstone-test.mjs), whose first assertion is that the trap is real. The trap pre-dates the reset — the study modal could always tombstone one topic at a time — but a button that tombstones all 315 at once turns it from theoretical into the likely path.
+> **Export is the reset's only undo, so importing has to actually work.** It did not. A tombstoned record is dropped by the merge unless it is *newer* than the tombstone (`recDate(rec) > tombDay`), and a backup is by definition older — so Export → Reset → change your mind → Import put everything back on screen and the next snapshot deleted it again, minutes later and silently. `mhRestoreFromBackup()` now writes an `add` stamp for every id the backup carries, across all six kinds the export holds (`sr`, notes, favourites, mistakes, papers and logbooks) — not just `sr`, since a deleted mistake, paper, favourite or note restored from a backup hits exactly the same wall. Pinned by [`scripts/restore-tombstone-test.mjs`](scripts/restore-tombstone-test.mjs), whose first assertion is that the trap is real. The trap pre-dates the reset — the study modal could always tombstone one topic at a time — but a button that tombstones all 315 at once turns it from theoretical into the likely path.
 
 ---
 
@@ -516,7 +534,8 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | Key | Holds |
 |-----|-------|
 | `alevel-sr-v5` | the FSRS memory state per topic (`{D,S,last,reps,lapses,log}`) — the core progress data |
-| `alevel-mistakes-v2` | logged mistakes (topic, category, severity, date) |
+| `alevel-mistakes-v2` | logged mistakes (topic, category, severity, date, and an optional `col` naming the [logbook](#logbooks--parallel-mistake-logs); absent means the built-in A-Level one) |
+| `alevel-mistake-logbooks-v1` | the custom logbooks: `{id,name,date,modified}`. The built-in A-Level one is implicit and never stored |
 | `alevel-paperlog-v1` | logged past-paper results (per-question marks) |
 | `alevel-paper-dates-v1` | when each paper was attempted |
 | `alevel-exam-date` | your exam date → drives the scheduler's exam ramp |
@@ -535,6 +554,7 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-practiceq-v1` | cached AI-generated practice questions, last 8 per topic (device-local) |
 | `msh-theme` | active theme |
 | `msh-last-mistake-topic` | the topic last logged against, restored into the Mistakes form on load. Device-local: `SYNC_KEYS` is an allow-list, so a UI preference never becomes something two devices argue about |
+| `msh-mistake-logbook` | which logbook the Mistakes page is showing. Device-local for the same reason — the logbooks themselves *are* synced, but which one you happen to have open is not a fact two devices should argue about |
 | `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
 | `alevel-imgpending-v1` | photo ids awaiting upload (device-local — deliberately not synced) |
 | `mh_stamp`, `mh_writer` | sync bookkeeping (last-write timestamp + which device wrote) |
@@ -572,7 +592,7 @@ Each kind of data gets the rule that actually fits it:
 | Data | Rule |
 |---|---|
 | `alevel-sr-v5` | union the review **logs**, sort by date, and replay FSRS over the result |
-| `mistakes`, `paperLog` | union by id; tombstones for deletes; newer `modified` wins an edit |
+| `mistakes`, `paperLog`, `logbooks` | union by id; tombstones for deletes; newer `modified` wins an edit |
 | `alevel-favs-v1` | set union, minus anything tombstoned |
 | `alevel-notes-v1` | newer edit wins, compared on the `mod` stamps in the ledger |
 | `alevel-streak-v1` | union the `days`, take the max of the counters — minus anything a `resetAt` predates |
@@ -885,6 +905,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`.
 - **The one shared step (phase 1 & 2):** `applyReview(rec,g,date,tdiff)` and `applyMistake(rec,E,date)` — the only two places state is advanced; `buildTimeline`, `replayTimeline`, `mistakeEventsByTopic`, `memoryFor(name)` (the derived read every UI number goes through, memoised per topic/day), `invalidateMemory`, `evidenceTrail(name)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`, `sanitizeAllSR`, `migrateV4`.
 - **Mistake feedback (soft channel):** `mistakeLoad(name)` (memoised per topic/day), `invalidateMistakeLoad`, `effectiveD(name)`, `targetRetention(name)`, `examDateForTopic(name)`, `examDateForComponent(comp)`, `sevPips`, `sevUpdateUI`.
+- **[Logbooks](#logbooks--parallel-mistake-logs):** the data rules live beside the mistake list — `MK_MAIN`, `mkColOf(m)`, `mkIsMain(id)`, `mkBook(id)`, `mkNameOf(id)`, `mkEntries(id)` — and the presentation on the Mistakes page: `renderLogbookBar()`, `mkSetActive(id)`, `mkApplyFormMode()` (hides the topic select), `mkApplyTabs()` (hides the Topics and Leaks tabs and the group-by-topic button), `mkEmptyText()`, and the inline create/rename row `mkOpenEdit(mode)` / `mkCommitEdit()` / `mkCancelEdit()`. The FSRS gate itself is not a function — it is one `continue` in each of `mistakeEventsByTopic()` and `mistakeLoad()`.
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
@@ -1075,7 +1096,7 @@ Before `npm run deploy`, for the change you just made:
 
 ### What the tooling can and cannot check
 
-`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Six suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), and `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Seven suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it), and `logbook-isolation-test` (only the A-Level logbook reaches the memory engine). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
 
 > **`npm test` is the single list.** CI and `scripts/deploy.sh` both call it rather than spelling the suites out again. They had each drifted into a *subset* of it — the icon-index check and the exam-ramp suite ran only on a developer's machine, so the 2026-08-22 exam-ramp work was unguarded everywhere it mattered. Two lists of the same thing is one list to forget.
 

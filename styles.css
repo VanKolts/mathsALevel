@@ -885,6 +885,30 @@ main,.tab-content{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .mk-filter-btn.active{background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;color:var(--text);font-weight:600;box-shadow:0 0 10px rgba(248,113,113,.2),0 0 10px rgba(96,165,250,.1);}
 .mk-group-hdr{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--muted);padding:8px 2px 4px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);margin-bottom:4px;}
 .mk-group-hdr:first-child{padding-top:0;}
+/* ---- Logbook bar: which mistake log the page is showing ----
+   Chips rather than a <select>, because the count on each one is half the information and a
+   select can only show the chosen row. The bar wraps rather than scrolls: there will be two
+   or three of these, not twenty, and a wrapped second line costs nothing a scroller does not. */
+.mk-book-bar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);}
+.mk-book-lbl{font-size:var(--fs-2xs);color:var(--dim);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.mk-book-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 auto;min-width:0;}
+.mk-book-acts{display:flex;gap:6px;flex:0 0 auto;margin-left:auto;}
+.mk-book-chip{font-size:var(--fs-xs);padding:3px 10px;border-radius:var(--r-xs);border:1.5px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:background-color var(--t-base),border-color var(--t-base),color var(--t-base),box-shadow var(--t-base);}
+.mk-book-chip:hover{color:var(--text);}
+.mk-book-chip.active{background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(90deg,var(--spectrum)) border-box;border:1.5px solid transparent;color:var(--text);font-weight:600;box-shadow:0 0 10px rgba(248,113,113,.2),0 0 10px rgba(96,165,250,.1);}
+.mk-book-n{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;color:var(--dim);}
+.mk-book-chip.active .mk-book-n{color:var(--muted);}
+.mk-book-act{font-size:var(--fs-2xs);padding:3px 8px;border-radius:var(--r-xs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:color var(--t-base),border-color var(--t-base);}
+.mk-book-act:hover{color:var(--text);}
+.mk-book-danger:hover{color:var(--overdue);border-color:var(--overdue);}
+.mk-book-edit{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+.mk-book-edit .form-input{flex:1 1 auto;min-width:0;}
+.mk-book-save,.mk-book-cancel{font-size:var(--fs-xs);padding:6px 14px;border-radius:var(--r-sm);cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;}
+.mk-book-save{background:var(--grad);border:none;color:#fff;font-weight:500;}
+.mk-book-save:hover{filter:brightness(1.1);}
+.mk-book-cancel{background:transparent;border:1px solid var(--border2);color:var(--muted);}
+.mk-book-cancel:hover{color:var(--text);}
+.mk-book-note{font-size:var(--fs-2xs);color:var(--dim);margin:-2px 2px 10px;line-height:1.5;}
 .m-card-sev{display:flex;gap:2px;align-items:center;margin-left:2px;}
 .pie-section{display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;}
 .pie-legend{display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:200px;}
@@ -1108,6 +1132,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Chips and segmented controls: grow to --tap, keep their pill shape. */
   .filter-btn,.fchip,.tool-chip,.mk-filter-btn,.mex-fmchip,.leak-sort-btn,.pq-act,
   .pq-diff-btn,.mv-tab,.trend-range-btn,.m-mode-btn,.rev-done-btn,
+  .mk-book-chip,.mk-book-act,.mk-book-save,.mk-book-cancel,
   .reattempt-shuffle,.pp-type-btn{min-height:var(--tap);
     display:inline-flex;align-items:center;justify-content:center;}
   .filter-btn{padding:6px 12px;font-size:var(--fs-sm);}
