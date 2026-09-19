@@ -464,6 +464,14 @@ entry a **real topic name** so they distinguish the `col` check from the cheaper
 one that would pass by coincidence today. It carries a control as well, since "memory is
 unchanged" would also pass against an engine that ignored mistakes altogether.
 
+**Moving an entry across that boundary is exactly reversible, and §2 is the reason.** Because
+memory is derived rather than advanced in place, taking an event back out of the timeline and
+replaying reproduces the prior state bit for bit — there is no accumulated effect to unwind
+and no approximation. Measured: one `Transcription slip` moved out of A-Level and back gives
+`S` 4.1 → 80.0611 → **4.1**, recall 24% → 74% → **24%**, due 2026-09-14 → 2026-11-19 →
+**2026-09-14**. A design that stored a mutable stability number could not offer the move at
+all without making it a one-way door, which is the clearest practical payoff §1 predicted.
+
 ---
 
 *Sources: [Newman's Error Analysis (ERIC)](https://files.eric.ed.gov/fulltext/EJ1488529.pdf) · [A technical explanation of FSRS](https://expertium.github.io/Algorithm.html) · [srs-benchmark](https://github.com/open-spaced-repetition/srs-benchmark)*

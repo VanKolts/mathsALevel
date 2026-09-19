@@ -909,6 +909,10 @@ main,.tab-content{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .mk-book-cancel{background:transparent;border:1px solid var(--border2);color:var(--muted);}
 .mk-book-cancel:hover{color:var(--text);}
 .mk-book-note{font-size:var(--fs-2xs);color:var(--dim);margin:-2px 2px 10px;line-height:1.5;}
+/* Shown in the edit modal only while the chosen logbook differs from the one the entry is in.
+   Tinted rather than plain grey: it is the one line in that dialog describing a consequence
+   outside it, and it should not read as another field label. */
+.em-move-note{font-size:var(--fs-2xs);line-height:1.5;color:var(--muted);background:var(--surface2);border:1px solid var(--border2);border-left:2px solid var(--accent);border-radius:var(--r-xs);padding:6px 8px;margin-top:2px;}
 .m-card-sev{display:flex;gap:2px;align-items:center;margin-left:2px;}
 .pie-section{display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;}
 .pie-legend{display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:200px;}

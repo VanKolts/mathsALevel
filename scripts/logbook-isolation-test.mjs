@@ -134,7 +134,48 @@ const NINE  = [UKMT(0),UKMT(1),UKMT(2),UKMT(3),UKMT(4),UKMT(5),UKMT(6),UKMT(7),U
   check(mistakeLoad('U')===0, 'a custom entry on a second topic is invisible there too');
 }
 
-/* ---- 7. the logbook list is wired into sync as a LIST, not a blob --------
+/* ---- 7. moving an entry between logbooks is exactly reversible -----------
+   The claim the UI makes when you change an entry's logbook. It holds only because memory is
+   *derived*: nothing is mutated when a mistake is logged, so removing the event and replaying
+   reproduces the earlier state bit for bit rather than approximately undoing it. If stored
+   state were advanced in place this assertion could not pass, and a move would have to be a
+   one-way door. */
+{
+  const eq=(a,b)=>a.S===b.S && a.D===b.D && a.last===b.last && a.lapses===b.lapses && a.reps===b.reps;
+  const rec = () => { const e=mistakeEventsByTopic(); return replayTimeline('T',REVIEWS,e['T']); };
+
+  setMistakes([]);                       const never   = rec();
+  setMistakes([MAIN]);                   const logged  = rec();
+  check(!eq(never,logged), 'the control: logging it on T does move T (else the rest proves nothing)');
+
+  // move out: same id, same date, same category — only the logbook changes
+  setMistakes([Object.assign({},MAIN,{col:'ukmt'})]);
+  check(eq(rec(),never), 'moved out of A-Level, T reads exactly as if it had never been logged');
+
+  // and back
+  setMistakes([Object.assign({},MAIN)]);
+  check(eq(rec(),logged), 'moved back in, T reads exactly as it did before the move');
+
+  // custom to custom touches nothing
+  setMistakes([Object.assign({},MAIN,{col:'olympiad'})]);
+  check(eq(rec(),never), 'a move between two custom logbooks leaves the engine where it was');
+}
+
+/* ---- 8. retagging within A-Level moves the evidence, it does not copy it -- */
+{
+  const onT=Object.assign({},MAIN,{topic:'T'});
+  const onU=Object.assign({},MAIN,{topic:'U'});
+  setMistakes([onT]);
+  const idxT=mistakeEventsByTopic();
+  check((idxT['T']||[]).length===1 && (idxT['U']||[]).length===undefined||!(idxT['U']||[]).length,
+    'while on T, only T carries the event');
+  setMistakes([onU]);
+  const idxU=mistakeEventsByTopic();
+  check(!(idxU['T']||[]).length && (idxU['U']||[]).length===1,
+    'retagged to U, T loses the event and U gains it — one event, not two');
+}
+
+/* ---- 9. the logbook list is wired into sync as a LIST, not a blob --------
    Two separate facts, and losing either is silent. Out of SYNC_KEYS and the list never
    travels, so a synced record points at a logbook the other device cannot name. In
    SYNC_KEYS but out of LIST_KINDS and it merges as a scalar under last-write-wins, which

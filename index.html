@@ -1036,6 +1036,11 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
       <button class="stats-close" id="edit-mistake-close" aria-label="Close">&times;</button>
     </div>
     <div class="stats-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <div class="form-group">
+        <label class="form-lbl">Logbook</label>
+        <select class="form-select" id="em-book-sel"></select>
+        <div class="em-move-note" id="em-move-note" style="display:none"></div>
+      </div>
       <div class="form-row">
         <div class="form-group" id="em-topic-group">
           <label class="form-lbl">Topic</label>
@@ -6927,21 +6932,37 @@ document.getElementById('img-viewer').addEventListener('click',()=>document.getE
 // ---- EDIT MISTAKE ----
 let editMistakeId=null;
 let editPendingImg=null; // null = no change, 'clear' = remove, data-url = new image
+let editFromCol=MK_MAIN; // the logbook the entry was in when the modal opened
 
 function openEditMistake(id){
   const m=mistakes.find(x=>x.id===id);
   if(!m)return;
   editMistakeId=id;
   editPendingImg=null;
-  /* An entry in a custom logbook has no topic, and cannot gain one here: the select would
-     be the only way to move it onto the A-Level timeline, which is a different decision
-     from editing it. Delete and re-log if it is in the wrong logbook. */
-  const emMain=mkIsMain(mkColOf(m));
-  const emtg=document.getElementById('em-topic-group'); if(emtg)emtg.style.display=emMain?'':'none';
+  editFromCol=mkColOf(m);
+  /* The logbook is editable, so an entry filed in the wrong one can be moved rather than
+     deleted and retyped. Moving across the A-Level boundary is not a relabelling — it adds
+     or removes an observation from that topic's evidence timeline — so the save path
+     reports the memory it moved, the same way logging one does. */
+  const ebsel=document.getElementById('em-book-sel');
+  ebsel.innerHTML='';
+  mkAllBooks().forEach(function(b){
+    const o=document.createElement('option'); o.value=b.id; o.textContent=b.name; ebsel.appendChild(o);
+  });
+  ebsel.value=editFromCol;
   // populate topic select fresh (FM options may have changed)
   const emsel=document.getElementById('em-topic-sel');
   emsel.innerHTML=document.getElementById('m-topic-sel').innerHTML;
+  /* An entry arriving from a custom logbook has no topic. Letting the select fall through to
+     whichever option happens to be first would file a UKMT question under "1.1 Index laws"
+     and move that topic's schedule, silently. A placeholder forces the choice to be made. */
+  if(!mkIsMain(editFromCol)){
+    const ph=document.createElement('option');
+    ph.value=''; ph.textContent='— pick a topic —';
+    emsel.insertBefore(ph,emsel.firstChild);
+  }
   emsel.value=m.topic||'';
+  emSyncBookUI();
   document.getElementById('em-cat-sel').value=m.cat;
   document.getElementById('em-text').value=m.text;
   document.getElementById('em-date').value=m.date||today();
@@ -6957,11 +6978,31 @@ function openEditMistake(id){
   setTimeout(syncSpringSliders,50);
 }
 
-function closeEditMistake(){
-  document.getElementById('edit-mistake-overlay').classList.remove('open');
-  editMistakeId=null;editPendingImg=null;
+/* Keeps the modal honest about what the chosen logbook implies: the topic row only exists
+   for the A-Level one, and a move across that boundary is called out before it is made,
+   because it is the only edit here that changes what the Checklist says. */
+function emSyncBookUI(){
+  const to=document.getElementById('em-book-sel').value;
+  const toMain=mkIsMain(to);
+  const tg=document.getElementById('em-topic-group'); if(tg)tg.style.display=toMain?'':'none';
+  const note=document.getElementById('em-move-note');
+  if(!note)return;
+  let msg='';
+  if(to!==editFromCol){
+    if(toMain) msg='Moving into '+MK_MAIN_NAME+' — pick the topic it belongs to. It becomes evidence about that topic and will pull its next review earlier.';
+    else if(mkIsMain(editFromCol)) msg='Moving out of '+MK_MAIN_NAME+' — it stops counting as evidence, and the topic it was on goes back to what it would read if this had never been logged.';
+    else msg='Moving to '+mkNameOf(to)+'. Neither logbook feeds the memory engine, so nothing about your revision changes.';
+  }
+  note.textContent=msg;
+  note.style.display=msg?'':'none';
 }
 
+function closeEditMistake(){
+  document.getElementById('edit-mistake-overlay').classList.remove('open');
+  editMistakeId=null;editPendingImg=null;editFromCol=MK_MAIN;
+}
+
+document.getElementById('em-book-sel').addEventListener('change',emSyncBookUI);
 document.getElementById('edit-mistake-close').addEventListener('click',closeEditMistake);
 document.getElementById('em-cancel-btn').addEventListener('click',closeEditMistake);
 document.getElementById('edit-mistake-overlay').addEventListener('click',function(e){if(e.target===this)closeEditMistake();});
@@ -6993,6 +7034,29 @@ document.getElementById('em-img-clear').addEventListener('click',()=>{
   document.getElementById('em-img-clear').style.display='none';
 });
 
+/* Recall for a set of topics, and a readable description of how it moved. An edit can touch
+   two topics at once — retagging an A-Level mistake from one topic to another removes evidence
+   from the first and adds it to the second — so this takes a list rather than a name.
+   Only topics with an estimate on both sides are reported: a topic with no review log has an
+   empty evidence timeline either way, so there is genuinely nothing to say about it. */
+function mkRecallSnapshot(names){
+  const out=Object.create(null);
+  names.forEach(function(n){ if(n) out[n]=currentRetrievability(n); });
+  return out;
+}
+function mkDescribeRecallMove(before){
+  const parts=[];
+  Object.keys(before).forEach(function(n){
+    const b=before[n], a=currentRetrievability(n);
+    if(b==null||a==null)return;
+    const bp=Math.round(b*100), ap=Math.round(a*100);
+    if(bp===ap)return;
+    const st=statusFor(n);
+    parts.push(n+': '+bp+'% → '+ap+'%'+((ap<bp&&(st==='overdue'||st==='due'))?', now due':''));
+  });
+  return parts;
+}
+
 document.getElementById('em-save-btn').addEventListener('click',()=>{
   if(!editMistakeId)return;
   const text=document.getElementById('em-text').value.trim();
@@ -7000,13 +7064,33 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   const idx=mistakes.findIndex(x=>x.id===editMistakeId);
   if(idx<0)return;
   const existing=mistakes[idx];
+  const fromCol=mkColOf(existing), toCol=document.getElementById('em-book-sel').value;
+  const toMain=mkIsMain(toCol);
+  /* Outside the A-Level logbook there is no topic at all; inside it, one is required. The
+     placeholder added when the entry arrives from a custom logbook can reach here as '', and
+     accepting that would put an untopiced record on the A-Level side of the gate, where every
+     consumer expects a topic. */
+  const newTopic=toMain?document.getElementById('em-topic-sel').value:'';
+  if(toMain&&!newTopic){
+    if(typeof toast==='function')toast('Pick the topic this belongs to');
+    document.getElementById('em-topic-sel').focus();
+    return;
+  }
   // Photos live in IndexedDB, so an edit changes the *id* the record points at, never the
   // record's own size. `img` is only ever cleared here — legacy inline copies are migrated out.
   let newImg=existing.img||null, newImgId=existing.qImgId||null;
   if(editPendingImg==='clear'){ mhForgetImage(newImgId); newImg=null; newImgId=null; }
   else if(editPendingImg){ newImgId=newImgId||('mq_'+existing.id); mhStoreImage(newImgId,editPendingImg); newImg=null; }
-  mistakes[idx]=Object.assign({},existing,{   // keep question/answer, the photo id and `col`
-    topic:mkIsMain(mkColOf(existing))?document.getElementById('em-topic-sel').value:(existing.topic||''),
+  /* Snapshot before the write. Both sides matter: the topic losing the evidence and the topic
+     gaining it, either of which may be absent. Only A-Level-side topics can move, because the
+     gate means a custom entry was never on anyone's timeline. */
+  const touched=[];
+  if(mkIsMain(fromCol)&&existing.topic) touched.push(existing.topic);
+  if(toMain&&newTopic&&touched.indexOf(newTopic)<0) touched.push(newTopic);
+  const before=mkRecallSnapshot(touched);
+
+  const next=Object.assign({},existing,{   // keeps question/answer and the photo id
+    topic:newTopic,
     cat:document.getElementById('em-cat-sel').value,
     text,
     date:document.getElementById('em-date').value||today(),
@@ -7015,11 +7099,26 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
     severity:+document.getElementById('em-severity').value||3,
     modified:Date.now()          // lets the merge pick the newer of two concurrent edits
   });
-  saveState();
+  // Absent `col` is the built-in logbook, so moving back to it deletes the field rather than
+  // storing 'alevel' — otherwise two records in the same logbook would differ in shape, and
+  // only one of them would match anything written before logbooks existed.
+  if(toMain) delete next.col; else next.col=toCol;
+  mistakes[idx]=next;
+
+  saveState();                    // also drops the mistake-load and memory caches
   renderMistakesTab();
   if(activeTab==='checklist')renderAll();
   renderReviewPanel();
-  toast('Mistake updated');
+  /* A move across the A-Level boundary changes what the app tells you to revise, so it says
+     so — the same rule as logging one. A move between two custom logbooks changes nothing in
+     the engine, and the message says that too rather than staying silent about it. */
+  const moved=fromCol!==toCol;
+  const deltas=mkDescribeRecallMove(before);
+  let msg='Mistake updated';
+  if(moved) msg='Moved to '+mkNameOf(toCol);
+  if(deltas.length) msg+=' · '+deltas.slice(0,2).join(' · ');
+  else if(moved&&!mkIsMain(fromCol)&&!toMain) msg+=' · nothing in your revision changed';
+  if(typeof toast==='function')toast(msg);
   closeEditMistake();
 });
 

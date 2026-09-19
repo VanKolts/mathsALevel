@@ -307,12 +307,33 @@ The page opens on one **logbook** at a time, chosen from a chip bar at the top. 
 | Breakdown tabs | Log · Topics · Reasons · Trend · Leaks | Log · Reasons · Trend |
 | Group the log by | none / category / topic | none / category |
 | Photo, answer, re-attempt, AI | yes | yes |
+| Moving an entry here | needs a topic; adds evidence | drops the topic; removes evidence |
 
 **One array, not two.** A logbook is an optional `col` field on the mistake record; absent means `alevel`. `alevel-mistakes-v2` already merges by id with tombstones, already exports, already restores, and already keeps its photos in IndexedDB — a second storage key would have had to reimplement all four, and each reimplementation is somewhere the two can drift. It also means **no migration**: every record written before logbooks existed reads as A-Level.
 
 **The gate is two lines, in two functions.** `mistakeEventsByTopic()` and `mistakeLoad()` are the only doors from the mistake list into FSRS, and both now skip anything whose `col` is not `alevel`. The check is on `col`, not on `!m.topic` — a topicless record would be skipped downstream anyway, but then the isolation would hold *by accident* and would break silently the day a logbook gained a label field. [`scripts/logbook-isolation-test.mjs`](scripts/logbook-isolation-test.mjs) pins it with fixtures that give every custom entry a **real topic name**, so they fail against the `!m.topic` version. Measured in the running app on the heavy seed: 20 custom entries on real topics at the harshest category leave average recall at **48.8983%**, unchanged to four decimals; the same 20 untagged move it to **47.2574%**.
 
 The **Leaks report and the topic wheel stay A-Level-only** wherever they appear, since both are cut by syllabus topic. The logbook list itself is `alevel-mistake-logbooks-v1`, synced — see [storage](#storage-keys) and [the merge](#how-the-merge-works).
+
+#### Moving an entry between logbooks
+
+The edit dialog carries a **Logbook** select, so a misfiled entry is moved rather than deleted and retyped. Three cases, and only two of them are relabelling:
+
+| Move | What happens to the record | What happens to memory |
+|---|---|---|
+| custom → custom | `col` changes | **nothing** — neither side was ever on a timeline |
+| A-Level → custom | `col` set, `topic` cleared to `''` | that topic **loses** an observation: recall rises, the next review pushes out |
+| custom → A-Level | `col` deleted, a topic **required** | that topic **gains** an observation: recall drops, the review pulls in |
+
+Three things the implementation has to get right:
+
+- **Moving back to A-Level deletes `col` rather than storing `'alevel'`.** Two records in the same logbook must not differ in shape, or only one of them matches what was written before logbooks existed.
+- **A topic is required on the way in, and is not pre-selected.** The select is populated from the add form, so falling through to the first option would file a UKMT question under *1.1 Index laws* and move that topic's schedule with no one having chosen it. An entry arriving from a custom logbook gets a `— pick a topic —` placeholder with an empty value, and saving with it still selected is refused.
+- **The move reports the memory it moved**, the same rule as logging one — *"Moved to A-Level Maths · 6.5 Circles and triangles: 74% → 24%, now due"*. Up to two topics can move in one save, because retagging an A-Level mistake from one topic to another removes evidence from the first and adds it to the second; `mkRecallSnapshot()` / `mkDescribeRecallMove()` take a list for exactly that reason. (That retag was **silent before this change** — it changed two schedules and said nothing.)
+
+**A move is exactly reversible, and that is a property of the evidence model rather than of this code.** Memory is [derived, never stored](#the-idea-the-whole-app-rests-on-memory-is-derived-never-stored): logging a mistake appends an event, it does not advance a number. So removing the event and replaying reproduces the earlier state bit for bit — not an approximate undo. Measured on the heavy seed, moving one `Transcription slip` out of A-Level and back: `S` **4.1 → 80.0611 → 4.1**, recall **24% → 74% → 24%**, due date **2026-09-14 → 2026-11-19 → 2026-09-14**. Pinned in [`scripts/logbook-isolation-test.mjs`](scripts/logbook-isolation-test.mjs) §7.
+
+Two consequences worth knowing. A mistake dated **before the topic's first review** is a no-op either way — `buildTimeline()` has nothing for it to modify — so moving it changes nothing and the toast says nothing. And a move **is** an edit: it bumps `modified`, so the merge propagates it to every device as an ordinary last-write-wins edit on one record, with no new key and no tombstone.
 
 ### 4. 📉 "Where I lost marks" (Leaks report) — inside Progress/Mistakes
 **Visual:** turns all your logged papers into a ranked report — **marks lost per topic**, a **grade-impact headline** ("these leaks cost you ~1 grade"), and a **"revise first" ordering** by how often each topic bleeds marks.
@@ -905,7 +926,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **FSRS update primitives:** `ratingEase(r)`, `initialStability(r)`, `initialDifficulty(g,topicDiff)`, `nextDifficulty(D,g)`, `stabilityAfterRecall(D,S,R,r)`, `stabilityAfterLapse(D,S,R)`.
 - **The one shared step (phase 1 & 2):** `applyReview(rec,g,date,tdiff)` and `applyMistake(rec,E,date)` — the only two places state is advanced; `buildTimeline`, `replayTimeline`, `mistakeEventsByTopic`, `memoryFor(name)` (the derived read every UI number goes through, memoised per topic/day), `invalidateMemory`, `evidenceTrail(name)`, `simulateGrade(name,date,g)`, `saveTopicStudied(name,date,gradeKey)`, `sanitizeAllSR`, `migrateV4`.
 - **Mistake feedback (soft channel):** `mistakeLoad(name)` (memoised per topic/day), `invalidateMistakeLoad`, `effectiveD(name)`, `targetRetention(name)`, `examDateForTopic(name)`, `examDateForComponent(comp)`, `sevPips`, `sevUpdateUI`.
-- **[Logbooks](#logbooks--parallel-mistake-logs):** the data rules live beside the mistake list — `MK_MAIN`, `mkColOf(m)`, `mkIsMain(id)`, `mkBook(id)`, `mkNameOf(id)`, `mkEntries(id)` — and the presentation on the Mistakes page: `renderLogbookBar()`, `mkSetActive(id)`, `mkApplyFormMode()` (hides the topic select), `mkApplyTabs()` (hides the Topics and Leaks tabs and the group-by-topic button), `mkEmptyText()`, and the inline create/rename row `mkOpenEdit(mode)` / `mkCommitEdit()` / `mkCancelEdit()`. The FSRS gate itself is not a function — it is one `continue` in each of `mistakeEventsByTopic()` and `mistakeLoad()`.
+- **[Logbooks](#logbooks--parallel-mistake-logs):** the data rules live beside the mistake list — `MK_MAIN`, `mkColOf(m)`, `mkIsMain(id)`, `mkBook(id)`, `mkNameOf(id)`, `mkEntries(id)`, `mkAllBooks()` — and the presentation on the Mistakes page: `renderLogbookBar()`, `mkSetActive(id)`, `mkApplyFormMode()` (hides the topic select), `mkApplyTabs()` (hides the Topics and Leaks tabs and the group-by-topic button), `mkEmptyText()`, and the inline create/rename row `mkOpenEdit(mode)` / `mkCommitEdit()` / `mkCancelEdit()`. [Moving an entry](#moving-an-entry-between-logbooks): `editFromCol`, `emSyncBookUI()` (the live topic-row toggle and the consequence note), `mkRecallSnapshot(names)` / `mkDescribeRecallMove(before)`. The FSRS gate itself is not a function — it is one `continue` in each of `mistakeEventsByTopic()` and `mistakeLoad()`.
 - **AI subsystem:** `geminiCall(parts,genCfg)`, `geminiFriendly(err)`, `tutorMd(text)`, `askTutor()`, `pqGenerate()`, `pqParse()`, `pqValidate(q)`, `pqVerify(q)`, `pqRenderQuestion(q)`, `reattemptExplainAI(btn)`, `renderReattempt(pick)`, `reattemptShuffle()`.
 - **Sync & migration:** `applyToLocal(store)`, `schedulePush()`, `collectLocal()`, `applyRemote(d)`, plus the Firebase `onSnapshot` listener and `enablePersistence` setup. `applyChapterRenames()` runs on load and at the end of `applyToLocal` — see [Topic renames & the remap](#topic-renames--the-remap).
 - **Leaks / analytics:** the paper-log aggregation that ranks marks-lost per topic and maps recoverable marks onto `GRADE_BOUNDARIES`.
