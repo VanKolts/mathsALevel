@@ -1061,6 +1061,16 @@ if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})()
         </div>
       </div>
       <div class="form-group">
+        <label class="form-lbl">The question <span class="form-opt">optional</span></label>
+        <textarea class="form-textarea" id="em-question" placeholder="What the question actually asked"></textarea>
+      </div>
+      <!-- Always shown, not just for entries that already have one: a quick log can be written
+           up into a full record later, which is when a student usually knows the answer. -->
+      <div class="form-group">
+        <label class="form-lbl">Your answer / worked solution <span class="form-opt">optional — needed for the re-attempt loop</span></label>
+        <textarea class="form-textarea" id="em-answer" placeholder="The correct answer and the key steps"></textarea>
+      </div>
+      <div class="form-group">
         <label class="form-lbl">What went wrong?</label>
         <textarea class="form-textarea" id="em-text" placeholder="e.g. Forgot to multiply by inner derivative when using chain rule"></textarea>
       </div>
@@ -6262,7 +6272,7 @@ function mkCommitEdit(){
       : 'Delete the empty logbook "'+name+'"?';
     if(!confirm(msg))return;
     const gone=mkActive;
-    doomed.forEach(function(m){ mhForgetImage(m.qImgId); mhTombstone('mistakes',m.id); });
+    doomed.forEach(function(m){ mhForgetImage(m.qImgId); mkOpenSolutions.delete(m.id); mhTombstone('mistakes',m.id); });
     mistakes=mistakes.filter(function(m){ return mkColOf(m)!==gone; });
     mkLogbooks=mkLogbooks.filter(function(b){ return b.id!==gone; });
     mhTombstone('logbooks',gone);
@@ -6283,6 +6293,10 @@ sevUpdateUI(3,'em-sev-lbl','em-sev-pips');
 document.getElementById('em-severity').addEventListener('input',function(){sevUpdateUI(this.value,'em-sev-lbl','em-sev-pips');});
 // Sort / group filter bar
 let mkSort='newest', mkGroup='none';
+/* Which cards have their worked solution open. Module scope rather than a class on the node,
+   because renderMistakesTab() rebuilds every card from scratch — a sort or a group change
+   would otherwise silently collapse whatever you had just opened. */
+const mkOpenSolutions=new Set();
 document.querySelectorAll('.mk-filter-btn[data-sort]').forEach(b=>b.addEventListener('click',()=>{
   mkSort=b.getAttribute('data-sort');
   document.querySelectorAll('.mk-filter-btn[data-sort]').forEach(x=>x.classList.toggle('active',x===b));
@@ -6885,9 +6899,44 @@ function renderMistakesTab(){
     const txt=document.createElement('div');txt.className='m-text';txt.textContent=m.text;
     const dt=document.createElement('div');dt.className='m-date';dt.textContent=fmtDate(m.date);
     left.append(topRow);
-    if(m.question){ const qd=document.createElement('div');qd.textContent='Q: '+m.question;qd.style.cssText='font-size:12px;color:var(--muted);margin-bottom:4px;font-style:italic;line-height:1.4;'; left.appendChild(qd); }
+    if(m.question){ const qd=document.createElement('div');qd.className='m-q';qd.textContent='Q: '+m.question; left.appendChild(qd); }
     left.appendChild(txt);
-    if(m.answer){ const rb=document.createElement('span');rb.textContent='\u{1F501} re-attemptable';rb.style.cssText='display:inline-block;font-size:10px;color:var(--accent);font-weight:600;margin-bottom:4px;'; left.appendChild(rb); }
+    /* The worked solution, which until now was written down and then only ever readable from
+       the re-attempt card at the top of the page — invisible in the log itself.
+
+       Collapsed by default, and that default is the whole design question here: the log is
+       also where you go to find something to redo, and a solution printed inline spoils every
+       question you scroll past on the way. One click is a small price for not destroying the
+       re-attempt loop by browsing. Which cards are open is remembered across a re-render, so
+       changing the sort or the grouping does not close what you just opened. */
+    if(m.answer){
+      const wrap=document.createElement('div'); wrap.className='m-sol';
+      const btn=document.createElement('button'); btn.className='m-sol-btn'; btn.type='button';
+      const body=document.createElement('div'); body.className='m-sol-body';
+      body.textContent=m.answer;
+      // Reads the set every time rather than a captured boolean, so the initial paint and the
+      // click path cannot drift apart — the set is the single source of truth for this card.
+      const paint=function(){
+        const open=mkOpenSolutions.has(m.id);
+        btn.textContent=(open?'▾':'▸')+' Worked solution';
+        btn.setAttribute('aria-expanded',open?'true':'false');
+        body.hidden=!open;
+      };
+      btn.addEventListener('click',function(){
+        if(mkOpenSolutions.has(m.id)) mkOpenSolutions.delete(m.id); else mkOpenSolutions.add(m.id);
+        paint();
+      });
+      paint();
+      wrap.append(btn,body);
+      left.appendChild(wrap);
+    }
+    /* The badge used to appear for any entry with an answer, but the pool also requires a
+       photo — so entries with a written solution and no picture advertised a loop they could
+       never appear in. It matches reattemptPool() now. */
+    if(m.answer&&(m.qImgId||m.img)){
+      const rb=document.createElement('span');rb.className='m-reatt-tag';rb.textContent='\u{1F501} re-attemptable';
+      left.appendChild(rb);
+    }
     left.appendChild(dt);
     if(m.img||m.qImgId){
       mhResolveImage(m).then(function(src){
@@ -6904,6 +6953,7 @@ function renderMistakesTab(){
     del.addEventListener('click',()=>{
       if(!confirm('Delete this mistake entry?'))return;
       mhForgetImage(m.qImgId);   // local copy, queued upload and cloud record
+      mkOpenSolutions.delete(m.id);
       mhTombstone('mistakes',m.id);mistakes=mistakes.filter(x=>x.id!==m.id);saveState();renderMistakesTab();renderReattempt();
       toast('Mistake entry deleted');
     });
@@ -6967,9 +7017,23 @@ function openEditMistake(id){
     ph.value=''; ph.textContent='— pick a topic —';
     emsel.insertBefore(ph,emsel.firstChild);
   }
+  /* The select only lists the topics of the track you are on, and a record's topic may
+     legitimately not be among them — logged on Further Maths and now viewed on Maths, or
+     renamed since. Assigning a value a <select> does not have sets its value to '', so
+     **saving used to write that empty string straight back**, silently detaching the record
+     from its topic; on a Further-Maths-seeded store that was 135 of 400 entries, one Save
+     away each. Topic names are the primary key for every saved record, so the topic is added
+     as an option instead — labelled, because it explains why it appears nowhere else. */
+  if(m.topic && !Array.from(emsel.options).some(function(o){ return o.value===m.topic; })){
+    const keep=document.createElement('option');
+    keep.value=m.topic; keep.textContent=m.topic+' — not in your current track';
+    emsel.insertBefore(keep,emsel.firstChild);
+  }
   emsel.value=m.topic||'';
   emSyncBookUI();
   document.getElementById('em-cat-sel').value=m.cat;
+  document.getElementById('em-question').value=m.question||'';
+  document.getElementById('em-answer').value=m.answer||'';
   document.getElementById('em-text').value=m.text;
   document.getElementById('em-date').value=m.date||today();
   const sev=m.severity||3;
@@ -7076,11 +7140,19 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
      placeholder added when the entry arrives from a custom logbook can reach here as '', and
      accepting that would put an untopiced record on the A-Level side of the gate, where every
      consumer expects a topic. */
-  const newTopic=toMain?document.getElementById('em-topic-sel').value:'';
+  let newTopic=toMain?document.getElementById('em-topic-sel').value:'';
   if(toMain&&!newTopic){
-    if(typeof toast==='function')toast('Pick the topic this belongs to');
-    document.getElementById('em-topic-sel').focus();
-    return;
+    /* Defence in depth for the bug above: the dialog now keeps an off-track topic as an
+       option, but this path must not be able to blank a topic even if that ever stops
+       working. An empty select on a record that already had one means "the dialog could not
+       represent it", never "the student chose none" — there is no way to choose none. Only a
+       record genuinely arriving without a topic is asked for one. */
+    if(mkIsMain(fromCol)&&existing.topic) newTopic=existing.topic;
+    else {
+      if(typeof toast==='function')toast('Pick the topic this belongs to');
+      document.getElementById('em-topic-sel').focus();
+      return;
+    }
   }
   // Photos live in IndexedDB, so an edit changes the *id* the record points at, never the
   // record's own size. `img` is only ever cleared here — legacy inline copies are migrated out.
@@ -7095,7 +7167,13 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   if(toMain&&newTopic&&touched.indexOf(newTopic)<0) touched.push(newTopic);
   const before=mkRecallSnapshot(touched);
 
-  const next=Object.assign({},existing,{   // keeps question/answer and the photo id
+  /* An empty string and an absent field are not the same thing here: `m.answer` is what makes
+     an entry re-attemptable, and `m.question` is what the AI explainer reads. Clearing either
+     should remove it rather than leave an empty value that still reads as truthy-ish downstream,
+     so both are deleted when blank. */
+  const nextQ=document.getElementById('em-question').value.trim();
+  const nextA=document.getElementById('em-answer').value.trim();
+  const next=Object.assign({},existing,{   // keeps the photo id
     topic:newTopic,
     cat:document.getElementById('em-cat-sel').value,
     text,
@@ -7109,8 +7187,11 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   // storing 'alevel' — otherwise two records in the same logbook would differ in shape, and
   // only one of them would match anything written before logbooks existed.
   if(toMain) delete next.col; else next.col=toCol;
+  if(nextQ) next.question=nextQ; else delete next.question;
+  if(nextA) next.answer=nextA; else delete next.answer;
   mistakes[idx]=next;
 
+  if(!nextA) mkOpenSolutions.delete(existing.id);
   saveState();                    // also drops the mistake-load and memory caches
   renderMistakesTab();
   if(activeTab==='checklist')renderAll();

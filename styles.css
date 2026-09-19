@@ -764,6 +764,10 @@ main,.tab-content{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .form-select,.form-input,.form-textarea{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Inter',sans-serif;font-size:var(--fs-sm);padding:6px 8px;outline:none;transition:border-color var(--t-base);width:100%;}
 .form-select:focus,.form-input:focus,.form-textarea:focus{border-color:rgba(var(--accent-rgb),.5);}
 .form-textarea{resize:vertical;min-height:60px;}
+/* Worked solutions are written in lines, not sentences — the shared 60px shows two of them and
+   hands you a scrollbar for the rest, which is the wrong default for the one field whose whole
+   value is its structure. Still resizable, and still 60px for the one-line fields. */
+#m-answer,#em-answer{min-height:120px;font-family:'JetBrains Mono',monospace;font-size:var(--fs-xs);line-height:1.55;}
 .form-select option{background:var(--surface2);}
 .img-upload-area{border:1.5px dashed var(--border2);border-radius:var(--r-sm);padding:8px;text-align:center;cursor:pointer;transition:border-color var(--t-fast);font-size:var(--fs-xs);color:var(--muted);}
 .img-upload-area:hover{border-color:var(--accent);}
@@ -844,6 +848,18 @@ main,.tab-content{width:var(--wrap);margin:0 auto;padding:20px 0 32px;}
 .m-topic-badge{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:var(--r-xs);background:rgba(var(--accent-rgb),.12);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.25);}
 .m-cat-badge{font-size:var(--fs-3xs);font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:var(--r-xs);background:rgba(251,191,36,.1);color:var(--due);border:1px solid rgba(251,191,36,.25);}
 .m-text{font-size:var(--fs-sm);color:var(--text);line-height:1.5;margin-bottom:4px;}
+/* The question, as typed. Was an inline style block on the element; it is a class now because
+   the worked solution below needs to match it and two copies of the same rule drift. */
+.m-q{font-size:var(--fs-xs);color:var(--muted);margin-bottom:4px;font-style:italic;line-height:1.4;white-space:pre-wrap;}
+/* ---- Worked solution, collapsed by default ----
+   `pre-wrap` is the point of the body rule: working is written in lines, and a solution
+   reflowed into one paragraph is unreadable as maths however well it is typed. */
+.m-sol{margin:2px 0 6px;}
+.m-sol-btn{font-size:var(--fs-2xs);font-family:'JetBrains Mono',monospace;letter-spacing:.04em;background:transparent;border:none;padding:2px 0;color:var(--accent);cursor:pointer;text-align:left;}
+.m-sol-btn:hover{filter:brightness(1.2);}
+.m-sol-body{margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border2);border-left:2px solid var(--accent);border-radius:var(--r-xs);font-size:var(--fs-xs);color:var(--text);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;}
+.m-reatt-tag{display:inline-block;font-size:var(--fs-2xs);color:var(--accent);font-weight:600;margin-bottom:4px;}
+.form-opt{color:var(--dim);font-weight:400;}
 .m-img{max-width:120px;max-height:80px;border-radius:var(--r-xs);border:1px solid var(--border2);margin-top:4px;cursor:pointer;}
 /* Mistake-log mode toggle (Quick / Detailed) */
 .m-mode-seg{display:flex;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:4px;margin-bottom:8px;position:relative;}
@@ -1136,7 +1152,7 @@ footer{border-top:1px solid var(--border);padding:16px 24px;text-align:center;fo
   /* Chips and segmented controls: grow to --tap, keep their pill shape. */
   .filter-btn,.fchip,.tool-chip,.mk-filter-btn,.mex-fmchip,.leak-sort-btn,.pq-act,
   .pq-diff-btn,.mv-tab,.trend-range-btn,.m-mode-btn,.rev-done-btn,
-  .mk-book-chip,.mk-book-act,.mk-book-save,.mk-book-cancel,
+  .mk-book-chip,.mk-book-act,.mk-book-save,.mk-book-cancel,.m-sol-btn,
   .reattempt-shuffle,.pp-type-btn{min-height:var(--tap);
     display:inline-flex;align-items:center;justify-content:center;}
   .filter-btn{padding:6px 12px;font-size:var(--fs-sm);}
