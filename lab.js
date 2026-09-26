@@ -208,6 +208,12 @@ function setThemeAttr(key){
   if(key==='rose-dark') root.removeAttribute('data-theme'); else root.setAttribute('data-theme',key);
 }
 function clearInline(){ applied.forEach(function(k){ root.style.removeProperty(k); }); applied=[]; }
+/* Reads the tokens straight after flipping data-theme. That is the trap the vault's Layout note
+   warns about — an element's computed colour is one theme behind for the length of its
+   transition — but it does not apply here: these are custom properties on :root, which do not
+   transition. Measured 2026-09-26: right after a flip the root token read the new theme's value
+   while a `transition: color` element beside it still read the old one. Read tokens, never an
+   element's colour, and this stays true. */
 function readBase(base){
   if(baseCache[base]) return baseCache[base];
   var cs=getComputedStyle(root), m={};
