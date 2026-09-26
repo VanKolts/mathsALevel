@@ -42,10 +42,11 @@ This document describes the app on **three levels**: the **visual/UX layer** (wh
    - [9.6 External dependencies & config](#96-external-dependencies--config)
 11. [Test mode](#test-mode)
     - [Driving it from a script](#driving-it-from-a-script)
-12. [Editing, building & deploying](#editing-building--deploying)
+12. [Design lab](#design-lab)
+13. [Editing, building & deploying](#editing-building--deploying)
     - [Committing without being asked](#committing-without-being-asked)
-13. [Keeping the documentation in step](#keeping-the-documentation-in-step)
-14. [Known gaps & roadmap](#known-gaps--roadmap)
+14. [Keeping the documentation in step](#keeping-the-documentation-in-step)
+15. [Known gaps & roadmap](#known-gaps--roadmap)
 
 ---
 
@@ -179,6 +180,8 @@ Timing: the pill 400ms `cubic-bezier(.32,1.08,.5,1)` with **no delay**, then sha
 > **Note — the two orphaned page containers are gone** (2026-08-18). `#page-progress` and `#page-settings` were in the markup with nothing to activate them: neither was in `TAB_ORDER`, neither had a nav button, neither was ever given `.active`. Settings had moved into `#settings-overlay` and the progress charts were superseded by `#stats-overlay`, but `renderProgressTab()` still ran on **every** refresh — measured at **13ms**, a third of the whole refresh cycle, drawing a bar chart, a canvas donut and a per-topic list into a container no one could see. Deleting all three (markup, function, ~24 rules of CSS) is what closed it; `drawDonut()` and `PIE_COLORS` stay, since the Mistakes breakdown wheel uses them.
 
 **Theming.** Colours are driven entirely by CSS custom properties (`--bg`, `--surface`, `--accent`, `--text`, …) set on the root via a `data-theme` attribute. There are **3 built-in themes** — **Dark** (the default), **Light** and **Light rose**. The choice persists in `localStorage['msh-theme']`. Because every colour is a variable, adding a theme is just one CSS block.
+
+**Fonts are tokens too** (since 2026-09-26): `--font-body` (Inter), `--font-head` (Manrope) and `--font-mono` (JetBrains Mono). 190 of the 192 `font-family` declarations in `styles.css` read one of the three — the other two are `inherit` and the formula sheet's Georgia serif — and the Mistakes donut's canvas label reads `--font-mono` through `_themeColor()`. Before this all 190 were literals, so trying a typeface meant a find-and-replace across the file. `npm test` now fails on any new literal, because the [design lab](#design-lab) can only reach what is a token.
 
 Ocean, Violet and Pure Black were retired once the spectrum became a memory scale rather than decoration: a palette that retints the whole app fights a colour ramp that has to mean the same thing everywhere. `THEME_MIGRATE` in `index.html` maps the retired keys onto the survivors, and — like `applyChapterRenames` — it runs on **every** load rather than once behind a flag, because sync can push a retired value back down from a device still on an older build at any moment. A copy of the map lives in the boot `<script>` in `<head>` so the migration lands before first paint.
 
@@ -968,6 +971,7 @@ Groupings: **modern spec** = `alevel` + `as` (36 papers); **legacy Core** = `old
 - **MathJax** — LaTeX typesetting (CDN).
 - **Firebase compat SDK v10.14.1** — `firebase-app`, `firebase-auth`, `firebase-firestore` (CDN `gstatic.com`). Project **`maths-hub-3aa8c`** (`authDomain: maths-hub-3aa8c.firebaseapp.com`). Firestore doc per user at `users/{uid}`; profile-image writes to a sibling doc with a `serverTimestamp()`.
 - **Google Gemini** — `gemini-2.5-flash` via the student's own key in `localStorage['alevel-gemini-key-v1']`.
+- **Google Fonts** — Inter, Manrope and JetBrains Mono from the `<link>` in `<head>`. The [design lab](#design-lab) adds a stylesheet per family you pick, and only then.
 - **Service worker** (`sw.js`) — precaches the shell and `data/*.js`; cache-first with background refresh for MathJax, Google Fonts **and the Firebase SDK on `www.gstatic.com`**; network-first for own files so a push reaches you immediately; explicitly *bypasses* Firestore, Identity Toolkit and Gemini so realtime sync and AI calls are never served stale. Caching the SDK is what makes offline durability real: without it the three `<script>` tags failed offline, `firebase` was undefined, and the sync block bailed out early — taking the `localStorage` hook with it, so offline edits were never queued for the cloud at all.
 - No runtime dependencies beyond those CDNs; the only tooling is `scripts/validate.mjs`, which uses nothing but Node's standard library.
 
@@ -1003,6 +1007,7 @@ A sandbox for looking at the app without signing in and without waiting three we
 | **FPS** | Live frame rate and worst frame, for watching a transition rather than guessing |
 | **Copy diagnostics** | The whole panel state as text |
 | **Next theme** | Cycles all three |
+| **Design lab** | Opens the [design lab](#design-lab) — the same as `?lab` |
 
 **The clock is the substantive one.** Nearly everything the app decides is a function of the date, and none of that is visible on any single day. On the Mid-year preset: `+30d` takes the due list 76 → 128 and a sample topic 86% → 82% recall; `+180d` puts everything overdue at 69%; **`+300d` lands inside `EXAM_RAMP_DAYS` of the June 2027 papers and target retention jumps 89.7% → 96.7%** — the exam ramp engaging, which there is otherwise no way to watch. `−60d` shows last term: 94% recall, six topics due. Returning to `Now` reproduces the original numbers exactly.
 
@@ -1054,6 +1059,42 @@ Two things worth knowing once you are in, both of which have cost real debugging
 - **Always move the clock with `mshTestSetDay()`**, never by assigning `_testDayShift`. The one-second `today()` memo and both per-day caches have to be dropped with it or half the app answers as yesterday.
 
 > **This section tells anyone how to enter test mode without the password, and that is deliberate.** It costs nothing that was actually protecting anything: the SHA-256 hash is in `index.html` for anyone to read, so the gate has always been obfuscation. What makes the sandbox safe is the three properties above — namespaced storage, no cloud connection, an unmissable hazard bar — not the password. The password stays out of this file because it is still a useful speed bump for a person who wanders in. **Nothing real must ever go behind this gate.**
+
+---
+
+## Design lab
+
+A live editor for the design tokens, run on the real app. Built for the redesign's Foundations step — colour scheme, font, corner shape — where the plan had been to redraw each page in Figma just to try colours on it. Every colour, font, type size and corner here is already a custom property, so the app is the better canvas: the lab changes the tokens, and every page, dialog and state is already wearing the result.
+
+**Open it** with `?lab` on the URL, the test panel's **Design lab** button, or `mshLab()` from the console. It works on the real app as well as in test mode — it only changes how things look — and is tab-scoped like test mode (`sessionStorage['msh-lab']`), so it ends with the tab or the ×.
+
+**It is one file, [`lab.js`](lab.js), fetched only on request.** A five-line loader in `<head>` is the only thing that references it; a normal page load does not request it. It is not in the service worker's precache, so it needs a connection the first time.
+
+| Section | What it does |
+|---|---|
+| **Base** | Which built-in theme the recipe sits on. Chosen here, it does **not** change your saved theme |
+| **Surfaces & text** | *Generate from one hue* — hue, tint, page lightness and layer step drive the four surfaces, text, muted and dim in OKLCH. With the sliders at their starting values it lands within a shade of the shipped theme, so the first move is continuous. Muted and dim are walked away from the surfaces until they clear 4.5:1 on all four, so **the generator cannot produce failing text** |
+| **Accent** | Hue shift for `--accent` / `--accent2`, keeping their lightness and chroma |
+| **Memory spectrum** | Presets (as is · even rainbow · soft · warm · cool · aurora · accent → accent 2 · one hue), then *Calm* (chroma ×0.2–1.4) and *Lightness* |
+| **Status, years, difficulty** | The remaining semantic colours, hand-editable |
+| **Type** | Heading, body and label/number fonts from 37 Google Fonts families, plus a size multiplier over the nine `--fs-*` steps |
+| **Shape** | Roundness ×0–1.6 over the four `--r-*` corners; *pills become corners* |
+| **Contrast** | 21 live checks: 14 text tokens at 4.5:1 on all four surfaces, 5 spectrum stops at 3:1, and the two "text on a fill" pairs. Each token row also shows its own worst ratio |
+| **Export** | *Copy CSS* gives a block of only the tokens the lab changed, ready to become a theme, with the recipe embedded as `/* lab:{…} */` so the same text pastes back in via *Import* |
+
+Every token row is also editable by hand — a colour picker plus a text field that takes any CSS colour — and a hand-set value (marked •) wins over the generators. Translucent tokens (the two hairlines) show their colour over a card and are edited as text, since a picker only speaks opaque `#rrggbb`. **Variants A / B / C** each hold a full recipe; **hold *Original*** (or hold `\`) to see the app as it really is. On screens ≥1100px the panel docks and the page reflows beside it rather than under it.
+
+**What it can and cannot touch** — the same kind of guarantee as test mode's, each tested rather than argued (2026-09-26):
+
+- **It writes inline custom properties on `<html>` and the `data-theme` attribute, nothing else**, and it tracks which properties it set, so clearing touches nothing it did not write. Closing restores the page exactly: inline style, theme attribute, every token and the root class list all compared equal to a snapshot taken before it opened.
+- **It never calls `applyTheme()`.** `msh-theme` is in `SYNC_KEYS`, so trying a base theme through the app's own setter would push it to every signed-in device. The lab sets the attribute directly and puts `activeTheme` back on close; a `MutationObserver` holds its base if the app re-applies a theme meanwhile (a cloud pull does).
+- **Its state is `localStorage['msh-lab-v1']`**, which is not in `SYNC_KEYS` — device-local, and inside the `msh-test:` namespace in test mode.
+- **It stops its own key events at `window` capture.** The app's shortcut handler listens on `document` in the capture phase and checks `document.activeElement` — which, for an input inside a shadow root, is the shadow *host*, a `div`. So typing `#1e2` into the lab would have fired app shortcuts. Window capture runs first; default actions (typing, Tab, Space on a button) are unaffected. Verified with a control: a page key still arrives, and the same shadow-DOM key arrives when the guard is absent.
+- **The panel is a shadow root with its own fixed palette**, so no edit can make the lab itself unreadable, and no app style leaks into it.
+
+**Scripts** can call `mshLabCompute(recipe)` for the token map a recipe produces, without touching the page, and `mshLabClose()`.
+
+**What it cannot reach yet:** spacing. Padding, gaps and margins are 4px-grid literals, not tokens (see the design-tokens comment in `styles.css`), so there is no spacing control — tokenising spacing is its own Foundations item.
 
 ---
 
@@ -1139,7 +1180,7 @@ Before `npm run deploy`, for the change you just made:
 
 ### What the tooling can and cannot check
 
-`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Seven suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it), and `logbook-isolation-test` (only the A-Level logbook reaches the memory engine). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness, every `font-family` reading a font token, every token the design lab lists still existing — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Seven suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it), and `logbook-isolation-test` (only the A-Level logbook reaches the memory engine). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
 
 > **`npm test` is the single list.** CI and `scripts/deploy.sh` both call it rather than spelling the suites out again. They had each drifted into a *subset* of it — the icon-index check and the exam-ramp suite ran only on a developer's machine, so the 2026-08-22 exam-ramp work was unguarded everywhere it mattered. Two lists of the same thing is one list to forget.
 
@@ -1176,6 +1217,8 @@ Honest list of what doesn't work yet, so nothing here looks like a bug you have 
 
 - **Clock skew is unhandled** in the merge — it trusts device clocks. `serverTimestamp` is the escape hatch if it bites. The streak's `resetAt` inherits this: two devices far enough out of step could disagree about which reset is newer.
 - **The display name is invisible on a phone.** It is set in Settings and shown in the rail's account footer, and the footer is desktop-only — the bottom bar is five icons wide with nowhere to put a name. So a student who only ever uses the PWA sets a name they will never see. Either the mobile speed-dial grows a header row, or the setting should say so.
+- **Three colour tokens are dead.** `--accent-h`, `--tab-active` and `--glow` are defined (the first two in every theme) and read by nothing — no `var()` anywhere in `styles.css` or `index.html`, measured 2026-09-26. The design lab leaves them out rather than offer editors for colours nobody sees. Delete them, or wire them to what they were meant for. (`--severity` is unread too, but on purpose: it is the one-line way back to the old green→red severity ramp, should the unified spectrum read worse in practice.)
+- **Spacing is not tokenised**, so the design lab has no spacing control and "make the spacing consistent" has nothing to adjust in one place. Padding and gaps are 4px-grid literals by design ("so shorthand stays readable"); a spacing scale would have to be introduced first.
 - **Reset revision logs has no undo**, beyond the ordinary Export you could have taken first. The tombstones make it propagate correctly, which also means it propagates *promptly* — every signed-in device clears within seconds. The dialog says so and requires a confirmation, but an "undo for the next 10 seconds" would be kinder than a warning.
 
 ---

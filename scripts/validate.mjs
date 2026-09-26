@@ -30,12 +30,12 @@ const DATA_FILES = [
   'data/formulas.js', 'data/grade-boundaries.js'
 ];
 
-for (const f of [...DATA_FILES, 'sw.js']) {
+for (const f of [...DATA_FILES, 'sw.js', 'lab.js']) {
   if (!exists(f)) { fail(`missing file: ${f}`); continue; }
   try { new vm.Script(read(f), { filename: f }); }
   catch (e) { fail(`syntax error in ${f}: ${e.message}`); }
 }
-ok(`${DATA_FILES.length + 1} standalone JS files parse`);
+ok(`${DATA_FILES.length + 2} standalone JS files parse`);
 
 const html = read('index.html');
 let inlineCount = 0;
@@ -244,6 +244,28 @@ for (const g of GLOSSARY) {
   for (const it of g.items) if (!it.term || !it.def) fail(`glossary group ${g.topic}: entry missing term or def`);
 }
 ok(`glossary: ${GLOSSARY.length} groups, ${terms} terms`);
+
+/* ------------------------------------------------ 9. design tokens & the lab ---- */
+
+/* The design lab (lab.js) works by overriding custom properties, so it only reaches what is
+   written as one. A font-family literal is invisible to it — the lab would show a font
+   changing on some text and not the rest, which reads as the lab being broken. And a token
+   the lab lists but the stylesheet no longer defines is an editor for nothing. Both fail
+   silently, so both are checked here. */
+{
+  const css = read('styles.css');
+  const FONT_OK = /^(var\(--font-(body|head|mono)\)|inherit|Georgia,'Times New Roman',serif)$/;
+  const stray = [...css.matchAll(/font-family:([^;}]*)/g)].map(m => m[1].trim()).filter(v => !FONT_OK.test(v));
+  if (stray.length) fail(`styles.css: ${stray.length} font-family value(s) bypass the font tokens: ${[...new Set(stray)].join(' | ')}`);
+  const defined = new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]));
+  if (exists('lab.js')) {
+    const lab = read('lab.js');
+    const listed = new Set([...lab.matchAll(/\['(--[a-z0-9-]+)',/g)].map(m => m[1]));
+    const missing = [...listed].filter(t => !defined.has(t));
+    if (missing.length) fail(`lab.js lists token(s) styles.css no longer defines: ${missing.join(', ')}`);
+    ok(`design tokens: every font-family reads a token; the lab's ${listed.size} tokens all exist`);
+  }
+}
 
 /* ------------------------------------------------------------- coverage info ---- */
 

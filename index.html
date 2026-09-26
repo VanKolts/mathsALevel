@@ -87,6 +87,14 @@ window.MSH_TEST = (function(){
 var t=localStorage.getItem('msh-theme');
 if(t&&M[t]){t=M[t];try{localStorage.setItem('msh-theme',t);}catch(e){}}
 if(t&&t!=='rose-dark')document.documentElement.setAttribute('data-theme',t);})();</script>
+<!-- Design lab loader. `?lab` on the URL, the test panel's "Design lab" button or mshLab() loads
+     lab.js, a live editor for the design tokens (README § Design lab). Tab-scoped like test mode,
+     and nothing is fetched otherwise. It sits here so the lab's recipe lands as early as it can. -->
+<script>window.mshLab=function(){try{sessionStorage.setItem('msh-lab','1');}catch(e){}
+if(window.__mshLabLoaded){if(window.mshLabOpen)window.mshLabOpen();return;}
+var s=document.createElement('script');s.src='lab.js';document.head.appendChild(s);};
+(function(){var on=/[?&]lab(=|&|$)/.test(location.search);try{if(!on)on=sessionStorage.getItem('msh-lab')==='1';}catch(e){}
+if(on)window.mshLab();})();</script>
 <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},svg:{fontCache:'global'},startup:{typeset:false}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
@@ -7276,7 +7284,7 @@ function drawDonut(canvas,entries,legendEl){
   });
   const hr=r*0.52;
   ctx.beginPath();ctx.arc(cx,cy,hr,0,2*Math.PI);ctx.fillStyle=surface;ctx.fill();
-  ctx.fillStyle=text;ctx.font='bold 14px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=text;ctx.font='bold 14px '+_themeColor('--font-mono','monospace');ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(total,cx,cy);
 
   entries.sort((a,b)=>b.count-a.count).forEach(e=>{
@@ -8409,7 +8417,8 @@ if(window.MSH_TEST) (function(){
    +'<section><div class="lbl">See the layout</div><div class="row">'
      +'<button type="button" id="msh-test-zoomnav">Zoom nav ×3</button>'
      +'<button type="button" id="msh-test-boxes">Outline boxes</button>'
-     +'<button type="button" id="msh-test-icons">Icon slots</button></div></section>'
+     +'<button type="button" id="msh-test-icons">Icon slots</button>'
+     +'<button type="button" id="msh-test-lab">Design lab</button></div></section>'
    +'<section><div class="lbl">Render cost</div><div class="row">'
      +'<button type="button" id="msh-test-perf">Measure</button>'
      +'<button type="button" id="msh-test-fps">FPS</button>'
@@ -8503,6 +8512,9 @@ if(window.MSH_TEST) (function(){
       toggleStyle(this,'msh-icons',
         '.ico{outline:1px dashed var(--accent,#fb923c)!important;min-width:14px;min-height:14px;display:inline-block!important;}');
     };
+
+    // The lab lives in its own file and loads only on request — see the loader in <head>.
+    document.getElementById('msh-test-lab').onclick=function(){ if(window.mshLab) window.mshLab(); };
 
     // ---- fps ------------------------------------------------------------------------------
     let fpsOn=false, fpsRaf=0;
