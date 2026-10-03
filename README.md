@@ -604,6 +604,7 @@ All student state is JSON in `localStorage`, namespaced `alevel-*` / `msh-*` / `
 | `alevel-syncmeta-v1` | the merge ledger: `del`/`add` tombstones and `mod` edit stamps |
 | `alevel-imgpending-v1` | photo ids awaiting upload (device-local — deliberately not synced) |
 | `mh_stamp`, `mh_writer` | sync bookkeeping (last-write timestamp + which device wrote) |
+| `mh_owner` | which account this browser's data belongs to — device-local; a sign-in by any other account drops the local copy instead of merging it ([Sync and test data](#sync-and-test-data)) |
 
 Older keys (`alevel-sr-v4`) are read for one-time migration.
 
@@ -676,6 +677,17 @@ Two consequences worth knowing:
 `applyRemote` no longer calls `location.reload()`. It re-reads state in place and re-renders — and defers the redraw while an input is focused, so an incoming sync can't swallow a half-typed note. The in-memory globals are always refreshed immediately regardless, since leaving them stale would let the next `saveState()` write the pre-merge copy back over the merged one.
 
 Your marks and progress are the source of truth; nothing is silently discarded.
+
+### Sync and test data
+
+Two guards, both added 2026-10-03 after a real account turned out to hold **180 seeded mistakes and 25 seeded paper logs** — the test seeder's *Mid-year* preset, written straight into a real (un-namespaced) store by a session on 2026-08-18, before [test mode](#test-mode) existed. They got into the account through the one door sync has: **sign-out leaves local storage as it is, and the first snapshot after a sign-in merges local into the cloud.** Whatever was in that browser became the account's, permanently, since a union merge has no way to know a record is not yours.
+
+- **Local data is bound to one account — `claimLocalFor(uid)`.** `mh_owner` (device-local, not synced) records whose data this browser holds. On sign-in, if it names a different account, or the data has no owner *and* no `mh_stamp` (it never came from any account — a seeded store, or something written before sign-in), every synced key plus `mh_stamp` and the photo-upload queue are dropped **before** the listener attaches, so the first snapshot is taken whole rather than merged. Nothing is lost: another account's data is safe in its own cloud copy. A device with a stamp and no owner is adopted, because that is every device already in use when the key was introduced.
+- **Test records never travel — `stripTestRecords(store)`.** Applied to what `collectLocal()` pushes, to every snapshot before it is merged, and once to local storage on sign-in. It drops mistakes and paper logs whose id `mhIsTestId()` recognises, review-log entries likewise, and a topic whose *every* review was seeded (its `S` and `D` are seeded too). `applyRemote` compares the merge against the cloud's *unstripped* copy, so a cloud copy still holding test data is rewritten rather than left alone. A clean store passes through byte-identical, so the guard cannot start a push loop.
+
+**`mhIsTestId(id)`** is the one definition: the `msh-test-` prefix the seeder now puts on every id, plus the three bare shapes it used before (`m12`, `p3`, `r4_1`). No real record takes those shapes — real ids come from `mhUid()` (UUID or `id-…`), or are the bare numbers of the oldest mistakes.
+
+Tombstones could not have done this job alone: they expire after `TOMBSTONE_TTL_DAYS`, and a device offline longer than that would push the records straight back. Pinned in [`scripts/sync-isolation-test.mjs`](scripts/sync-isolation-test.mjs), which was checked against four broken copies (no strip, no owner check, no legacy adoption, no bare-shape fingerprint) and fails on each.
 
 ---
 
@@ -987,6 +999,7 @@ A sandbox for looking at the app without signing in and without waiting three we
 
 - **Storage is namespaced before any app code runs.** A script above the theme boot block shadows `getItem`/`setItem`/`removeItem` on the `localStorage` *instance* (own properties shadowing `Storage.prototype`, which leaves `sessionStorage` — where the flag lives — alone) and prefixes every key with `msh-test:`. Verified by planting a marker in the real store, seeding the sandbox over it, and confirming the marker survived byte-identical.
 - **The cloud block takes its missing-SDK exit.** No auth, no gate, no listener, no push. The sandbox cannot read or write any account's data.
+- **Seeded records are marked, and sync refuses them.** Every id the seeder writes starts `msh-test-`, so even data that escapes the sandbox some other way — a session seeding a real store by hand, as one did on 2026-08-18 before this sandbox existed — is dropped by [sync](#sync-and-test-data) instead of reaching an account.
 - **It cannot be mistaken for the real app.** A permanent hazard bar reading `TEST MODE · sandboxed · no cloud`, plus the live clock offset when one is set.
 
 ### What the panel exposes
@@ -1180,7 +1193,7 @@ Before `npm run deploy`, for the change you just made:
 
 ### What the tooling can and cannot check
 
-`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness, every `font-family` reading a font token, every token the design lab lists still existing — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Seven suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it), and `logbook-isolation-test` (only the A-Level logbook reaches the memory engine). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
+`npm test` enforces the invariants — paper totals, canonical topic tags, array alignment, rename idempotency, precache completeness, every `font-family` reading a font token, every token the design lab lists still existing — and prints the live counts, so anything numeric in the docs can be checked against a real run rather than remembered. Eight suites run after it, each pulling its functions **out of `index.html` and executing them** rather than reimplementing the model, so a suite cannot quietly drift from the code it checks: `fsrs-replay-test` (stored state == replay of the log), `fsrs-mistake-test`, `fsrs-paper-test`, `fsrs-exam-ramp-test` (the calendar half — the run-in, the ceiling, and the release once every paper is sat), `streak-merge-test` (the merge's three properties), `restore-tombstone-test` (a restored backup out-ranks the tombstones covering it), `logbook-isolation-test` (only the A-Level logbook reaches the memory engine), and `sync-isolation-test` (seeded records and another account's data never reach an account). Each accepts a path as `argv[2]` so it can be pointed at a deliberately broken copy; that is how you check a new assertion actually fails when the invariant does. It cannot tell you that a *sentence* has gone stale. That part is the checklist above.
 
 > **`npm test` is the single list.** CI and `scripts/deploy.sh` both call it rather than spelling the suites out again. They had each drifted into a *subset* of it — the icon-index check and the exam-ramp suite ran only on a developer's machine, so the 2026-08-22 exam-ramp work was unguarded everywhere it mattered. Two lists of the same thing is one list to forget.
 

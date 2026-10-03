@@ -2447,6 +2447,16 @@ function mhUid(){
   try{ if(typeof crypto!=='undefined' && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
   return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
 }
+/* Records the test-mode seeder made, and never anything a person did. The seeder prefixes its
+   ids with 'msh-test-'; the three bare shapes are what it wrote before 2026-10-03, and what an
+   August session seeded straight into a real store before test mode existed — 180 mistakes and
+   25 paper logs of which then reached a real account through sync. Real records never take
+   these shapes: mhUid() above, or the bare-number ids of the oldest mistakes. Sync drops
+   anything this matches, in both directions (README § Sync and test data). */
+function mhIsTestId(id){
+  const s=String(id==null?'':id);
+  return s.indexOf('msh-test-')===0 || /^[mp]\d+$/.test(s) || /^r\d+_\d+$/.test(s);
+}
 function loadSyncMeta(){
   try{ const raw=JSON.parse(localStorage.getItem('alevel-syncmeta-v1')||'null');
        if(raw&&typeof raw==='object') syncMeta=raw; }catch(e){}
@@ -8321,11 +8331,11 @@ if(window.MSH_TEST) (function(){
     const sr2={};
     names.slice(0,p.topics).forEach(function(n,i){
       const reps=1+Math.floor(r()*6), log=[];
-      for(let k=0;k<reps;k++) log.push({id:'r'+i+'_'+k,date:dayOff(-(reps-k)*7-Math.floor(r()*5)),grade:1+Math.floor(r()*5),r:0.9,elapsed:5});
+      for(let k=0;k<reps;k++) log.push({id:'msh-test-r'+i+'_'+k,date:dayOff(-(reps-k)*7-Math.floor(r()*5)),grade:1+Math.floor(r()*5),r:0.9,elapsed:5});
       sr2[n]={D:3+r()*6,S:1+r()*200,last:dayOff(-Math.floor(r()*90)-1),reps:reps,lapses:Math.floor(r()*2),log:log};
     });
     const cats=Object.keys(MISTAKE_EVIDENCE), ms=[];
-    for(let i=0;i<p.mistakes;i++) ms.push({id:'m'+i,topic:names[Math.floor(r()*names.length)],
+    for(let i=0;i<p.mistakes;i++) ms.push({id:'msh-test-m'+i,topic:names[Math.floor(r()*names.length)],
       cat:cats[Math.floor(r()*cats.length)],severity:1+Math.floor(r()*5),date:dayOff(-Math.floor(r()*120)),note:''});
     const plog=[]; let n=0;
     outer: for(const mod of Object.keys(PAPER_QUESTIONS||{})){
@@ -8333,7 +8343,7 @@ if(window.MSH_TEST) (function(){
         for(const pn of Object.keys(PAPER_QUESTIONS[mod][y])){
           const qs=PAPER_QUESTIONS[mod][y][pn], qMarks={};
           qs.forEach(function(q){ qMarks[q.q]=Math.round(q.marks*(0.45+r()*0.55)); });
-          plog.push({id:'p'+(n++),moduleId:mod,year:y,paperN:pn,date:dayOff(-Math.floor(r()*150)),qMarks:qMarks});
+          plog.push({id:'msh-test-p'+(n++),moduleId:mod,year:y,paperN:pn,date:dayOff(-Math.floor(r()*150)),qMarks:qMarks});
           if(n>=p.papers) break outer;
         }
       }
@@ -9040,7 +9050,41 @@ if(window.MSH_TEST) (function(){
   function docStamp(d){ var u=d&&d.updatedAt; if(u&&u.seconds!=null)u=u.seconds*1000; return ((d&&d.writer)||'?')+'|'+(u||0); }
   var lastPushError='';
 
-  function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return d; }
+  function collectLocal(){ var d={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)d[k]=v; }); return stripTestRecords(d); }
+  /* Test data never travels. Applied to what this device pushes AND to every snapshot before it
+     is merged, so a store that already holds seeded records — this device's or the cloud's —
+     is cleaned by the next sync rather than spread by it. Tombstones alone cannot promise that:
+     they expire after TOMBSTONE_TTL_DAYS, and a device that has been offline longer than that
+     would push the seeded records straight back. Unparseable values pass through untouched;
+     the merge has its own handling for those and this is not the place to second-guess it. */
+  function stripTestRecords(store){
+    if(!store)return store;
+    ['alevel-mistakes-v2','alevel-paperlog-v1'].forEach(function(k){
+      if(store[k]==null)return;
+      var a; try{ a=JSON.parse(store[k]); }catch(e){ return; }
+      if(!Array.isArray(a))return;
+      var kept=a.filter(function(r){ return !(r&&mhIsTestId(r.id)); });
+      if(kept.length!==a.length) store[k]=sj(kept);
+    });
+    if(store['alevel-sr-v5']!=null){
+      var sr0; try{ sr0=JSON.parse(store['alevel-sr-v5']); }catch(e){ sr0=null; }
+      if(sr0&&typeof sr0==='object'){
+        var hit=false;
+        Object.keys(sr0).forEach(function(n){
+          var rec=sr0[n], log=rec&&Array.isArray(rec.log)?rec.log:null;
+          if(!log||!log.length)return;
+          var kept=log.filter(function(e){ return !(e&&mhIsTestId(e.id)); });
+          if(kept.length===log.length)return;
+          hit=true;
+          // A topic whose every review was seeded was never studied: its S and D are seeded too.
+          if(!kept.length) delete sr0[n]; else rec.log=kept;
+        });
+        if(hit) store['alevel-sr-v5']=sj(sr0);
+      }
+    }
+    return store;
+  }
+  window.mhStripTestRecords=stripTestRecords;   // exposed for the sync-isolation suite
   // TRUE MIRROR: set keys present upstream AND clear keys absent upstream. Without the clear,
   // a value one device unset (e.g. exam date → removeItem) could never propagate, leaving the
   // two devices on permanently different schedules even though "everything looks synced".
@@ -9082,6 +9126,8 @@ if(window.MSH_TEST) (function(){
   // Reconcile another device's cloud data with this one, record by record.
   function applyRemote(d){
     if(!d||!d.store)return;
+    var cloudRaw=d.store;   // compared against below, so a cloud copy holding test data gets rewritten
+    d={store:stripTestRecords(Object.assign({},d.store)), updatedAt:d.updatedAt, writer:d.writer};
     var remote=docStamp(d), mine=localStorage.getItem('mh_stamp')||'';
     if(remote===mine)return;                                          // nothing new
     if(d.writer===myWriter){ nativeSet('mh_stamp',remote); return; }  // our own write echoed back
@@ -9095,7 +9141,7 @@ if(window.MSH_TEST) (function(){
     // Anything the merge added that the cloud doesn't have goes straight back, so the other
     // device converges too. Idempotence is what keeps this from becoming a push loop: once
     // both sides hold the merged store, the next merge changes nothing and no push follows.
-    if(sj(merged)!==sj(d.store)) schedulePush();
+    if(sj(merged)!==sj(cloudRaw)) schedulePush();
     refreshFromStorage();
   }
   /* Re-read state in place instead of reloading the page. The old location.reload() could fire
@@ -9148,7 +9194,35 @@ if(window.MSH_TEST) (function(){
         return;
       }
       gotFirst=true; applyRemote(snap.data());
+      if(needCleanPush){ needCleanPush=false; schedulePush(); }
     }, function(err){ console.warn('[cloud] listener error',err); setTimeout(function(){ if(currentUser)attachListener(currentUser.uid); },4000); });
+  }
+  /* Whose data is in this browser. Sign-out leaves local storage as it is, and the first snapshot
+     after a sign-in MERGES local into the cloud — so without this, signing into account B where
+     account A (or anything signed-out: an old seeded store) had been left behind copied all of it
+     into B, permanently. That is how 180 seeded mistakes reached a real account (2026-10-03).
+     Data with no owner is adopted only when the device has synced before (it has an mh_stamp),
+     which is every device that was already in use when this key was introduced; data with no
+     stamp never came from any account, and data owned by another account stays theirs — it is
+     safe in their own cloud copy, so this browser's copy of it is dropped, not merged. */
+  var OWNER_KEY='mh_owner', needCleanPush=false;
+  function claimLocalFor(uid){
+    var owner=null, stamp=null;
+    try{ owner=localStorage.getItem(OWNER_KEY); stamp=localStorage.getItem('mh_stamp'); }catch(e){}
+    if(owner!==uid){
+      if(owner||!stamp){
+        console.info('[cloud] local data belongs to '+(owner?'another account':'no account')+' — not merging it');
+        SYNC_KEYS.concat(['mh_stamp',IMG_PENDING_KEY]).forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+      }
+      nativeSet(OWNER_KEY,uid);
+    }
+    // Test records already in this browser are cleaned here, not just filtered on the way out:
+    // otherwise they would stay on screen and keep feeding the scheduler on this device.
+    var raw={}; SYNC_KEYS.forEach(function(k){ var v=localStorage.getItem(k); if(v!==null)raw[k]=v; });
+    var clean=stripTestRecords(Object.assign({},raw)), changed=false;
+    Object.keys(clean).forEach(function(k){ if(clean[k]!==raw[k]){ nativeSet(k,clean[k]); changed=true; } });
+    if(owner!==uid||changed) refreshFromStorage();
+    if(changed) needCleanPush=true;   // once the first snapshot is in, so the cloud copy is corrected too
   }
   // Manual .get() pull — backup for when a listener was dropped, and used on focus / reconnect.
   var pulling=false;
@@ -9259,6 +9333,7 @@ if(window.MSH_TEST) (function(){
     if(typeof renderRailAccount==='function'){ try{ renderRailAccount(); }catch(e){} }
     if(!user){ showForm(); return; }
     hide();
+    claimLocalFor(user.uid);    // before the listener: only this account's own data may be merged up
     attachListener(user.uid);   // realtime listener reconciles cloud↔local and keeps them in sync
     // Photos taken offline can now reach the other devices, and any legacy base64 still sitting
     // in localStorage can be moved out to IndexedDB without losing it for those devices.
