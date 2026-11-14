@@ -2420,14 +2420,29 @@ let sr={}, mistakes=[], favourites=new Set(), notes={}, fmOptions=new Set(), pap
    two doors from the mistake list into FSRS. */
 const MK_MAIN='alevel';
 const MK_MAIN_NAME='A-Level Maths';
-let mkLogbooks=[];          // custom logbooks only; the built-in one is implicit
+/* Further Maths is the second built-in logbook, and it is a *view*, not a storage tag.
+   An FM mistake is stored exactly like an A-Level one — no `col` — and is told apart by its
+   topic, whose cluster has qual 'fm'. So both built-ins sit on the engine side of the gate
+   (mkColOf() is still 'alevel' for both, and the two FSRS doors never see a difference),
+   every FM mistake logged before this existed moves into the new logbook without a
+   migration, and nothing about storage or sync changes. Topic names are unique across the
+   two quals, so the topic alone decides. MK_FM is never written to a record's `col`. */
+const MK_FM='fm';
+const MK_FM_NAME='Further Maths';
+let mkLogbooks=[];          // custom logbooks only; the two built-ins are implicit
 let mkActive=MK_MAIN;       // which one the Mistakes page is showing
 function mkColOf(m){ return (m&&m.col)||MK_MAIN; }
-function mkIsMain(id){ return !id||id===MK_MAIN; }
+function mkTopicView(name){ var t=topicByName(name); return (t&&t.qual==='fm')?MK_FM:MK_MAIN; }
+// The logbook a record shows under: its `col`, except that the built-in splits by topic.
+function mkViewOf(m){ var c=mkColOf(m); return c===MK_MAIN?mkTopicView(m&&m.topic):c; }
+// "Main" = a syllabus logbook: it has topics and feeds the memory engine. True of both built-ins.
+function mkIsMain(id){ return !id||id===MK_MAIN||id===MK_FM; }
 function mkBook(id){ return mkIsMain(id)?null:mkLogbooks.find(function(b){return b.id===id;}); }
-function mkNameOf(id){ if(mkIsMain(id))return MK_MAIN_NAME; var b=mkBook(id); return b?b.name:'Unknown logbook'; }
+function mkNameOf(id){ if(id===MK_FM)return MK_FM_NAME; if(mkIsMain(id))return MK_MAIN_NAME; var b=mkBook(id); return b?b.name:'Unknown logbook'; }
 // Entries in one logbook. Defaults to the one on screen, which is what every view wants.
-function mkEntries(id){ var want=id||mkActive; return mistakes.filter(function(m){ return mkColOf(m)===want; }); }
+function mkEntries(id){ var want=id||mkActive; return mistakes.filter(function(m){ return mkViewOf(m)===want; }); }
+// Both built-ins together: everything that reaches the engine.
+function mkSyllabusCount(){ return mkEntries(MK_MAIN).length+mkEntries(MK_FM).length; }
 /* ---- Sync metadata: tombstones + modification stamps ------------------------------
    Two devices are merged by unioning their records, and a union can never express a
    deletion: anything you remove locally is simply re-added from the other device's copy.
@@ -2498,7 +2513,7 @@ function loadState(){
   try{mistakes=JSON.parse(localStorage.getItem('alevel-mistakes-v2')||'[]');}catch(e){mistakes=[];}
   try{mkLogbooks=JSON.parse(localStorage.getItem('alevel-mistake-logbooks-v1')||'[]');}catch(e){mkLogbooks=[];}
   if(!Array.isArray(mkLogbooks))mkLogbooks=[];
-  mkLogbooks=mkLogbooks.filter(function(b){ return b&&b.id&&b.id!==MK_MAIN&&typeof b.name==='string'; });
+  mkLogbooks=mkLogbooks.filter(function(b){ return b&&b.id&&!mkIsMain(b.id)&&typeof b.name==='string'; });
   try{paperLog=JSON.parse(localStorage.getItem('alevel-paperlog-v1')||'[]');}catch(e){paperLog=[];}
   try{const f=JSON.parse(localStorage.getItem('alevel-favs-v1')||'[]');favourites=new Set(f);}catch(e){favourites=new Set();}
   try{notes=JSON.parse(localStorage.getItem('alevel-notes-v1')||'{}');}catch(e){notes={};}
@@ -2955,7 +2970,8 @@ function tutorGoPractise(topic){
 function tutorLogMistake(topic){
   closeTutor();
   if(typeof switchTab==='function')switchTab('mistakes');
-  if(typeof mkSetActive==='function' && !mkIsMain(mkActive)) mkSetActive(MK_MAIN);
+  // ...and in the right one of the two built-ins, or the topic would not be in the dropdown.
+  if(typeof mkSetActive==='function' && mkActive!==mkTopicView(topic)) mkSetActive(mkTopicView(topic));
   setTimeout(function(){
     var sel=document.getElementById('m-topic-sel');
     if(sel){ sel.value=topic; if(sel.value!==topic){ /* topic not in active list */ } }
@@ -5106,7 +5122,7 @@ function doExport(){
         const data=JSON.parse(e.target.result);
         if(data.sr) sr=data.sr;
         if(data.mistakes) mistakes=data.mistakes;
-        if(Array.isArray(data.logbooks)) mkLogbooks=data.logbooks.filter(function(b){return b&&b.id&&b.id!==MK_MAIN;});
+        if(Array.isArray(data.logbooks)) mkLogbooks=data.logbooks.filter(function(b){return b&&b.id&&!mkIsMain(b.id);});
         if(data.favourites) favourites=new Set(data.favourites);
         if(data.notes) notes=data.notes;
         if(data.paperLog) paperLog=data.paperLog;
@@ -5123,9 +5139,9 @@ function doExport(){
            already uses to revive a topic you study again after resetting it. */
         mhRestoreFromBackup(data);
         sanitizeAllSR();
-        if(!mkIsMain(mkActive)&&!mkBook(mkActive)) mkActive=MK_MAIN;
+        if(!mkValid(mkActive)) mkActive=MK_MAIN;
         saveState();renderReviewPanel();renderAll();
-        mkApplyFormMode();mkApplyTabs();
+        populateMistakeTopics();mkApplyFormMode();mkApplyTabs();
         if(activeTab==='mistakes')renderMistakesTab(); else renderLogbookBar();
         if(activeTab==='resources')renderResources();
         alert('Data imported successfully!');
@@ -6137,20 +6153,38 @@ const msel=document.getElementById('m-topic-sel');
    changes and two devices do not fight over a UI preference. */
 const LAST_TOPIC_KEY='msh-last-mistake-topic';
 function rememberMistakeTopic(name){ try{ if(name) localStorage.setItem(LAST_TOPIC_KEY,name); }catch(e){} }
-function populateMistakeTopics(){
-  const cur=msel.value;
-  msel.innerHTML='';
-  activeClusters().forEach(c=>{
+/* The clusters a syllabus logbook offers as topics: Maths ones for A-Level, FM ones for
+   Further Maths, 'all' for both (the paper log, where a paper decides it). The FM logbook
+   can be open off the FM track — it stays visible while it holds entries — and there no FM
+   cluster is active, so it falls back to every FM cluster rather than an empty dropdown
+   that could not log anything. */
+function mkViewClusters(view){
+  const act=activeClusters();
+  if(view==='all') return act;
+  const fm=view===MK_FM;
+  const cs=act.filter(c=>(c.qual==='fm')===fm);
+  return (fm&&!cs.length) ? clusters.filter(c=>c.qual==='fm') : cs;
+}
+function mkFillTopicSelect(sel,view){
+  sel.innerHTML='';
+  mkViewClusters(view).forEach(c=>{
     const og=document.createElement('optgroup');og.label=componentName(c.qual,c.component)+' — '+c.name;
     c.topics.forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;og.appendChild(o);});
-    msel.appendChild(og);
+    sel.appendChild(og);
   });
+}
+function populateMistakeTopics(){
+  const cur=msel.value;
+  // A custom logbook hides the select, so which list it holds there does not matter.
+  mkFillTopicSelect(msel, mkIsMain(mkActive)?(mkActive||MK_MAIN):MK_MAIN);
   // Restore in order of confidence: what was selected a moment ago, then what was last
-  // logged. Assigning a value the list does not contain is a no-op, so a topic that has
-  // since been renamed or filtered out by the track simply falls back to the first entry.
-  let want=cur;
-  if(!want){ try{ want=localStorage.getItem(LAST_TOPIC_KEY)||''; }catch(e){} }
-  if(want) msel.value=want;
+  // logged. Assigning a value the list does not contain sets the select to '' rather than
+  // doing nothing, and with two logbooks the remembered topic is often in the other one,
+  // so each candidate is checked against the options and the first topic is the fallback.
+  const has=v=>!!v&&Array.from(msel.options).some(o=>o.value===v);
+  let last=''; try{ last=localStorage.getItem(LAST_TOPIC_KEY)||''; }catch(e){}
+  const want=has(cur)?cur:(has(last)?last:'');
+  if(want) msel.value=want; else if(msel.options.length) msel.selectedIndex=0;
 }
 populateMistakeTopics();
 msel.addEventListener('change',function(){ rememberMistakeTopic(msel.value); });
@@ -6169,10 +6203,21 @@ function mkEmptyText(){
   return mkIsMain(mkActive) ? 'No mistakes logged yet.'
                             : 'Nothing logged in '+mkNameOf(mkActive)+' yet.';
 }
-function mkAllBooks(){ return [{id:MK_MAIN,name:MK_MAIN_NAME}].concat(mkLogbooks); }
+/* The Further Maths chip shows on the FM track, and off it only while it still holds
+   entries — so switching track never hides mistakes, and an A-Level-only student never
+   sees a logbook that can only be empty. */
+function mkFmVisible(){ return getTrack()==='fm' || mkEntries(MK_FM).length>0; }
+function mkValid(id){ if(id===MK_FM) return mkFmVisible(); return mkIsMain(id)||!!mkBook(id); }
+function mkAllBooks(){
+  const built=[{id:MK_MAIN,name:MK_MAIN_NAME}];
+  if(mkFmVisible()) built.push({id:MK_FM,name:MK_FM_NAME});
+  return built.concat(mkLogbooks);
+}
 
 function renderLogbookBar(){
   const chips=document.getElementById('mk-book-chips'); if(!chips)return;
+  // The track can change under an open FM logbook (Settings, My exams, a restore).
+  if(!mkValid(mkActive)){ mkSetActive(MK_MAIN); return; }
   chips.innerHTML='';
   mkAllBooks().forEach(function(b){
     const btn=document.createElement('button');
@@ -6226,10 +6271,11 @@ function mkApplyTabs(){
 }
 
 function mkSetActive(id){
-  if(!mkIsMain(id)&&!mkBook(id)) id=MK_MAIN;
+  if(!mkValid(id)) id=MK_MAIN;
   mkActive=id;
   try{ localStorage.setItem(MK_ACTIVE_KEY,id); }catch(e){}
   mkCancelEdit();
+  populateMistakeTopics();   // the two built-ins list different topics
   mkApplyFormMode();
   mkApplyTabs();
   renderMistakesTab();
@@ -6252,7 +6298,9 @@ function mkCommitEdit(){
   const input=document.getElementById('mk-book-name');
   const name=(input.value||'').trim();
   if(!name){ input.focus(); return; }
-  const clash=mkAllBooks().some(function(b){ return b.id!==mkEditing && b.name.toLowerCase()===name.toLowerCase(); });
+  // Both built-in names are reserved even while the FM chip is hidden, or a custom
+  // "Further Maths" would sit beside the real one the day the track changes.
+  const clash=mkAllBooks().concat([{id:MK_FM,name:MK_FM_NAME}]).some(function(b){ return b.id!==mkEditing && b.name.toLowerCase()===name.toLowerCase(); });
   if(clash){ if(typeof toast==='function')toast('You already have a logbook called that'); input.focus(); return; }
   if(mkEditing==='new'){
     const b={id:mhUid(),name:name,date:today(),modified:Date.now()};
@@ -6299,7 +6347,8 @@ function mkCommitEdit(){
     if(typeof toast==='function')toast('Logbook "'+name+'" deleted');
   });
   try{ mkActive=localStorage.getItem(MK_ACTIVE_KEY)||MK_MAIN; }catch(e){ mkActive=MK_MAIN; }
-  if(!mkIsMain(mkActive)&&!mkBook(mkActive)) mkActive=MK_MAIN;
+  if(!mkValid(mkActive)) mkActive=MK_MAIN;
+  populateMistakeTopics();   // first filled before the saved logbook was known
   renderLogbookBar();
 })();
 document.getElementById('m-date').value=today();
@@ -6619,12 +6668,16 @@ var leakSort='lost';   // 'lost' | 'priority'
 function leakRows(){
   if(typeof refreshPaperTopicStats==='function') refreshPaperTopicStats();
   var freq=topicFrequency(), rows={};
+  /* Scoped to the syllabus logbook on screen. Paper marks are keyed by topic, so the same
+     split as the mistakes applies: an FM paper's leaks belong on the Further Maths page. */
+  var view=mkIsMain(mkActive)?(mkActive||MK_MAIN):MK_MAIN;
   function ensure(tp){ if(!rows[tp]) rows[tp]={topic:tp,got:0,max:0,lost:0,attempts:0,mistakes:0,causes:{}}; return rows[tp]; }
   Object.keys(paperTopicStats||{}).forEach(function(tp){
+    if(mkTopicView(tp)!==view) return;
     var s=paperTopicStats[tp], r=ensure(tp);
     r.got=s.got; r.max=s.max; r.lost=Math.max(0,s.max-s.got); r.attempts=s.attempts.length;
   });
-  mkEntries(MK_MAIN).forEach(function(m){ if(!m.topic)return; var r=ensure(m.topic); r.mistakes++; if(m.cat)r.causes[m.cat]=(r.causes[m.cat]||0)+1; });
+  mkEntries(view).forEach(function(m){ if(!m.topic)return; var r=ensure(m.topic); r.mistakes++; if(m.cat)r.causes[m.cat]=(r.causes[m.cat]||0)+1; });
   var list=Object.keys(rows).map(function(tp){
     var r=rows[tp];
     r.topCause=Object.keys(r.causes).sort(function(a,b){return r.causes[b]-r.causes[a];})[0]||null;
@@ -6647,11 +6700,15 @@ function renderLeaks(){
   if(!rows.length){ el.innerHTML='<div class="mistakes-empty">Log a past paper <b>question-by-question</b> (Past Papers → Log a paper), or log a few mistakes, and this will show exactly where you’re leaking marks.</div>'; return; }
   // Real marks lost = per-QUESTION (counted once), not per-topic — a question tagged with several
   // topics credits its marks to each topic, so summing rows would double-count the headline total.
-  var totalLost=0;
+  var totalLost=0, lkView=(mkActive===MK_FM)?MK_FM:MK_MAIN;
   paperLog.forEach(function(e){
     if(!e.qMarks)return;
     var qs=(typeof ppQuestionsFor==='function')?ppQuestionsFor(e.moduleId,e.paperN,e.year):null; if(!qs)return;
-    qs.forEach(function(q){ if(e.qMarks[q.q]==null)return; var g=Math.max(0,Math.min(q.marks,+e.qMarks[q.q]||0)); totalLost+=(q.marks-g); });
+    qs.forEach(function(q){ if(e.qMarks[q.q]==null)return;
+      // Only questions on this logbook's syllabus, judged by topic like the rows are — module
+      // ids would miss the legacy specs (C3, C4, FP1 2017…), whose questions carry new topics.
+      if(!(q.topics||[]).some(function(tp){ return mkTopicView(tp)===lkView; }))return;
+      var g=Math.max(0,Math.min(q.marks,+e.qMarks[q.q]||0)); totalLost+=(q.marks-g); });
   });
   var byLost=rows.slice().sort(function(a,b){return b.lost-a.lost;});
   var top3=byLost.slice(0,3), top3Lost=top3.reduce(function(s,r){return s+r.lost;},0);
@@ -6660,7 +6717,10 @@ function renderLeaks(){
     /* "Roughly N grade boundaries' worth" needs a typical gap between adjacent grades. Take it
        from the most recent paper this student actually sits, rather than from one hard-coded
        row — an FM option paper is out of 75, so a 9MA0 gap would overstate it by a third. */
-    var gbMod=gbModulesForTrack()[0]||'alevel', pb=null;
+    /* The module is the logbook on screen: Core Pure on the Further Maths page, the
+       student's Maths qualification otherwise. This called gbModulesForTrack() until
+       2026-11-14 — deleted on 2026-08-23, so the report threw whenever marks were lost. */
+    var gbMod=(mkActive===MK_FM)?'fmcp':(getTrack()==='as'?'as':'alevel'), pb=null;
     Object.keys(GRADE_BOUNDARIES.components).sort().reverse().some(function(y){
       pb=gbComponent(gbMod,1,y); return !!pb;
     });
@@ -7013,7 +7073,7 @@ function openEditMistake(id){
   if(!m)return;
   editMistakeId=id;
   editPendingImg=null;
-  editFromCol=mkColOf(m);
+  editFromCol=mkViewOf(m);   // the logbook it shows under — 'fm' for a Further Maths topic
   /* The logbook is editable, so an entry filed in the wrong one can be moved rather than
      deleted and retyped. Moving across the A-Level boundary is not a relabelling — it adds
      or removes an observation from that topic's evidence timeline — so the save path
@@ -7024,30 +7084,7 @@ function openEditMistake(id){
     const o=document.createElement('option'); o.value=b.id; o.textContent=b.name; ebsel.appendChild(o);
   });
   ebsel.value=editFromCol;
-  // populate topic select fresh (FM options may have changed)
-  const emsel=document.getElementById('em-topic-sel');
-  emsel.innerHTML=document.getElementById('m-topic-sel').innerHTML;
-  /* An entry arriving from a custom logbook has no topic. Letting the select fall through to
-     whichever option happens to be first would file a UKMT question under "1.1 Index laws"
-     and move that topic's schedule, silently. A placeholder forces the choice to be made. */
-  if(!mkIsMain(editFromCol)){
-    const ph=document.createElement('option');
-    ph.value=''; ph.textContent='— pick a topic —';
-    emsel.insertBefore(ph,emsel.firstChild);
-  }
-  /* The select only lists the topics of the track you are on, and a record's topic may
-     legitimately not be among them — logged on Further Maths and now viewed on Maths, or
-     renamed since. Assigning a value a <select> does not have sets its value to '', so
-     **saving used to write that empty string straight back**, silently detaching the record
-     from its topic; on a Further-Maths-seeded store that was 135 of 400 entries, one Save
-     away each. Topic names are the primary key for every saved record, so the topic is added
-     as an option instead — labelled, because it explains why it appears nowhere else. */
-  if(m.topic && !Array.from(emsel.options).some(function(o){ return o.value===m.topic; })){
-    const keep=document.createElement('option');
-    keep.value=m.topic; keep.textContent=m.topic+' — not in your current track';
-    emsel.insertBefore(keep,emsel.firstChild);
-  }
-  emsel.value=m.topic||'';
+  emFillTopics(m,true);
   emSyncBookUI();
   document.getElementById('em-cat-sel').value=m.cat;
   document.getElementById('em-question').value=m.question||'';
@@ -7066,9 +7103,43 @@ function openEditMistake(id){
   setTimeout(syncSpringSliders,50);
 }
 
+/* The topic list follows the logbook chosen in the dialog: A-Level topics for A-Level,
+   FM topics for Further Maths. Because the FM logbook is defined by its topics, a list that
+   mixed the two would let you file an entry under "Further Maths" with a Maths topic, and it
+   would quietly reappear under A-Level.
+   An entry arriving from anywhere else has no topic in this list. Letting the select fall
+   through to whichever option happens to be first would file a UKMT question under
+   "1.1 Index laws" and move that topic's schedule, silently, so a placeholder forces the
+   choice. And a record's own topic may legitimately be missing from its own logbook's list —
+   an FM option since dropped, or renamed. Assigning a value a <select> does not have sets its
+   value to '', so **saving used to write that empty string straight back**, silently detaching
+   the record from its topic; on a Further-Maths-seeded store that was 135 of 400 entries, one
+   Save away each. Topic names are the primary key for every saved record, so the topic is
+   added as an option instead — labelled, because it explains why it appears nowhere else. */
+function emFillTopics(m,opening){
+  const to=document.getElementById('em-book-sel').value;
+  const emsel=document.getElementById('em-topic-sel');
+  // Carry a pick across a logbook switch, but never from the last entry the dialog showed.
+  const prev=opening?'':emsel.value;
+  if(!mkIsMain(to)){ emsel.innerHTML=''; return; }   // the row is hidden; nothing to choose
+  mkFillTopicSelect(emsel,to);
+  const has=v=>!!v&&Array.from(emsel.options).some(o=>o.value===v);
+  const own=(m&&m.topic&&mkTopicView(m.topic)===to)?m.topic:'';
+  if(own && !has(own)){
+    const keep=document.createElement('option');
+    keep.value=own; keep.textContent=own+' — not in your current track';
+    emsel.insertBefore(keep,emsel.firstChild);
+  }
+  if(own){ emsel.value=own; return; }
+  if(has(prev)){ emsel.value=prev; return; }
+  const ph=document.createElement('option');
+  ph.value=''; ph.textContent='— pick a topic —';
+  emsel.insertBefore(ph,emsel.firstChild);
+  emsel.value='';
+}
 /* Keeps the modal honest about what the chosen logbook implies: the topic row only exists
-   for the A-Level one, and a move across that boundary is called out before it is made,
-   because it is the only edit here that changes what the Checklist says. */
+   for the two built-ins, and a move across the engine boundary is called out before it is
+   made, because it is the only edit here that changes what the Checklist says. */
 function emSyncBookUI(){
   const to=document.getElementById('em-book-sel').value;
   const toMain=mkIsMain(to);
@@ -7077,8 +7148,9 @@ function emSyncBookUI(){
   if(!note)return;
   let msg='';
   if(to!==editFromCol){
-    if(toMain) msg='Moving into '+MK_MAIN_NAME+' — pick the topic it belongs to. It becomes evidence about that topic and will pull its next review earlier.';
-    else if(mkIsMain(editFromCol)) msg='Moving out of '+MK_MAIN_NAME+' — it stops counting as evidence, and the topic it was on goes back to what it would read if this had never been logged.';
+    if(toMain&&mkIsMain(editFromCol)) msg='Moving to '+mkNameOf(to)+' — pick the topic it belongs to. The evidence moves with it: the old topic loses it and the new one gains it.';
+    else if(toMain) msg='Moving into '+mkNameOf(to)+' — pick the topic it belongs to. It becomes evidence about that topic and will pull its next review earlier.';
+    else if(mkIsMain(editFromCol)) msg='Moving out of '+mkNameOf(editFromCol)+' — it stops counting as evidence, and the topic it was on goes back to what it would read if this had never been logged.';
     else msg='Moving to '+mkNameOf(to)+'. Neither logbook feeds the memory engine, so nothing about your revision changes.';
   }
   note.textContent=msg;
@@ -7090,7 +7162,10 @@ function closeEditMistake(){
   editMistakeId=null;editPendingImg=null;editFromCol=MK_MAIN;
 }
 
-document.getElementById('em-book-sel').addEventListener('change',emSyncBookUI);
+document.getElementById('em-book-sel').addEventListener('change',function(){
+  emFillTopics(mistakes.find(function(x){ return x.id===editMistakeId; }));
+  emSyncBookUI();
+});
 document.getElementById('edit-mistake-close').addEventListener('click',closeEditMistake);
 document.getElementById('em-cancel-btn').addEventListener('click',closeEditMistake);
 document.getElementById('edit-mistake-overlay').addEventListener('click',function(e){if(e.target===this)closeEditMistake();});
@@ -7152,7 +7227,8 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
   const idx=mistakes.findIndex(x=>x.id===editMistakeId);
   if(idx<0)return;
   const existing=mistakes[idx];
-  const fromCol=mkColOf(existing), toCol=document.getElementById('em-book-sel').value;
+  // Views, not stored cols: 'fm' is a view of the built-in logbook and is never written.
+  const fromCol=mkViewOf(existing), toCol=document.getElementById('em-book-sel').value;
   const toMain=mkIsMain(toCol);
   /* Outside the A-Level logbook there is no topic at all; inside it, one is required. The
      placeholder added when the entry arrives from a custom logbook can reach here as '', and
@@ -7165,7 +7241,7 @@ document.getElementById('em-save-btn').addEventListener('click',()=>{
        working. An empty select on a record that already had one means "the dialog could not
        represent it", never "the student chose none" — there is no way to choose none. Only a
        record genuinely arriving without a topic is asked for one. */
-    if(mkIsMain(fromCol)&&existing.topic) newTopic=existing.topic;
+    if(fromCol===toCol&&existing.topic) newTopic=existing.topic;
     else {
       if(typeof toast==='function')toast('Pick the topic this belongs to');
       document.getElementById('em-topic-sel').focus();
@@ -7235,12 +7311,14 @@ function renderPieChart(type){
     const canvas=document.getElementById('pie-canvas');
     const legend=document.getElementById('pie-legend');legend.innerHTML='';
     const ps=document.getElementById('pie-section');
-    const rows=mkEntries(MK_MAIN);   // the wheel is by syllabus cluster, so A-Level only
+    // The wheel is by syllabus cluster, so it shows the built-in logbook on screen.
+    const view=mkIsMain(mkActive)?(mkActive||MK_MAIN):MK_MAIN;
+    const rows=mkEntries(view), cs=mkViewClusters(view);
     if(!rows.length){ps.innerHTML='<div class="pie-empty">No mistakes yet.</div>';return;}
     const counts={};
-    activeClusters().forEach(c=>{counts[c.id]=0;});
+    cs.forEach(c=>{counts[c.id]=0;});
     rows.forEach(m=>{const t=topicByName(m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
-    const entries=activeClusters().map((c,i)=>({id:c.id,name:c.name,count:counts[c.id]||0,color:PIE_COLORS[i%PIE_COLORS.length]})).filter(e=>e.count>0);
+    const entries=cs.map((c,i)=>({id:c.id,name:c.name,count:counts[c.id]||0,color:PIE_COLORS[i%PIE_COLORS.length]})).filter(e=>e.count>0);
     drawDonut(canvas,entries,legend);
   }
 }
@@ -7792,7 +7870,9 @@ function plogAddMistake(){
 function openPaperLog(prefill){
   plogMistakes=[];
   plogFillModules();
-  document.getElementById('plog-mk-topic').innerHTML=document.getElementById('m-topic-sel').innerHTML;
+  // Every active topic, Maths and Further: the paper being logged decides which applies, and
+  // the Mistakes page's own select now lists only the logbook that is open.
+  mkFillTopicSelect(document.getElementById('plog-mk-topic'),'all');
   document.getElementById('plog-mk-cat').innerHTML=document.getElementById('m-cat-sel').innerHTML;
   if(prefill&&prefill.moduleId&&ppAllLoggableModules().some(function(m){return m.id===prefill.moduleId;}))document.getElementById('plog-module').value=prefill.moduleId;
   plogFillPapers();
@@ -8698,9 +8778,9 @@ if(window.MSH_TEST) (function(){
     if(c){
       const studied=activeTopics().filter(t=>sr[t.name]).length;
       const due=activeTopics().filter(t=>{const s=statusFor(t.name);return s==='due'||s==='overdue';}).length;
-      // A-Level count, to match the three figures beside it. A custom logbook contributes
+      // Syllabus count (A-Level + Further Maths), to match the three figures beside it. A custom logbook contributes
       // nothing to any of them, so including its entries here made the row disagree with itself.
-      const mkN=mkEntries(MK_MAIN).length, otherN=mistakes.length-mkN;
+      const mkN=mkSyllabusCount(), otherN=mistakes.length-mkN;
       c.textContent=studied+' studied · '+due+' due/overdue · '+mkN+' mistakes'+(otherN?(' (+'+otherN+' other logbooks)'):'')+' · '+paperLog.length+' papers';
     }
     const sel=document.getElementById('msh-test-topic');

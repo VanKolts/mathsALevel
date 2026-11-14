@@ -27,6 +27,12 @@ const grabFn = n => {
   const m = html.match(new RegExp(`^function ${n}\\([\\s\\S]*?\\n\\}`, 'm'));
   if(!m) throw new Error(`could not extract ${n}() from index.html`); return m[0];
 };
+// A one-line function. grabFn() would run on to the next closing brace at column 0 and pull
+// in everything declared between, which is several screens here.
+const grabOne = n => {
+  const m = html.match(new RegExp(`^function ${n}\\([^\\n]*\\}$`, 'm'));
+  if(!m) throw new Error(`could not extract one-line ${n}() from index.html`); return m[0];
+};
 const grabLine = (kw,n) => {
   const m = html.match(new RegExp(`^${kw} ${n}\\s*=[^\\n]*$`, 'm'));
   if(!m) throw new Error(`could not extract ${kw} ${n}`); return m[0];
@@ -42,7 +48,7 @@ const source = [
   grabConstLine('DIFF_D_SEED'), grabConstLine('MAX_INTERVAL'),
   grabBlock('MISTAKE_EVIDENCE'), grabConstLine('MISTAKE_EVIDENCE_DEFAULT'),
   grabBlock('MISTAKE_SEVERITY'), grabConstLine('MISTAKE_TAU'), grabConstLine('EV_PAPER'),
-  grabLine('const','MK_MAIN'),
+  grabLine('const','MK_MAIN'), grabLine('const','MK_FM'),
   grabLine('var','_dayCache'), grabFn('_dayMs'),
   grabLine('var','_mlCache'),
   'var _mistIdx=null;',
@@ -52,13 +58,16 @@ const source = [
   grabFn('applyReview'), grabFn('applyMistake'), grabFn('paperRating'), grabFn('applyPaper'),
   grabFn('buildTimeline'), grabFn('replayTimeline'),
   // ---- the three under test ----
-  grabFn('mkColOf'), grabFn('mistakeEventsByTopic'), grabFn('mistakeLoad'),
+  grabOne('mkColOf'), grabOne('mkTopicView'), grabOne('mkViewOf'), grabOne('mkEntries'),
+  grabFn('mistakeEventsByTopic'), grabFn('mistakeLoad'),
+  'var mkActive="alevel";',
   // ---- stubs for what the app supplies but this suite is not testing ----
   // today() is memoised off Date.now() and a test-mode offset; pin it so the recency decay
   // inside mistakeLoad() is a fixed number rather than one that changes tomorrow.
   `function today(){ return '${TODAY}'; }`,
   'function invalidateMemory(){ _mistIdx=null; }',
-  'var allTopics=[{name:"T",diff:2},{name:"U",diff:2}];',
+  // "F" is a Further Maths topic: the built-in logbook splits on qual, nothing else.
+  'var allTopics=[{name:"T",diff:2,qual:"maths"},{name:"U",diff:2,qual:"maths"},{name:"F",diff:2,qual:"fm"}];',
   'function topicByName(n){ return allTopics.find(function(t){return t.name===n;}); }',
   'var mistakes=[];',
   'function setMistakes(ms){ mistakes=ms; _mistIdx=null; _mlCache=Object.create(null); _mlDay=""; }',
@@ -68,7 +77,7 @@ function grabConstLine(n){ return grabLine('const', n); }
 
 const ctx = vm.createContext({ Math, Date, isFinite, parseInt, String });
 vm.runInContext(source, ctx);
-const { mistakeEventsByTopic, mistakeLoad, setMistakes, replayTimeline, mkColOf } = ctx;
+const { mistakeEventsByTopic, mistakeLoad, setMistakes, replayTimeline, mkColOf, mkViewOf, mkEntries } = ctx;
 
 let pass=0, fail=0; const fails=[];
 const check=(ok,label)=>{ ok?pass++:(fail++,fails.push(label)); };
@@ -224,6 +233,28 @@ const NINE  = [UKMT(0),UKMT(1),UKMT(2),UKMT(3),UKMT(4),UKMT(5),UKMT(6),UKMT(7),U
   const dead = ALLOWED.filter(a => !hits.some(h => h.t.includes(a[0])));
   check(dead.length===0,
     'no stale entries in the allow-list — unmatched: ' + (dead.map(a=>a[0]).join('; ') || 'none'));
+}
+
+/* ---- 11. Further Maths is a view of the built-in logbook, not a custom one -------
+   It is read off the topic, so an FM mistake is stored with no `col` and must still be
+   evidence — the opposite of a custom logbook, which carries a real topic and must not be.
+   The two built-in views partition the col-less records between them, and a custom entry
+   on an FM topic stays in its own logbook rather than leaking into Further Maths. */
+{
+  const FMm  = {id:'f0', topic:'F', cat:'Method error', severity:4, date:'2026-09-12'};
+  const FMuk = {id:'f1', col:'ukmt', topic:'F', cat:'Method error', severity:4, date:'2026-09-12'};
+  check(mkViewOf(FMm)==='fm' && mkColOf(FMm)==='alevel',
+    'an FM-topic mistake shows under Further Maths but is still the built-in logbook underneath');
+  check(mkViewOf(MAIN)==='alevel', 'a Maths-topic mistake shows under A-Level Maths');
+  check(mkViewOf(FMuk)==='ukmt', 'a custom entry on an FM topic stays in its custom logbook');
+  check(mkViewOf({id:'z', topic:'gone'})==='alevel' && mkViewOf({id:'y', topic:''})==='alevel',
+    'an unknown or empty topic falls back to A-Level, never to nowhere');
+  setMistakes([MAIN, FMm, FMuk]);
+  const a=mkEntries('alevel').map(m=>m.id), f=mkEntries('fm').map(m=>m.id), u=mkEntries('ukmt').map(m=>m.id);
+  check(a.join()==='m0' && f.join()==='f0' && u.join()==='f1',
+    'the logbooks partition the list: each entry appears in exactly one — got '+[a,f,u].map(x=>'['+x+']').join(' '));
+  check((mistakeEventsByTopic()['F']||[]).length===1 && mistakeLoad('F')>0,
+    'the FM entry reaches the engine; the custom one on the same topic does not');
 }
 
 console.log('\nLogbook isolation — only the A-Level logbook reaches the engine\n');
