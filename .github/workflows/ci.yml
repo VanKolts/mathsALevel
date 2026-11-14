@@ -1,7 +1,8 @@
 name: Validate
 
 # Deploying this site is a push to main, so the useful moment to catch a broken build is
-# right here. Runs on pushes and pull requests; zero dependencies, so it finishes in seconds.
+# right here. Runs on pushes and pull requests; zero dependencies (the render test uses the
+# runner's own Chrome), so it finishes in well under a minute.
 on:
   push:
     branches: [main]
@@ -14,9 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 22, not 20: scripts/render-smoke-test.mjs drives Chrome with Node's built-in WebSocket,
+      # which 20 does not have. The runner image ships Google Chrome, so nothing is installed.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # Syntax-checks every inline <script>, sw.js and each data/*.js file, then asserts the
       # invariants the app depends on: paper marks summing to their real Edexcel totals, every

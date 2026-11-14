@@ -7314,7 +7314,16 @@ function renderPieChart(type){
     // The wheel is by syllabus cluster, so it shows the built-in logbook on screen.
     const view=mkIsMain(mkActive)?(mkActive||MK_MAIN):MK_MAIN;
     const rows=mkEntries(view), cs=mkViewClusters(view);
-    if(!rows.length){ps.innerHTML='<div class="pie-empty">No mistakes yet.</div>';return;}
+    /* The empty state sits beside the chart rather than replacing it. It used to be
+       ps.innerHTML=..., which deleted the canvas and the legend, so the next render — the
+       first mistake logged, or Topics on the other built-in logbook — read a null legend and
+       threw. Found by scripts/render-smoke-test.mjs, 2026-11-14. */
+    let empty=ps.querySelector('.pie-empty');
+    if(!empty){ empty=document.createElement('div'); empty.className='pie-empty'; empty.textContent='No mistakes yet.'; ps.appendChild(empty); }
+    empty.style.display=rows.length?'none':'';
+    canvas.style.display=rows.length?'':'none';
+    legend.style.display=rows.length?'':'none';
+    if(!rows.length)return;
     const counts={};
     cs.forEach(c=>{counts[c.id]=0;});
     rows.forEach(m=>{const t=topicByName(m.topic);if(t)counts[t.clusterId]=(counts[t.clusterId]||0)+1;});
